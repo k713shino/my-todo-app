@@ -9,17 +9,17 @@ if [ ! -f .env.local ]; then
     exit 1
 fi
 
-# Dockerコンテナ起動
-echo "🐳 PostgreSQLコンテナを起動..."
-docker-compose up -d postgres
+# AWS RDS接続確認
+echo "☁️ AWS RDS PostgreSQL接続確認中..."
+npx prisma db push --accept-data-loss
 
-# データベースの接続待機
-echo "⏳ データベースの起動を待機中..."
-sleep 10
-
-# Prismaマイグレーション
-echo "🔄 データベースマイグレーション実行..."
-npx prisma db push
+if [ $? -eq 0 ]; then
+    echo "✅ AWS RDS PostgreSQL接続成功"
+else
+    echo "❌ AWS RDS PostgreSQL接続失敗"
+    echo "📝 DATABASE_URLを確認してください"
+    exit 1
+fi
 
 # 開発サーバー起動
 echo "🌟 開発サーバーを起動..."

@@ -1,21 +1,20 @@
 version: '3.8'
 
 services:
-  # PostgreSQL データベース
-  postgres:
-    image: postgres:15-alpine
-    container_name: todo-postgres
-    environment:
-      POSTGRES_DB: todoapp
-      POSTGRES_USER: todouser
-      POSTGRES_PASSWORD: todopass123
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - todo-network
+  # PostgreSQL（ローカル用）- AWS使用時は不要
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: todo-postgres
+  #   environment:
+  #     POSTGRES_DB: todoapp
+  #     POSTGRES_USER: todouser
+  #     POSTGRES_PASSWORD: todopass123
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - todo-network
 
   # Next.js アプリケーション
   app:
@@ -26,15 +25,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://todouser:todopass123@postgres:5432/todoapp
+      # AWS RDS PostgreSQL接続
+      - DATABASE_URL=postgresql://todouser:Hinewfrost3@my-todo-app-db.cfcy8c2wq7lr.ap-northeast-1.rds.amazonaws.com:5432/todoapp
       - NEXTAUTH_SECRET=your-super-secret-key-change-this
       - NEXTAUTH_URL=http://localhost:3000
-    depends_on:
-      - postgres
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/.next
     networks:
       - todo-network
 
@@ -52,8 +46,8 @@ services:
     networks:
       - todo-network
 
-volumes:
-  postgres_data:
+# volumes:
+#   postgres_data:  # AWS使用時は不要
 
 networks:
   todo-network:
