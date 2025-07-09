@@ -39,3 +39,33 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 環境変数
+.env
+.env.local
+.env.production.local
+
+# データベース
+*.db
+*.sqlite
+
+# Docker
+.docker/
+
+# Next.js
+.next/
+out/
+
+# 依存関係
+node_modules/
+.pnpm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# ログ
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,36 +1,122 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Todo管理システム
 
-## Getting Started
+現代的な技術スタックで構築された個人用Todoリストアプリケーション
 
-First, run the development server:
+## 機能概要
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- 🔐 **セキュアな認証**: GitHub OAuth による安全なログイン
+- 📊 **優先度管理**: 4段階の優先度設定
+- 📅 **期限管理**: 日時指定とアラート機能
+- 🔍 **検索・フィルター**: 効率的なタスク検索
+- 📱 **レスポンシブデザイン**: 全デバイス対応
+- ⚡ **リアルタイム更新**: 即座にデータ反映
+- 🐳 **Docker対応**: 統一された開発環境
+
+## 技術仕様
+
+- **フロントエンド**: Next.js 15 + TypeScript + Tailwind CSS
+- **バックエンド**: Next.js API Routes
+- **データベース**: PostgreSQL + Prisma ORM
+- **認証**: NextAuth.js + GitHub OAuth
+- **コンテナ化**: Docker + Docker Compose
+- **デプロイ**: Vercel
+
+## セットアップ手順
+
+### 前提条件
+
+- Windows 10/11 + WSL2
+- Docker Desktop
+- Node.js 20+
+- Git
+
+### インストール
+
+1. **リポジトリクローン**
+   ```bash
+   git clone https://github.com/yourusername/my-todo-app.git
+   cd my-todo-app
+   ```
+
+2. **依存関係インストール**
+   ```bash
+   npm install
+   ```
+
+3. **環境変数設定**
+   ```bash
+   cp .env.example .env.local
+   # .env.localを編集して必要な値を設定
+   ```
+
+4. **開発環境起動**
+   ```bash
+   ./start-dev.sh
+   ```
+
+5. **ブラウザでアクセス**
+   ```
+   http://localhost:3000
+   ```
+
+
+## API仕様
+
+- `GET /api/todos` - Todo一覧取得
+- `POST /api/todos` - Todo作成
+- `PUT /api/todos/[id]` - Todo更新
+- `DELETE /api/todos/[id]` - Todo削除
+- `GET /api/health` - ヘルスチェック
+
+## データベーススキーマ
+
+```prisma
+model User {
+  id       String @id @default(cuid())
+  name     String?
+  email    String @unique
+  todos    Todo[]
+}
+
+model Todo {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  completed   Boolean  @default(false)
+  priority    Priority @default(MEDIUM)
+  dueDate     DateTime?
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+}
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## プロジェクト構造
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+my-todo-app/
+├── app/                    # Next.js App Router
+│   ├── components/         # UIコンポーネント
+│   ├── dashboard/          # ダッシュボードページ
+│   ├── auth/               # 認証ページ
+│   └── api/                # API Routes
+├── prisma/                 # データベーススキーマ
+├── lib/                    # ユーティリティ関数
+├── types/                  # TypeScript型定義
+└── docker-compose.yml      # Docker設定
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## コントリビューション
 
-## Learn More
+1. リポジトリをフォーク
+2. 機能ブランチ作成 (`git checkout -b feature/new-feature`)
+3. 変更をコミット (`git commit -m 'Add: 新機能追加'`)
+4. ブランチをプッシュ (`git push origin feature/new-feature`)
+5. プルリクエスト作成
 
-To learn more about Next.js, take a look at the following resources:
+## ライセンス
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+このプロジェクトはMITライセンスの下で公開されています。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## サポート
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+ご質問やバグ報告は[Issues](https://github.com/yourusername/my-todo-app/issues)までお願いします。
