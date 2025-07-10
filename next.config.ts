@@ -1,5 +1,6 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
   // Docker最適化
   output: 'standalone',
   
@@ -35,6 +36,15 @@ const nextConfig = {
       },
     ]
   },
+
+  // Webpack設定でPrismaを最適化
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals || []
+      config.externals.push('@prisma/client')
+    }
+    return config
+  },
 }
 
-module.exports = nextConfig
+export default nextConfig
