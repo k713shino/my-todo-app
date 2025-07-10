@@ -14,25 +14,27 @@ export default function SignIn() {
   })
   const router = useRouter()
 
-  // Google認証が設定されているかチェック
-  const hasGoogleAuth = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-
   const handleOAuthSignIn = async (provider: 'github' | 'google') => {
     setIsLoading(true)
     try {
+      console.log(`${provider}認証を開始...`)
       const result = await signIn(provider, {
         callbackUrl: '/dashboard',
         redirect: false,
       })
       
+      console.log('認証結果:', result)
+      
       if (result?.ok) {
+        console.log('認証成功、ダッシュボードへリダイレクト')
         router.push('/dashboard')
       } else if (result?.error) {
+        console.error('認証エラー:', result.error)
         alert(`ログインに失敗しました: ${result.error}`)
       }
     } catch (err) {
       console.error('ログインエラー:', err)
-      alert('ログインに失敗しました')
+      alert('ログインに失敗しました。もう一度お試しください。')
     } finally {
       setIsLoading(false)
     }
@@ -78,6 +80,7 @@ export default function SignIn() {
           {!showEmailLogin ? (
             // OAuth ログイン画面
             <>
+              {/* GitHub認証ボタン */}
               <button
                 onClick={() => handleOAuthSignIn('github')}
                 disabled={isLoading}
@@ -89,19 +92,17 @@ export default function SignIn() {
                 {isLoading ? '認証中...' : 'GitHubでログイン'}
               </button>
 
-              {/* Google認証ボタン（環境変数が設定されている場合のみ表示） */}
-              {hasGoogleAuth && (
-                <button
-                  onClick={() => handleOAuthSignIn('google')}
-                  disabled={isLoading}
-                  className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                >
-                  <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                    🔴
-                  </span>
-                  {isLoading ? '認証中...' : 'Googleでログイン'}
-                </button>
-              )}
+              {/* Google認証ボタン（常に表示、設定不備の場合はエラー表示） */}
+              <button
+                onClick={() => handleOAuthSignIn('google')}
+                disabled={isLoading}
+                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                  🔴
+                </span>
+                {isLoading ? '認証中...' : 'Googleでログイン'}
+              </button>
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">

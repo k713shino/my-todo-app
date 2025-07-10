@@ -6,32 +6,56 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "./prisma"
 
+// 環境変数の存在確認
+const checkEnvVars = () => {
+  const required = {
+    NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
+    NEXTAUTH_URL: !!process.env.NEXTAUTH_URL,
+    GITHUB_CLIENT_ID: !!process.env.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET: !!process.env.GITHUB_CLIENT_SECRET,
+    GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
+  }
+  
+  console.log('🔍 環境変数チェック:', required)
+  return required
+}
+
+// 開発環境でのチェック
+if (process.env.NODE_ENV === 'development') {
+  checkEnvVars()
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
-    // GitHub OAuth（既存）
-    GithubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID!,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          scope: "read:user user:email",
+    // GitHub OAuth
+    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET ? [
+      GithubProvider({
+        clientId: process.env.GITHUB_CLIENT_ID,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        authorization: {
+          params: {
+            scope: "read:user user:email",
+          },
         },
-      },
-    }),
+      })
+    ] : []),
     
-    // Google OAuth（本番対応）
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          scope: "openid email profile",
+    // Google OAuth
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? [
+      GoogleProvider({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        authorization: {
+          params: {
+            scope: "openid email profile",
+          },
         },
-      },
-    }),
+      })
+    ] : []),
     
-    // メールアドレス + パスワード認証（本番対応）
+    // メールアドレス + パスワード認証
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -58,7 +82,7 @@ export const authOptions: NextAuthOptions = {
             name: user.name,
           }
         } catch (error) {
-          console.error('Authentication error:', error)
+          console.error('認証エラー:', error)
           return null
         }
       }
@@ -77,13 +101,9 @@ export const authOptions: NextAuthOptions = {
       }
       return token
     },
-    // 本番環境用のリダイレクト制御
     redirect: async ({ url, baseUrl }) => {
-      // 同一ドメインならそのまま
       if (url.startsWith("/")) return `${baseUrl}${url}`
-      // 同一ドメインのURLなら許可
       else if (new URL(url).origin === baseUrl) return url
-      // それ以外はベースURLへ
       return baseUrl
     },
   },
@@ -95,6 +115,8 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/signin",
     error: "/auth/error",
   },
+  // デバッグ用ログ有効化
+  debug: process.env.NODE_ENV === 'development',
   // 本番環境用セキュリティ設定
   cookies: {
     sessionToken: {
