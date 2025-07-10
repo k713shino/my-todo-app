@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 // PUT: Todo更新
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -15,13 +15,14 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { id } = await params
     const body = await request.json()
     const { title, description, completed, priority, dueDate } = body
 
     // 所有者確認
     const existingTodo = await prisma.todo.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })
@@ -31,7 +32,7 @@ export async function PUT(
     }
 
     const todo = await prisma.todo.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(title !== undefined && { title: title.trim() }),
         ...(description !== undefined && { description: description?.trim() || null }),
@@ -51,7 +52,7 @@ export async function PUT(
 // DELETE: Todo削除
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -60,10 +61,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { id } = await params
+
     // 所有者確認
     const existingTodo = await prisma.todo.findFirst({
       where: {
-        id: params.id,
+        id,
         userId: session.user.id,
       },
     })
@@ -73,7 +76,7 @@ export async function DELETE(
     }
 
     await prisma.todo.delete({
-      where: { id: params.id },
+      where: { id },
     })
 
     return NextResponse.json({ message: 'Todo deleted successfully' })
