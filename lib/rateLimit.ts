@@ -1,5 +1,3 @@
-import { NextRequest } from 'next/server'
-
 interface RateLimitOptions {
   interval: number
   uniqueTokenPerInterval: number

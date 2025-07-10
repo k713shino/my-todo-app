@@ -4,10 +4,8 @@ const nextConfig: NextConfig = {
   // Docker最適化
   output: 'standalone',
   
-  // 実験的機能
-  experimental: {
-    serverComponentsExternalPackages: ['@prisma/client'],
-  },
+  // サーバー外部パッケージ（Next.js 15の新しい設定）
+  serverExternalPackages: ['@prisma/client'],
   
   // 画像最適化（外部ホスト許可）
   images: {
