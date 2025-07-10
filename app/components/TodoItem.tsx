@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { format, isAfter } from 'date-fns'
 import { ja } from 'date-fns/locale'
-import { Priority } from '@prisma/client'
 import { Todo } from '@/types/todo'
 
 interface TodoItemProps {

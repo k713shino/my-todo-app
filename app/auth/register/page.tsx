@@ -32,10 +32,11 @@ export default function Register() {
           callbackUrl: '/dashboard'
         })
       } else {
-        const error = await response.json()
-        alert(error.error)
+        const errorData = await response.json()
+        alert(errorData.error)
       }
-    } catch (error) {
+    } catch (err) {
+      console.error('Registration error:', err)
       alert('エラーが発生しました')
     } finally {
       setIsLoading(false)

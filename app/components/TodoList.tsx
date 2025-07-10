@@ -8,6 +8,26 @@ import TodoItem from './TodoItem'
 import TodoFilters from './TodoFilters'
 import TodoStatsDisplay from './TodoStatsDisplay'
 
+interface TodoResponse {
+  id: string
+  title: string
+  description?: string | null
+  completed: boolean
+  priority: Priority
+  dueDate?: string | null
+  createdAt: string
+  updatedAt: string
+  userId: string
+}
+
+interface UpdateTodoData {
+  completed?: boolean
+  title?: string
+  description?: string
+  priority?: Priority
+  dueDate?: Date | null
+}
+
 export default function TodoList() {
   const [todos, setTodos] = useState<Todo[]>([])
   const [filteredTodos, setFilteredTodos] = useState<Todo[]>([])
@@ -25,8 +45,8 @@ export default function TodoList() {
     try {
       const response = await fetch('/api/todos')
       if (response.ok) {
-        const data = await response.json()
-        setTodos(data.map((todo: any) => ({
+        const data: TodoResponse[] = await response.json()
+        setTodos(data.map((todo) => ({
           ...todo,
           createdAt: new Date(todo.createdAt),
           updatedAt: new Date(todo.updatedAt),
@@ -67,7 +87,7 @@ export default function TodoList() {
   }
 
   // Todo更新
-  const handleUpdateTodo = async (id: string, data: any) => {
+  const handleUpdateTodo = async (id: string, data: UpdateTodoData) => {
     try {
       const response = await fetch(`/api/todos/${id}`, {
         method: 'PUT',

@@ -28,13 +28,6 @@ const priorityLabels = {
   URGENT: '緊急',
 }
 
-const priorityColors = {
-  LOW: 'text-green-600 bg-green-100',
-  MEDIUM: 'text-yellow-600 bg-yellow-100',
-  HIGH: 'text-orange-600 bg-orange-100',
-  URGENT: 'text-red-600 bg-red-100',
-}
-
 export default function TodoForm({ 
   onSubmit, 
   onCancel, 

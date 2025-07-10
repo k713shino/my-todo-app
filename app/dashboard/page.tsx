@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import TodoList from '@/app/components/TodoList'
+import Image from 'next/image'
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions)
@@ -25,11 +26,15 @@ export default async function Dashboard() {
               <span className="text-sm text-gray-700">
                 こんにちは、{session.user?.name}さん 👋
               </span>
-              <img
-                src={session.user?.image || '/default-avatar.png'}
-                alt="プロフィール"
-                className="w-8 h-8 rounded-full"
-              />
+              {session.user?.image && (
+                <Image
+                  src={session.user.image}
+                  alt="プロフィール"
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                />
+              )}
               <a
                 href="/api/auth/signout"
                 className="text-sm text-red-600 hover:text-red-800 transition-colors"

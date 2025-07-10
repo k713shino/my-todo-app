@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
       user: { id: user.id, email: user.email, name: user.name }
     })
     
-  } catch (error) {
+  } catch (err) {
+    console.error('Registration error:', err)
     return NextResponse.json(
       { error: '会員登録に失敗しました' }, 
       { status: 500 }
