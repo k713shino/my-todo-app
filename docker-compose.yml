@@ -27,7 +27,7 @@ services:
     environment:
       # AWS RDS PostgreSQL接続
       - DATABASE_URL=postgresql://todouser:Hinewfrost3@my-todo-app-db.cfcy8c2wq7lr.ap-northeast-1.rds.amazonaws.com:5432/todoapp
-      - NEXTAUTH_SECRET=your-super-secret-key-change-this
+      - NEXTAUTH_SECRET=jBu9vAKuRwvEgnjuUbNEaOdByDAuHRQm1HQNmqwbymY=
       - NEXTAUTH_URL=http://localhost:3000
     networks:
       - todo-network
