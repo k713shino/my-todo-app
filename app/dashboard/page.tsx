@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import TodoList from '@/app/components/TodoList'
 import Image from 'next/image'
+import SignOutButton from '@/app/components/SignOutButton'
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions)
@@ -35,12 +36,7 @@ export default async function Dashboard() {
                   className="rounded-full"
                 />
               )}
-              <a
-                href="/api/auth/signout"
-                className="text-sm text-red-600 hover:text-red-800 transition-colors"
-              >
-                ログアウト
-              </a>
+              <SignOutButton />
             </div>
           </div>
         </div>
