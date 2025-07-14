@@ -12,6 +12,23 @@ const nextConfig: NextConfig = {
     domains: ['avatars.githubusercontent.com', 'lh3.googleusercontent.com'],
   },
   
+  // ESLint設定（ビルド時エラーを警告に変更）
+  eslint: {
+    ignoreDuringBuilds: false,
+    dirs: ['app', 'lib', 'types'],
+  },
+  
+  // TypeScript設定
+  typescript: {
+    ignoreBuildErrors: false,
+  },
+  
+  // 実験的機能
+  experimental: {
+    // ビルド時のPrismaクライアント最適化
+    serverComponentsExternalPackages: ['@prisma/client'],
+  },
+  
   // セキュリティヘッダー
   async headers() {
     return [

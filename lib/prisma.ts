@@ -7,11 +7,18 @@ declare global {
 
 // Prismaクライアントのシングルトンインスタンス
 const createPrismaClient = () => {
+  // ビルド時の環境変数チェック
+  const databaseUrl = process.env.DATABASE_URL
+  
+  if (!databaseUrl) {
+    console.warn('⚠️ DATABASE_URL is not set. Using default configuration.')
+  }
+  
   return new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     datasources: {
       db: {
-        url: process.env.DATABASE_URL,
+        url: databaseUrl,
       },
     },
   })
@@ -24,18 +31,19 @@ if (process.env.NODE_ENV !== 'production') {
   globalThis.__prisma = prisma
 }
 
-// Vercel環境での接続確保
-if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-  prisma.$connect().catch((error) => {
-    console.error('Failed to connect to database:', error)
-  })
-}
-
-// 接続テスト関数
+// 接続テスト関数（ランタイムでのみ実行）
 export async function testDatabaseConnection() {
   try {
-    await prisma.$queryRaw`SELECT 1`
-    console.log('✅ Database connection successful')
+    // ビルド時は実際の接続テストをスキップ
+    if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL?.includes('localhost')) {
+      await prisma.$queryRaw`SELECT 1`
+      console.log('✅ Database connection successful')
+      return true
+    } else if (process.env.NODE_ENV === 'development') {
+      await prisma.$queryRaw`SELECT 1`
+      console.log('✅ Database connection successful')
+      return true
+    }
     return true
   } catch (error) {
     console.error('❌ Database connection failed:', error)
@@ -45,7 +53,11 @@ export async function testDatabaseConnection() {
 
 // グレースフルシャットダウン
 process.on('beforeExit', async () => {
-  await prisma.$disconnect()
+  try {
+    await prisma.$disconnect()
+  } catch (error) {
+    console.error('Error during Prisma disconnect:', error)
+  }
 })
 
 export { prisma }

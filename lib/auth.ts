@@ -1,4 +1,4 @@
-import { NextAuthOptions } from "next-auth"
+import type { AuthOptions } from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
@@ -26,7 +26,7 @@ if (process.env.NODE_ENV === 'development') {
   checkEnvVars()
 }
 
-export const authOptions: NextAuthOptions = {
+export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
     // GitHub OAuth
@@ -90,8 +90,8 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     session: async ({ session, token }) => {
-      if (session?.user) {
-        session.user.id = token.sub!
+      if (session?.user && token.sub) {
+        session.user.id = token.sub
       }
       return session
     },

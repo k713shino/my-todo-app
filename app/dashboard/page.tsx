@@ -1,14 +1,13 @@
-import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
-import { authOptions } from '@/lib/auth'
+import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import TodoList from '@/app/components/TodoList'
 import Image from 'next/image'
 import SignOutButton from '@/app/components/SignOutButton'
 
 export default async function Dashboard() {
-  const session = await getServerSession(authOptions)
+  const session = await getAuthSession()
 
-  if (!session) {
+  if (!isAuthenticated(session)) {
     redirect('/auth/signin')
   }
 
