@@ -7,6 +7,8 @@ import TodoForm from './TodoForm'
 import TodoItem from './TodoItem'
 import TodoFilters from './TodoFilters'
 import TodoStatsDisplay from './TodoStatsDisplay'
+import RealtimeUpdates from './RealtimeUpdates'
+import { Toaster } from 'react-hot-toast'
 
 interface TodoResponse {
   id: string
@@ -73,7 +75,6 @@ export default function TodoList() {
 
       if (response.ok) {
         await fetchTodos()
-        alert('✨ Todoが作成されました！')
       } else {
         const error = await response.json()
         alert(error.error || 'Todoの作成に失敗しました')
@@ -97,9 +98,6 @@ export default function TodoList() {
 
       if (response.ok) {
         await fetchTodos()
-        if (Object.keys(data).length > 1) {
-          alert('✅ Todoが更新されました！')
-        }
       } else {
         const error = await response.json()
         alert(error.error || 'Todoの更新に失敗しました')
@@ -119,7 +117,6 @@ export default function TodoList() {
 
       if (response.ok) {
         await fetchTodos()
-        alert('🗑️ Todoが削除されました')
       } else {
         const error = await response.json()
         alert(error.error || 'Todoの削除に失敗しました')
@@ -141,6 +138,21 @@ export default function TodoList() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // リアルタイム更新ハンドラー
+  const handleRealtimeUpdate = (updatedTodo: Todo) => {
+    setTodos(prev => prev.map(todo => 
+      todo.id === updatedTodo.id ? updatedTodo : todo
+    ))
+  }
+
+  const handleRealtimeCreate = (newTodo: Todo) => {
+    setTodos(prev => [newTodo, ...prev])
+  }
+
+  const handleRealtimeDelete = (todoId: string) => {
+    setTodos(prev => prev.filter(todo => todo.id !== todoId))
   }
 
   // フィルタリング
@@ -197,6 +209,25 @@ export default function TodoList() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
+      {/* React Hot Toast通知システム */}
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+        }}
+      />
+
+      {/* リアルタイム更新コンポーネント */}
+      <RealtimeUpdates
+        onTodoUpdate={handleRealtimeUpdate}
+        onTodoCreate={handleRealtimeCreate}
+        onTodoDelete={handleRealtimeDelete}
+      />
+
       {/* 統計表示 */}
       <TodoStatsDisplay stats={stats} />
 

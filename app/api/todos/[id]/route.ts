@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { prisma } from '@/lib/prisma'
+import { CacheManager } from '@/lib/cache'
+import { PubSubManager } from '@/lib/pubsub'
 
-// PUT: Todo更新
+// PUT: Todo更新（PubSub・キャッシュ対応）
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -30,6 +32,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Todo not found' }, { status: 404 })
     }
 
+    // Todo更新
     const todo = await prisma.todo.update({
       where: { id },
       data: {
@@ -41,6 +44,27 @@ export async function PUT(
       },
     })
 
+    // キャッシュ無効化
+    await CacheManager.invalidateUserTodos(session.user.id)
+
+    // リアルタイムイベント発行
+    await PubSubManager.publishTodoEvent({
+      type: 'updated',
+      todo,
+      userId: session.user.id,
+      timestamp: Date.now()
+    })
+
+    // 完了状態変更の場合は特別なアクティビティ記録
+    if (completed !== undefined && completed !== existingTodo.completed) {
+      await PubSubManager.publishUserActivity({
+        userId: session.user.id,
+        action: completed ? 'todo_completed' : 'todo_uncompleted',
+        timestamp: Date.now(),
+        metadata: { todoId: todo.id, title: todo.title }
+      })
+    }
+
     return NextResponse.json(todo)
   } catch (error) {
     console.error('Todo更新エラー:', error)
@@ -48,7 +72,7 @@ export async function PUT(
   }
 }
 
-// DELETE: Todo削除
+// DELETE: Todo削除（PubSub・キャッシュ対応）
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -74,8 +98,28 @@ export async function DELETE(
       return NextResponse.json({ error: 'Todo not found' }, { status: 404 })
     }
 
+    // Todo削除
     await prisma.todo.delete({
       where: { id },
+    })
+
+    // キャッシュ無効化
+    await CacheManager.invalidateUserTodos(session.user.id)
+
+    // リアルタイムイベント発行
+    await PubSubManager.publishTodoEvent({
+      type: 'deleted',
+      todo: { id, userId: session.user.id },
+      userId: session.user.id,
+      timestamp: Date.now()
+    })
+
+    // アクティビティ記録
+    await PubSubManager.publishUserActivity({
+      userId: session.user.id,
+      action: 'todo_deleted',
+      timestamp: Date.now(),
+      metadata: { todoId: id, title: existingTodo.title }
     })
 
     return NextResponse.json({ message: 'Todo deleted successfully' })

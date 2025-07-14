@@ -1,6 +1,6 @@
 {
   "name": "my-todo-app",
-  "version": "0.1.0",
+  "version": "2.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -11,6 +11,11 @@
     "db:generate": "dotenv -e .env.local -- prisma generate",
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
+    "redis:cli": "redis-cli -h localhost -p 6379",
+    "redis:monitor": "redis-cli -h localhost -p 6379 monitor",
+    "redis:info": "redis-cli -h localhost -p 6379 info",
+    "cache:clear": "node scripts/clear-cache.js",
+    "cache:stats": "node scripts/cache-stats.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -27,13 +32,17 @@
     "next-auth": "^4.24.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hot-toast": "^2.4.1",
     "redis": "^4.6.13",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
+    "@types/ioredis": "^5.0.0",
     "@types/node": "^20.19.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",

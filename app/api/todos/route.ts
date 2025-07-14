@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { prisma } from '@/lib/prisma'
 import { CacheManager, RateLimiter } from '@/lib/cache'
+import { PubSubManager } from '@/lib/pubsub'
 import { Priority } from '@prisma/client'
 
 // GET: Todo一覧取得（キャッシュ対応）
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     const priority = searchParams.get('priority') as Priority | null
     const useCache = searchParams.get('cache') !== 'false'
 
-    // 🔴 キャッシュから取得を試行（フィルターがない場合のみ）
+    // キャッシュから取得を試行（フィルターがない場合のみ）
     let todos = null
     if (useCache && !completed && !priority) {
       todos = await CacheManager.getTodos(session.user.id)
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
         ],
       })
 
-      // 🔴 フィルター条件がない場合はキャッシュに保存
+      // フィルター条件がない場合はキャッシュに保存
       if (useCache && !completed && !priority) {
         await CacheManager.setTodos(session.user.id, todos)
         console.log('💾 Data cached')
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Todo作成（キャッシュ無効化対応）
+// POST: Todo作成（PubSub・キャッシュ無効化対応）
 export async function POST(request: NextRequest) {
   try {
     const session = await getAuthSession()
@@ -125,9 +126,25 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 🔴 キャッシュ無効化（新しいTodoが追加されたので古いキャッシュを削除）
+    // キャッシュ無効化（新しいTodoが追加されたので古いキャッシュを削除）
     await CacheManager.invalidateUserTodos(session.user.id)
     console.log('🗑️ Cache invalidated after todo creation')
+
+    // リアルタイムイベント発行
+    await PubSubManager.publishTodoEvent({
+      type: 'created',
+      todo,
+      userId: session.user.id,
+      timestamp: Date.now()
+    })
+
+    // ユーザーアクティビティ発行
+    await PubSubManager.publishUserActivity({
+      userId: session.user.id,
+      action: 'todo_created',
+      timestamp: Date.now(),
+      metadata: { todoId: todo.id, title: todo.title }
+    })
 
     return NextResponse.json(todo, { 
       status: 201,
