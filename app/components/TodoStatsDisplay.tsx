@@ -46,19 +46,19 @@ export default function TodoStatsDisplay({ stats }: TodoStatsDisplayProps) {
 
       {/* 優先度別統計 */}
       <div className="grid grid-cols-4 gap-2 text-xs">
-        <div className="text-center bg-white bg-opacity-20 rounded p-2">
+        <div className="text-center bg-white bg-opacity-20 rounded p-2 text-gray-800">
           <div className="font-bold">🔴 {stats.byPriority.urgent}</div>
           <div>緊急</div>
         </div>
-        <div className="text-center bg-white bg-opacity-20 rounded p-2">
+        <div className="text-center bg-white bg-opacity-20 rounded p-2 text-gray-800">
           <div className="font-bold">🟠 {stats.byPriority.high}</div>
           <div>高</div>
         </div>
-        <div className="text-center bg-white bg-opacity-20 rounded p-2">
+        <div className="text-center bg-white bg-opacity-20 rounded p-2 text-gray-800">
           <div className="font-bold">🟡 {stats.byPriority.medium}</div>
           <div>中</div>
         </div>
-        <div className="text-center bg-white bg-opacity-20 rounded p-2">
+        <div className="text-center bg-white bg-opacity-20 rounded p-2 text-gray-800">
           <div className="font-bold">🟢 {stats.byPriority.low}</div>
           <div>低</div>
         </div>
