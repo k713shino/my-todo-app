@@ -25,9 +25,14 @@ export interface UserActivityData {
   metadata?: Record<string, any>
 }
 
+// 型安全なコールバック関数の型定義
+type MessageCallback = (data: any) => void
+type PatternMessageCallback = (channel: string, data: any) => void
+
 // PubSub管理クラス
 export class PubSubManager {
-  private static subscribers = new Map<string, Set<Function>>()
+  // 具体的な型を使用して型安全性を確保します
+  private static subscribers = new Map<string, Set<MessageCallback>>()
 
   // メッセージ発行
   static async publish(channel: string, data: any): Promise<boolean> {
@@ -43,14 +48,14 @@ export class PubSubManager {
     }
   }
 
-  // チャンネル購読
-  static async subscribe(channel: string, callback: (data: any) => void): Promise<boolean> {
+  // チャンネル購読（型安全版）
+  static async subscribe(channel: string, callback: MessageCallback): Promise<boolean> {
     try {
       if (!this.subscribers.has(channel)) {
-        this.subscribers.set(channel, new Set())
+        this.subscribers.set(channel, new Set<MessageCallback>())
         
         await subClient.subscribe(channel)
-        subClient.on('message', (receivedChannel, message) => {
+        subClient.on('message', (receivedChannel: string, message: string) => {
           if (receivedChannel === channel) {
             try {
               const data = JSON.parse(message)
@@ -69,6 +74,30 @@ export class PubSubManager {
       return true
     } catch (error) {
       console.error('Subscribe error:', error)
+      return false
+    }
+  }
+
+  // チャンネル購読解除（型安全版）
+  static async unsubscribe(channel: string, callback?: MessageCallback): Promise<boolean> {
+    try {
+      const callbacks = this.subscribers.get(channel)
+      if (!callbacks) return true
+
+      if (callback) {
+        callbacks.delete(callback)
+        if (callbacks.size === 0) {
+          await subClient.unsubscribe(channel)
+          this.subscribers.delete(channel)
+        }
+      } else {
+        await subClient.unsubscribe(channel)
+        this.subscribers.delete(channel)
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Unsubscribe error:', error)
       return false
     }
   }
@@ -99,6 +128,63 @@ export class PubSubManager {
   static async publishUserActivity(activityData: UserActivityData): Promise<boolean> {
     const channel = PubSubChannels.userActivity(activityData.userId)
     return this.publish(channel, activityData)
+  }
+
+  // グローバル通知発行
+  static async publishGlobalNotification(notification: {
+    type: string
+    message: string
+    data?: any
+  }): Promise<boolean> {
+    return this.publish(PubSubChannels.globalNotifications, notification)
+  }
+
+  // パターンベース購読（型安全版）
+  static async subscribePattern(
+    pattern: string, 
+    callback: PatternMessageCallback
+  ): Promise<boolean> {
+    try {
+      await subClient.psubscribe(pattern)
+      subClient.on('pmessage', (receivedPattern: string, channel: string, message: string) => {
+        if (receivedPattern === pattern) {
+          try {
+            const data = JSON.parse(message)
+            callback(channel, data)
+          } catch (error) {
+            console.error('Pattern message parse error:', error)
+          }
+        }
+      })
+      return true
+    } catch (error) {
+      console.error('Pattern subscribe error:', error)
+      return false
+    }
+  }
+
+  // パターン購読解除
+  static async unsubscribePattern(pattern: string): Promise<boolean> {
+    try {
+      await subClient.punsubscribe(pattern)
+      return true
+    } catch (error) {
+      console.error('Pattern unsubscribe error:', error)
+      return false
+    }
+  }
+
+  // 全購読解除（クリーンアップ用）
+  static async unsubscribeAll(): Promise<boolean> {
+    try {
+      await subClient.unsubscribe()
+      await subClient.punsubscribe()
+      this.subscribers.clear()
+      return true
+    } catch (error) {
+      console.error('Unsubscribe all error:', error)
+      return false
+    }
   }
 }
 

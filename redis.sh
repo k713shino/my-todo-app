@@ -1,6 +1,6 @@
-# 🎀 修正版 AWS ElastiCache Redis クラスター作成コマンド
+# 修正版 AWS ElastiCache Redis クラスター作成コマンド
 
-echo "🔴 Redis クラスターを作成中ですわ..."
+echo "🔴 Redis クラスターを作成中です..."
 
 # 正しいパラメーター名で実行
 aws elasticache create-replication-group \
@@ -23,4 +23,4 @@ aws elasticache describe-replication-groups \
     --query 'ReplicationGroups[0].RedisEndpoint.Address' \
     --output text
 
-echo "✨ Redis クラスター作成コマンド完了ですわ！"
+echo "✨ Redis クラスター作成コマンド完了です！"
