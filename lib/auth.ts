@@ -6,26 +6,6 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "./prisma"
 
-// 環境変数の存在確認
-const checkEnvVars = () => {
-  const required = {
-    NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
-    NEXTAUTH_URL: !!process.env.NEXTAUTH_URL,
-    GITHUB_CLIENT_ID: !!process.env.GITHUB_CLIENT_ID,
-    GITHUB_CLIENT_SECRET: !!process.env.GITHUB_CLIENT_SECRET,
-    GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
-  }
-  
-  console.log('🔍 環境変数チェック:', required)
-  return required
-}
-
-// 開発環境でのチェック
-if (process.env.NODE_ENV === 'development') {
-  checkEnvVars()
-}
-
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -34,11 +14,6 @@ export const authOptions: AuthOptions = {
       GithubProvider({
         clientId: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
-        authorization: {
-          params: {
-            scope: "read:user user:email",
-          },
-        },
       })
     ] : []),
     
@@ -47,11 +22,6 @@ export const authOptions: AuthOptions = {
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        authorization: {
-          params: {
-            scope: "openid email profile",
-          },
-        },
       })
     ] : []),
     
@@ -80,6 +50,7 @@ export const authOptions: AuthOptions = {
             id: user.id,
             email: user.email,
             name: user.name,
+            hasPassword: true, // パスワード認証フラグ
           }
         } catch (error) {
           console.error('認証エラー:', error)
@@ -92,12 +63,28 @@ export const authOptions: AuthOptions = {
     session: async ({ session, token }) => {
       if (session?.user && token.sub) {
         session.user.id = token.sub
+        session.user.hasPassword = token.hasPassword || false
       }
       return session
     },
-    jwt: async ({ user, token }) => {
+    jwt: async ({ user, token, account }) => {
       if (user) {
         token.sub = user.id
+        // OAuth認証かパスワード認証かを判定
+        if (account?.provider === 'credentials') {
+          token.hasPassword = true
+        } else {
+          // OAuth認証の場合、DBでパスワードの有無を確認
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { id: user.id },
+              select: { password: true }
+            })
+            token.hasPassword = !!dbUser?.password
+          } catch (error) {
+            token.hasPassword = false
+          }
+        }
       }
       return token
     },
@@ -115,18 +102,5 @@ export const authOptions: AuthOptions = {
     signIn: "/auth/signin",
     error: "/auth/error",
   },
-  // デバッグ用ログ有効化
   debug: process.env.NODE_ENV === 'development',
-  // 本番環境用セキュリティ設定
-  cookies: {
-    sessionToken: {
-      name: `${process.env.NODE_ENV === 'production' ? '__Secure-' : ''}next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-      },
-    },
-  },
 }

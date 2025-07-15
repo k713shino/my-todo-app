@@ -3,6 +3,7 @@ import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import TodoList from '@/app/components/TodoList'
 import Image from 'next/image'
 import SignOutButton from '@/app/components/SignOutButton'
+import Link from 'next/link'
 
 export default async function Dashboard() {
   const session = await getAuthSession()
@@ -35,6 +36,14 @@ export default async function Dashboard() {
                   className="rounded-full"
                 />
               )}
+              {/* 設定リンク追加 */}
+              <Link
+                href="/settings"
+                className="text-sm text-gray-600 hover:text-purple-600 transition-colors"
+                title="アカウント設定"
+              >
+                ⚙️ 設定
+              </Link>
               <SignOutButton />
             </div>
           </div>
