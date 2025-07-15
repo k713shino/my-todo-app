@@ -15,6 +15,7 @@ export default function AccountDeletionForm() {
     password: '',
     reason: ''
   })
+  const [error, setError] = useState('')
 
   const reasons = [
     '他のサービスに移行するため',
@@ -27,17 +28,20 @@ export default function AccountDeletionForm() {
 
   const handleInitialDelete = () => {
     setShowConfirmation(true)
+    setError('')
   }
 
   const handleFinalDelete = async () => {
+    setError('')
+    
     if (!formData.confirmationText || formData.confirmationText !== 'DELETE') {
-      toast.error('確認テキスト「DELETE」を正確に入力してください')
+      setError('確認テキスト「DELETE」を正確に入力してください')
       return
     }
 
     // パスワード認証ユーザーの場合、パスワード必須
     if (session?.user?.hasPassword && !formData.password) {
-      toast.error('パスワードを入力してください')
+      setError('パスワードを入力してください')
       return
     }
 
@@ -46,7 +50,7 @@ export default function AccountDeletionForm() {
 
 この操作は取り消すことができません。
 - すべてのTodoデータが永久に削除されます
-- ログイン情報が削除されます
+- ログイン情報が削除されます  
 - アカウントに関連するすべてのデータが削除されます
 
 削除を継続する場合は「OK」をクリックしてください。
@@ -59,33 +63,83 @@ export default function AccountDeletionForm() {
     setIsDeleting(true)
     
     try {
-      const response = await fetch('/api/auth/delete-account', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          confirmationText: formData.confirmationText,
-          password: formData.password,
-          reason: formData.reason
-        })
+      console.log('🗑️ Starting account deletion...')
+      
+      const requestBody = {
+        confirmationText: formData.confirmationText,
+        password: formData.password,
+        reason: formData.reason
+      }
+      
+      console.log('📤 Sending deletion request:', {
+        confirmationText: requestBody.confirmationText,
+        hasPassword: !!requestBody.password,
+        reason: requestBody.reason
       })
       
-      const data = await response.json()
+      const response = await fetch('/api/auth/delete-account', {
+        method: 'DELETE',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        body: JSON.stringify(requestBody)
+      })
+      
+      console.log('📥 Deletion response status:', response.status)
+      
+      // レスポンスの処理
+      let data
+      try {
+        const responseText = await response.text()
+        console.log('📄 Raw response:', responseText)
+        
+        if (responseText) {
+          data = JSON.parse(responseText)
+        } else {
+          data = { error: 'サーバーからの応答が空です' }
+        }
+      } catch (parseError) {
+        console.error('JSON parse error:', parseError)
+        data = { error: 'サーバー応答の解析に失敗しました' }
+      }
       
       if (response.ok) {
+        console.log('✅ Account deletion successful:', data)
         toast.success('アカウントが正常に削除されました')
         
         // ログアウトして削除完了ページへ
-        await signOut({ redirect: false })
-        router.push('/account-deleted')
+        try {
+          await signOut({ redirect: false })
+          router.push('/account-deleted')
+        } catch (signOutError) {
+          console.error('Sign out error:', signOutError)
+          // エラーでもリダイレクトする
+          window.location.href = '/account-deleted'
+        }
       } else {
+        console.error('❌ Account deletion failed:', data)
+        setError(data.error || `削除に失敗しました (ステータス: ${response.status})`)
         toast.error(data.error || 'アカウント削除に失敗しました')
       }
     } catch (error) {
-      console.error('Account deletion error:', error)
+      console.error('❌ Account deletion network error:', error)
+      setError('ネットワークエラーが発生しました。インターネット接続を確認してください。')
       toast.error('エラーが発生しました')
     } finally {
       setIsDeleting(false)
     }
+  }
+
+  // セッション情報をデバッグ表示（開発環境のみ）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 Session debug:', {
+      hasSession: !!session,
+      userId: session?.user?.id,
+      email: session?.user?.email,
+      hasPassword: session?.user?.hasPassword,
+      authMethod: session?.user?.hasPassword ? 'credentials' : 'oauth'
+    })
   }
 
   if (!showConfirmation) {
@@ -95,12 +149,23 @@ export default function AccountDeletionForm() {
           ⚠️ アカウント削除
         </h3>
         
+        {/* 認証方法の表示 */}
+        <div className="bg-blue-50 p-4 rounded-lg mb-4">
+          <h4 className="font-medium text-blue-800 mb-2">📋 アカウント情報</h4>
+          <ul className="text-sm text-blue-700 space-y-1">
+            <li>• メールアドレス: {session?.user?.email}</li>
+            <li>• 認証方法: {session?.user?.hasPassword ? 'パスワード認証' : 'OAuth認証 (GitHub/Google)'}</li>
+            <li>• アカウントID: {session?.user?.id}</li>
+          </ul>
+        </div>
+        
         <div className="bg-red-50 p-4 rounded-lg mb-4">
           <h4 className="font-medium text-red-800 mb-2">削除されるデータ</h4>
           <ul className="text-sm text-red-700 space-y-1">
             <li>• すべてのTodoアイテム</li>
             <li>• アカウント情報（名前、メール等）</li>
             <li>• ログイン履歴・セッション</li>
+            <li>• OAuth接続情報</li>
             <li>• プロフィール設定</li>
             <li>• その他すべての関連データ</li>
           </ul>
@@ -132,6 +197,12 @@ export default function AccountDeletionForm() {
         🚨 最終確認 - アカウント削除
       </h3>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-4">
+          <p className="text-red-800 text-sm">{error}</p>
+        </div>
+      )}
+
       <div className="space-y-4">
         {/* 削除理由 */}
         <div>
@@ -151,7 +222,7 @@ export default function AccountDeletionForm() {
           </select>
         </div>
 
-        {/* パスワード確認（必要な場合） */}
+        {/* パスワード確認（パスワード認証の場合のみ） */}
         {session?.user?.hasPassword && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -166,6 +237,19 @@ export default function AccountDeletionForm() {
               required
               disabled={isDeleting}
             />
+            <p className="text-xs text-gray-500 mt-1">
+              セキュリティのため、現在のパスワードを入力してください
+            </p>
+          </div>
+        )}
+
+        {/* OAuth認証の場合の説明 */}
+        {!session?.user?.hasPassword && (
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <strong>OAuth認証アカウント</strong><br />
+              GitHub/Google認証でログインしているため、パスワード確認は不要です。
+            </p>
           </div>
         )}
 
@@ -175,23 +259,32 @@ export default function AccountDeletionForm() {
             確認テキスト *
           </label>
           <p className="text-sm text-gray-600 mb-2">
-            削除を確認するため、下のボックスに <code className="bg-gray-100 px-1 rounded">DELETE</code> と入力してください
+            削除を確認するため、下のボックスに <code className="bg-gray-100 px-1 rounded font-mono">DELETE</code> と正確に入力してください
           </p>
           <input
             type="text"
             value={formData.confirmationText}
             onChange={(e) => setFormData({...formData, confirmationText: e.target.value})}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
             placeholder="DELETE"
             required
             disabled={isDeleting}
           />
+          {formData.confirmationText && formData.confirmationText !== 'DELETE' && (
+            <p className="text-sm text-red-600 mt-1">
+              ❌ 「DELETE」と正確に入力してください（大文字小文字を区別します）
+            </p>
+          )}
         </div>
 
         {/* ボタン */}
         <div className="flex space-x-3">
           <button
-            onClick={() => setShowConfirmation(false)}
+            onClick={() => {
+              setShowConfirmation(false)
+              setError('')
+              setFormData({ confirmationText: '', password: '', reason: '' })
+            }}
             className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
             disabled={isDeleting}
           >
@@ -200,11 +293,35 @@ export default function AccountDeletionForm() {
           <button
             onClick={handleFinalDelete}
             className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-            disabled={isDeleting || formData.confirmationText !== 'DELETE' || (session?.user?.hasPassword && !formData.password)}
+            disabled={
+              isDeleting || 
+              formData.confirmationText !== 'DELETE' || 
+              (session?.user?.hasPassword && !formData.password)
+            }
           >
             {isDeleting ? '削除中...' : '完全に削除する'}
           </button>
         </div>
+
+        {/* 法的情報 */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h4 className="text-sm font-medium text-blue-800 mb-2">📋 法的情報</h4>
+          <p className="text-sm text-blue-700">
+            この削除はGDPR（一般データ保護規則）およびその他のプライバシー法に準拠しています。
+            削除処理は即座に実行され、すべてのデータが完全に削除されます。
+          </p>
+        </div>
+
+        {/* デバッグ情報（開発環境のみ） */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
+            <strong>デバッグ情報:</strong><br />
+            認証方法: {session?.user?.hasPassword ? 'パスワード' : 'OAuth'}<br />
+            ユーザーID: {session?.user?.id}<br />
+            確認テキスト: {formData.confirmationText}<br />
+            パスワード入力: {formData.password ? '●●●●' : '（空）'}
+          </div>
+        )}
       </div>
     </div>
   )

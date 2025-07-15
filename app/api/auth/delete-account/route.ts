@@ -1,9 +1,9 @@
+// app/api/auth/delete-account/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { prisma } from '@/lib/prisma'
 import { CacheManager, RateLimiter } from '@/lib/cache'
-import { signOut } from 'next-auth/react'
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -55,15 +55,15 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // パスワード認証のユーザーの場合、パスワード確認
-    if (user.password && !password) {
-      return NextResponse.json(
-        { error: 'パスワードが必要です' }, 
-        { status: 400 }
-      )
-    }
+    // パスワード認証のユーザーの場合のみパスワード確認
+    if (user.password && session.user.hasPassword) {
+      if (!password) {
+        return NextResponse.json(
+          { error: 'パスワードが必要です' }, 
+          { status: 400 }
+        )
+      }
 
-    if (user.password && password) {
       const isPasswordValid = await bcrypt.compare(password, user.password)
       if (!isPasswordValid) {
         return NextResponse.json(
@@ -80,46 +80,62 @@ export async function DELETE(request: NextRequest) {
       todoCount: user.todos.length,
       accountCount: user.accounts.length,
       sessionCount: user.sessions.length,
+      authMethod: user.password ? 'credentials' : 'oauth',
       createdAt: user.createdAt,
       deletedAt: new Date().toISOString(),
       reason: reason || 'Not specified'
     }
 
+    console.log('🗑️ Account deletion initiated:', {
+      userId: user.id,
+      email: user.email,
+      authMethod: deletionStats.authMethod,
+      dataCount: {
+        todos: deletionStats.todoCount,
+        sessions: deletionStats.sessionCount,
+        accounts: deletionStats.accountCount
+      }
+    })
+
     // トランザクションでデータ削除
     await prisma.$transaction(async (tx) => {
-      // 1. Todoの削除（カスケード削除）
-      await tx.todo.deleteMany({
+      // 1. Todoの削除（カスケード削除されるが明示的に）
+      const deletedTodos = await tx.todo.deleteMany({
         where: { userId: session.user.id }
       })
+      console.log(`📝 Deleted ${deletedTodos.count} todos`)
 
       // 2. セッションの削除
-      await tx.session.deleteMany({
+      const deletedSessions = await tx.session.deleteMany({
         where: { userId: session.user.id }
       })
+      console.log(`🔑 Deleted ${deletedSessions.count} sessions`)
 
       // 3. OAuth アカウントの削除
-      await tx.account.deleteMany({
+      const deletedAccounts = await tx.account.deleteMany({
         where: { userId: session.user.id }
       })
+      console.log(`🔗 Deleted ${deletedAccounts.count} OAuth accounts`)
 
       // 4. ユーザーアカウントの削除
       await tx.user.delete({
         where: { id: session.user.id }
       })
+      console.log(`👤 Deleted user account: ${user.email}`)
     })
 
     // Redisからユーザー関連データを削除
     try {
-      await CacheManager.deletePattern(`*:${session.user.id}`)
-      await CacheManager.deletePattern(`*${session.user.id}*`)
+      const deletedCacheKeys = await CacheManager.deletePattern(`*${session.user.id}*`)
+      console.log(`🧹 Deleted ${deletedCacheKeys} cache keys`)
     } catch (error) {
-      console.warn('Redis cleanup failed:', error)
+      console.warn('Redis cleanup failed (non-critical):', error)
     }
 
     // 削除ログ記録（監査用）
-    console.log('Account deleted:', JSON.stringify(deletionStats, null, 2))
+    console.log('✅ Account deletion completed:', JSON.stringify(deletionStats, null, 2))
 
-    // GDPR準拠のログ（必要に応じて外部システムに送信）
+    // GDPR準拠のログ（外部webhook送信）
     if (process.env.GDPR_AUDIT_WEBHOOK) {
       try {
         await fetch(process.env.GDPR_AUDIT_WEBHOOK, {
@@ -127,9 +143,11 @@ export async function DELETE(request: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: 'account_deletion',
+            timestamp: deletionStats.deletedAt,
             ...deletionStats
           })
         })
+        console.log('📋 GDPR audit log sent')
       } catch (error) {
         console.error('GDPR audit log failed:', error)
       }
@@ -140,15 +158,28 @@ export async function DELETE(request: NextRequest) {
       deletedAt: deletionStats.deletedAt,
       stats: {
         todoCount: deletionStats.todoCount,
+        authMethod: deletionStats.authMethod,
         memberSince: deletionStats.createdAt
       }
     })
 
   } catch (error) {
-    console.error('Account deletion error:', error)
+    console.error('❌ Account deletion error:', error)
     return NextResponse.json(
-      { error: 'アカウント削除に失敗しました' }, 
+      { error: 'アカウント削除に失敗しました。しばらく後に再試行してください。' }, 
       { status: 500 }
     )
   }
+}
+
+// OPTIONS メソッドの追加（CORS対応）
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  })
 }
