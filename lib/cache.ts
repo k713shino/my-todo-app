@@ -126,11 +126,12 @@ export class CacheManager {
     return this.del(CacheKeys.userSession(sessionId))
   }
 
-  // ユーザーアクティビティ追跡
+  // ユーザーアクティビティ追跡（型エラー修正）
   static async updateUserActivity(userId: string): Promise<boolean> {
     try {
       const key = CacheKeys.userActivity(userId)
-      await redis.setex(key, 1800, Date.now()) // 30分間のアクティビティ記録
+      const timestamp = Date.now().toString() // 文字列に変換
+      await redis.setex(key, 1800, timestamp) // 30分間のアクティビティ記録
       return true
     } catch (_error: unknown) {
       console.error('User activity update error:', _error)
@@ -139,11 +140,11 @@ export class CacheManager {
   }
 
   static async isUserActive(userId: string): Promise<boolean> {
-    const activity = await this.get<number>(CacheKeys.userActivity(userId))
+    const activity = await this.get<string>(CacheKeys.userActivity(userId))
     if (!activity) return false
     
     const now = Date.now()
-    const lastActivity = activity
+    const lastActivity = parseInt(activity, 10)
     return (now - lastActivity) < 1800000 // 30分以内
   }
 

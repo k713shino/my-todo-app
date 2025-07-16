@@ -25,7 +25,7 @@ interface MockRedis {
   // 基本操作
   get(key: string): Promise<string | null>
   set(key: string, value: string): Promise<string>
-  setex(key: string, seconds: number, value: string): Promise<string>
+  setex(key: string, seconds: number, value: string | number): Promise<string>
   del(...keys: string[]): Promise<number>
   exists(...keys: string[]): Promise<number>
   expire(key: string, seconds: number): Promise<number>
