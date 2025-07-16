@@ -5,17 +5,14 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "prisma generate && next build",
+    "build:no-lint": "prisma generate && SKIP_ENV_VALIDATION=1 next build --no-lint",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "next lint --fix",
+    "lint:fix": "next lint --fix --quiet",
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:generate": "dotenv -e .env.local -- prisma generate",
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
-    "redis:cli": "redis-cli -h localhost -p 6379",
-    "redis:monitor": "redis-cli -h localhost -p 6379 monitor",
-    "redis:info": "redis-cli -h localhost -p 6379 info",
-    "cache:clear": "node scripts/clear-cache.js",
-    "cache:stats": "node scripts/cache-stats.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {

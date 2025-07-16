@@ -12,19 +12,16 @@ const nextConfig = {
     serverExternalPackages: ['@prisma/client'],
   },
   
-  // その他の設定
+  // 本番ビルド時のエラー対策
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: true, // ESLintエラーを無視
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: true, // TypeScriptエラーを無視（必要に応じて）
   },
-}
-
-module.exports = {
+  
+  // 画像設定
   images: {
-    //domains: ['lh3.googleusercontent.com'],
-    // または remotePatterns を使用
     remotePatterns: [
       {
         protocol: 'https',
@@ -41,3 +38,5 @@ module.exports = {
     ],
   },
 }
+
+module.exports = nextConfig

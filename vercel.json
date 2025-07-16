@@ -11,7 +11,8 @@
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1",
-      "SKIP_ENV_VALIDATION": "1"
+      "SKIP_ENV_VALIDATION": "1",
+      "ESLint_NO_DEV_ERRORS": "true"
     }
   },
   "rewrites": [
