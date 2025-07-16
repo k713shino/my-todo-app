@@ -48,9 +48,21 @@ export class MonitoringService {
   // アプリケーション健全性チェック
   static async healthCheck(): Promise<{
     status: 'healthy' | 'degraded' | 'unhealthy'
-    checks: Record<string, { status: string; latency?: number; error?: string }>
+    checks: Record<string, { 
+      status: string; 
+      latency?: number; 
+      error?: string;
+      heapUsed?: number;
+      heapTotal?: number;
+    }>
   }> {
-    const checks: Record<string, any> = {}
+    const checks: Record<string, { 
+      status: string; 
+      latency?: number; 
+      error?: string;
+      heapUsed?: number;
+      heapTotal?: number;
+    }> = {}
     
     // Redis接続チェック
     try {
@@ -77,8 +89,7 @@ export class MonitoringService {
     return { status: overallStatus, checks }
   }
 
-  // パフォーマンス監視
-  static async trackPerformance(operation: string, duration: number, metadata?: any): Promise<void> {
+  static async trackPerformance(operation: string, duration: number, metadata?: Record<string, unknown>): Promise<void> {
     try {
       const key = `performance:${operation}`
       const data = {
@@ -87,9 +98,8 @@ export class MonitoringService {
         ...metadata
       }
       
-      // 直近の性能データを保存（24時間分）
       await redis.zadd(key, Date.now(), JSON.stringify(data))
-      await redis.expire(key, 86400) // 24時間
+      await redis.expire(key, 86400)
       
     } catch (error) {
       console.error('Performance tracking error:', error)

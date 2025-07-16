@@ -7,7 +7,7 @@ interface DataExportFormProps {
   userId: string
 }
 
-export default function DataExportForm({ userId }: DataExportFormProps) {
+export default function DataExportForm({ userId: _userId }: DataExportFormProps) {
   const [isExporting, setIsExporting] = useState(false)
 
   const handleExport = async (format: 'json' | 'csv') => {

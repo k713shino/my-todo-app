@@ -26,6 +26,7 @@ const eslintConfig = [
       "@typescript-eslint/no-empty-object-type": "off",
       "@typescript-eslint/no-unsafe-function-type": "off",
       "@typescript-eslint/no-wrapper-object-types": "off",
+      "@typescript-eslint/no-require-imports": "off",
       
       // React関連も緩和
       "react-hooks/exhaustive-deps": "off",

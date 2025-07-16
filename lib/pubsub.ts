@@ -22,12 +22,18 @@ export interface UserActivityData {
   userId: string
   action: string
   timestamp: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
+}
+
+export interface GlobalNotificationData {
+  type: string
+  message: string
+  data?: Record<string, unknown>
 }
 
 // 型安全なコールバック関数の型定義
-type MessageCallback = (data: any) => void
-type PatternMessageCallback = (channel: string, data: any) => void
+type MessageCallback = (data: TodoEventData | UserActivityData | GlobalNotificationData) => void
+type PatternMessageCallback = (channel: string, data: TodoEventData | UserActivityData | GlobalNotificationData) => void
 
 // PubSub管理クラス
 export class PubSubManager {
@@ -35,7 +41,7 @@ export class PubSubManager {
   private static subscribers = new Map<string, Set<MessageCallback>>()
 
   // メッセージ発行
-  static async publish(channel: string, data: any): Promise<boolean> {
+  static async publish(channel: string, data: TodoEventData | UserActivityData | GlobalNotificationData): Promise<boolean> {
     try {
       await pubClient.publish(channel, JSON.stringify({
         ...data,
@@ -46,6 +52,39 @@ export class PubSubManager {
       console.error('Publish error:', error)
       return false
     }
+  }
+
+  // Todo関連イベント発行
+  static async publishTodoEvent(eventData: TodoEventData): Promise<boolean> {
+    const { userId, type } = eventData
+    
+    let channel: string
+    switch (type) {
+      case 'created':
+        channel = PubSubChannels.todoCreated(userId)
+        break
+      case 'updated':
+        channel = PubSubChannels.todoUpdated(userId)
+        break
+      case 'deleted':
+        channel = PubSubChannels.todoDeleted(userId)
+        break
+      default:
+        return false
+    }
+
+    return this.publish(channel, eventData)
+  }
+
+  // ユーザーアクティビティ発行
+  static async publishUserActivity(activityData: UserActivityData): Promise<boolean> {
+    const channel = PubSubChannels.userActivity(activityData.userId)
+    return this.publish(channel, activityData)
+  }
+
+  // グローバル通知発行
+  static async publishGlobalNotification(notification: GlobalNotificationData): Promise<boolean> {
+    return this.publish(PubSubChannels.globalNotifications, notification)
   }
 
   // チャンネル購読（型安全版）
@@ -100,43 +139,6 @@ export class PubSubManager {
       console.error('Unsubscribe error:', error)
       return false
     }
-  }
-
-  // Todo関連イベント発行
-  static async publishTodoEvent(eventData: TodoEventData): Promise<boolean> {
-    const { userId, type } = eventData
-    
-    let channel: string
-    switch (type) {
-      case 'created':
-        channel = PubSubChannels.todoCreated(userId)
-        break
-      case 'updated':
-        channel = PubSubChannels.todoUpdated(userId)
-        break
-      case 'deleted':
-        channel = PubSubChannels.todoDeleted(userId)
-        break
-      default:
-        return false
-    }
-
-    return this.publish(channel, eventData)
-  }
-
-  // ユーザーアクティビティ発行
-  static async publishUserActivity(activityData: UserActivityData): Promise<boolean> {
-    const channel = PubSubChannels.userActivity(activityData.userId)
-    return this.publish(channel, activityData)
-  }
-
-  // グローバル通知発行
-  static async publishGlobalNotification(notification: {
-    type: string
-    message: string
-    data?: any
-  }): Promise<boolean> {
-    return this.publish(PubSubChannels.globalNotifications, notification)
   }
 
   // パターンベース購読（型安全版）

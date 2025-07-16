@@ -163,7 +163,7 @@ async function revokeOAuthToken(provider: string, accessToken: string): Promise<
 }
 
 // OPTIONS メソッドの追加（CORS対応）
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS(_request: NextRequest) {
   return new NextResponse(null, {
     status: 200,
     headers: {

@@ -1,10 +1,11 @@
-import type { AuthOptions } from "next-auth"
+import type { AuthOptions, Session, User } from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "./prisma"
+import type { JWT } from "next-auth/jwt"
 
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -76,14 +77,14 @@ export const authOptions: AuthOptions = {
     })
   ],
   callbacks: {
-    session: async ({ session, token }) => {
+    session: async ({ session, token }: { session: Session; token: JWT }) => {
       if (session?.user && token.sub) {
         session.user.id = token.sub
         session.user.hasPassword = token.hasPassword || false
       }
       return session
     },
-    jwt: async ({ user, token, account }) => {
+    jwt: async ({ user, token, account }: { user?: User; token: JWT; account?: any }) => {
       if (user) {
         token.sub = user.id
         // OAuth認証かパスワード認証かを判定
@@ -97,7 +98,7 @@ export const authOptions: AuthOptions = {
               select: { password: true }
             })
             token.hasPassword = !!dbUser?.password
-          } catch (error) {
+          } catch (_error) {
             token.hasPassword = false
           }
         }
@@ -105,7 +106,7 @@ export const authOptions: AuthOptions = {
       return token
     },
     // OAuth削除後の適切なリダイレクト
-    redirect: async ({ url, baseUrl }) => {
+    redirect: async ({ url, baseUrl }: { url: string; baseUrl: string }) => {
       // OAuth削除後のリダイレクト先を制御
       if (url.includes('/auth/oauth-removed')) {
         return `${baseUrl}/auth/oauth-removed`
@@ -115,7 +116,7 @@ export const authOptions: AuthOptions = {
       return baseUrl
     },
     // サインイン時の追加検証
-    signIn: async ({ user, account, profile }) => {
+    signIn: async ({ user: _user, account, profile: _profile }: { user: User; account: any; profile?: any }) => {
       // OAuth認証の場合、削除されたアカウントでないかチェック
       if (account?.provider && account.provider !== 'credentials') {
         try {
@@ -142,7 +143,7 @@ export const authOptions: AuthOptions = {
   },
   events: {
     // OAuth連携削除時のログ記録
-    signOut: async ({ token }) => {
+    signOut: async ({ token }: { token: JWT }) => {
       console.log(`User signed out: ${token?.sub}`)
     }
   },

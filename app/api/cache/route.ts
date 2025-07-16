@@ -4,7 +4,7 @@ import { CacheManager } from '@/lib/cache'
 import { redis } from '@/lib/redis'
 
 // キャッシュ統計取得
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await getAuthSession()
     

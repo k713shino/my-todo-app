@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
+import Image from 'next/image'
 
 interface ProfileSettingsFormProps {
   user: {
@@ -115,10 +116,12 @@ export default function ProfileSettingsForm({ user }: ProfileSettingsFormProps) 
         <div className="space-y-2">
           {user.image && (
             <div className="flex items-center space-x-3">
-              <img 
+              <Image 
                 src={user.image} 
                 alt="プロフィール画像" 
-                className="w-8 h-8 rounded-full"
+                width={32}
+                height={32}
+                className="rounded-full"
               />
               <span className="text-sm text-gray-600">プロフィール画像</span>
             </div>

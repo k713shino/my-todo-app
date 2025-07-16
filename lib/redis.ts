@@ -20,15 +20,91 @@ const shouldConnectRedis = (): boolean => {
   return true
 }
 
+// モックRedisの型定義
+interface MockRedis {
+  // 基本操作
+  get(key: string): Promise<string | null>
+  set(key: string, value: string): Promise<string>
+  setex(key: string, seconds: number, value: string): Promise<string>
+  del(...keys: string[]): Promise<number>
+  exists(...keys: string[]): Promise<number>
+  expire(key: string, seconds: number): Promise<number>
+  ttl(key: string): Promise<number>
+  keys(pattern: string): Promise<string[]>
+  incr(key: string): Promise<number>
+  ping(): Promise<string>
+  
+  // 情報取得
+  info(section?: string): Promise<string>
+  dbsize(): Promise<number>
+  
+  // ハッシュ操作
+  hset(key: string, field: string, value: string): Promise<number>
+  hget(key: string, field: string): Promise<string | null>
+  hgetall(key: string): Promise<Record<string, string>>
+  hdel(key: string, ...fields: string[]): Promise<number>
+  
+  // ソート済みセット
+  zadd(key: string, score: number, member: string): Promise<number>
+  zrange(key: string, start: number, stop: number): Promise<string[]>
+  zrem(key: string, ...members: string[]): Promise<number>
+  
+  // リスト操作
+  lpush(key: string, ...values: string[]): Promise<number>
+  rpush(key: string, ...values: string[]): Promise<number>
+  lrange(key: string, start: number, stop: number): Promise<string[]>
+  ltrim(key: string, start: number, stop: number): Promise<string>
+  
+  // セット操作
+  sadd(key: string, ...members: string[]): Promise<number>
+  smembers(key: string): Promise<string[]>
+  srem(key: string, ...members: string[]): Promise<number>
+  
+  // Pub/Sub操作
+  publish(channel: string, message: string): Promise<number>
+  subscribe(channel: string): Promise<void>
+  unsubscribe(channel?: string): Promise<void>
+  psubscribe(pattern: string): Promise<void>
+  punsubscribe(pattern?: string): Promise<void>
+  
+  // データベース操作
+  flushdb(): Promise<string>
+  flushall(): Promise<string>
+  
+  // イベントエミッター
+  on(event: string, listener: (...args: any[]) => void): MockRedis
+  off(event: string, listener: (...args: any[]) => void): MockRedis
+  once(event: string, listener: (...args: any[]) => void): MockRedis
+  emit(event: string, ...args: any[]): boolean
+  removeListener(event: string, listener: (...args: any[]) => void): MockRedis
+  removeAllListeners(event?: string): MockRedis
+  
+  // 接続管理
+  connect(): Promise<void>
+  disconnect(): Promise<void>
+  quit(): Promise<string>
+  
+  // ステータス
+  status: string
+  
+  // Pipeline処理
+  pipeline(): any
+  multi(): any
+  
+  // その他
+  options: any
+  condition: any
+}
+
 // Redisクライアントのシングルトンインスタンス
 class RedisClient {
-  private static instance: Redis | null = null
-  private static pubClient: Redis | null = null
-  private static subClient: Redis | null = null
+  private static instance: Redis | MockRedis | null = null
+  private static pubClient: Redis | MockRedis | null = null
+  private static subClient: Redis | MockRedis | null = null
   private static isDisabled = false
 
   // メインのRedisクライアントを取得
-  static getInstance(): Redis {
+  static getInstance(): Redis | MockRedis {
     // 接続が無効化されている場合はモックを返します
     if (this.isDisabled || !shouldConnectRedis()) {
       return this.createMockRedis()
@@ -76,8 +152,8 @@ class RedisClient {
   }
 
   // モックRedisクライアント
-  private static createMockRedis(): Redis {
-    const mockRedis = {
+  private static createMockRedis(): MockRedis {
+    const mockRedis: MockRedis = {
       // 基本的なRedisコマンド
       get: async (): Promise<string | null> => null,
       set: async (): Promise<string> => 'OK',
@@ -93,6 +169,7 @@ class RedisClient {
       // 情報取得
       info: async (): Promise<string> => 
         'redis_version:7.0.0\r\nused_memory:1000000\r\nconnected_clients:1\r\nkeyspace_hits:0\r\nkeyspace_misses:0\r\ntotal_commands_processed:0\r\n',
+      dbsize: async (): Promise<number> => 0,
       
       // ハッシュ操作
       hset: async (): Promise<number> => 1,
@@ -102,37 +179,74 @@ class RedisClient {
       
       // ソート済みセット
       zadd: async (): Promise<number> => 1,
+      zrange: async (): Promise<string[]> => [],
+      zrem: async (): Promise<number> => 1,
       
       // リスト操作
       lpush: async (): Promise<number> => 1,
+      rpush: async (): Promise<number> => 1,
       lrange: async (): Promise<string[]> => [],
       ltrim: async (): Promise<string> => 'OK',
       
-      // Pub/Sub
+      // セット操作
+      sadd: async (): Promise<number> => 1,
+      smembers: async (): Promise<string[]> => [],
+      srem: async (): Promise<number> => 1,
+      
+      // Pub/Sub操作
       publish: async (): Promise<number> => 0,
       subscribe: async (): Promise<void> => {},
       unsubscribe: async (): Promise<void> => {},
       psubscribe: async (): Promise<void> => {},
       punsubscribe: async (): Promise<void> => {},
       
-      // イベント管理
-      on: (): void => {},
-      off: (): void => {},
+      // データベース操作
+      flushdb: async (): Promise<string> => 'OK',
+      flushall: async (): Promise<string> => 'OK',
+      
+      // イベントエミッター
+      on: (): MockRedis => mockRedis,
+      off: (): MockRedis => mockRedis,
+      once: (): MockRedis => mockRedis,
+      emit: (): boolean => true,
+      removeListener: (): MockRedis => mockRedis,
+      removeAllListeners: (): MockRedis => mockRedis,
       
       // 接続管理
-      quit: async (): Promise<string> => 'OK',
+      connect: async (): Promise<void> => {},
       disconnect: async (): Promise<void> => {},
+      quit: async (): Promise<string> => 'OK',
       
-      // データベース管理
-      flushdb: async (): Promise<string> => 'OK',
-    } as any
+      // ステータス
+      status: 'ready',
+      
+      // Pipeline処理
+      pipeline: () => ({
+        set: () => mockRedis.pipeline(),
+        get: () => mockRedis.pipeline(),
+        del: () => mockRedis.pipeline(),
+        exec: async (): Promise<Array<[Error | null, unknown]>> => []
+      }),
+      
+      // Transaction処理
+      multi: () => ({
+        set: () => mockRedis.multi(),
+        get: () => mockRedis.multi(),
+        del: () => mockRedis.multi(),
+        exec: async (): Promise<Array<[Error | null, unknown]> | null> => []
+      }),
+      
+      // その他のプロパティ
+      options: {},
+      condition: {}
+    }
 
-    console.log('Using graceful mock Redis client')
+    console.log('🎭 Using graceful mock Redis client')
     return mockRedis
   }
 
   // メッセージ送信用クライアント
-  static getPubClient(): Redis {
+  static getPubClient(): Redis | MockRedis {
     if (this.isDisabled || !shouldConnectRedis()) {
       return this.createMockRedis()
     }
@@ -140,8 +254,14 @@ class RedisClient {
     if (!this.pubClient) {
       try {
         const redisUrl = getRedisConfig()
-        // 最もシンプルな設定
         this.pubClient = new Redis(redisUrl)
+        
+        this.pubClient.on('error', (err: Error) => {
+          console.error('❌ Redis Pub client error:', err.message)
+          if (err.message.includes('ECONNREFUSED')) {
+            this.isDisabled = true
+          }
+        })
       } catch (error) {
         console.error('Pub client creation error:', error)
         return this.createMockRedis()
@@ -151,7 +271,7 @@ class RedisClient {
   }
 
   // メッセージ受信用クライアント
-  static getSubClient(): Redis {
+  static getSubClient(): Redis | MockRedis {
     if (this.isDisabled || !shouldConnectRedis()) {
       return this.createMockRedis()
     }
@@ -159,8 +279,14 @@ class RedisClient {
     if (!this.subClient) {
       try {
         const redisUrl = getRedisConfig()
-        // 最もシンプルな設定
         this.subClient = new Redis(redisUrl)
+        
+        this.subClient.on('error', (err: Error) => {
+          console.error('❌ Redis Sub client error:', err.message)
+          if (err.message.includes('ECONNREFUSED')) {
+            this.isDisabled = true
+          }
+        })
       } catch (error) {
         console.error('Sub client creation error:', error)
         return this.createMockRedis()
@@ -179,7 +305,7 @@ class RedisClient {
       disconnectPromises.push(
         this.instance.quit().then(() => {
           this.instance = null
-        }).catch(() => {
+        }).catch((_err) => {
           this.instance = null
         })
       )
@@ -189,7 +315,7 @@ class RedisClient {
       disconnectPromises.push(
         this.pubClient.quit().then(() => {
           this.pubClient = null
-        }).catch(() => {
+        }).catch((_err) => {
           this.pubClient = null
         })
       )
@@ -199,7 +325,7 @@ class RedisClient {
       disconnectPromises.push(
         this.subClient.quit().then(() => {
           this.subClient = null
-        }).catch(() => {
+        }).catch((_err) => {
           this.subClient = null
         })
       )
@@ -208,29 +334,16 @@ class RedisClient {
     await Promise.allSettled(disconnectPromises)
   }
 
-  // 接続状態チェック
-  static async isConnected(): Promise<boolean> {
-    if (this.isDisabled || !shouldConnectRedis()) return false
-    
-    try {
-      if (!this.instance) return false
-      const result = await this.instance.ping()
-      return result === 'PONG'
-    } catch (_error) {
-      return false
-    }
-  }
-
   // 強制的にモックモードに切り替え（開発用）
   static forceDisable(): void {
     this.isDisabled = true
-    console.log('Redis manually disabled - using mock client')
+    console.log('🎭 Redis manually disabled - using mock client')
   }
 
   // モックモードを解除（開発用）
   static forceEnable(): void {
     this.isDisabled = false
-    console.log('Redis manually enabled - attempting real connection')
+    console.log('🔗 Redis manually enabled - attempting real connection')
   }
 }
 
@@ -239,8 +352,9 @@ const cleanup = async (): Promise<void> => {
   console.log('🧹 Cleaning up Redis connections gracefully...')
   try {
     await RedisClient.disconnect()
+    console.log('✅ Redis cleanup completed')
   } catch (err) {
-    // エラーでも処理
+    console.warn('⚠️ Redis cleanup error (non-critical):', err)
   }
 }
 

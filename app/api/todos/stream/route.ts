@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
 // POST メソッドも必要な場合
 export async function POST(request: NextRequest) {
-  const body = await request.json()
+  const _body = await request.json()
   
   // POST処理のロジック
   return NextResponse.json({ success: true })
