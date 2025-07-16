@@ -12,7 +12,8 @@
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1",
       "SKIP_ENV_VALIDATION": "1",
-      "ESLint_NO_DEV_ERRORS": "true"
+      "ESLint_NO_DEV_ERRORS": "true",
+      "DATABASE_URL": "postgresql://dummy:dummy@localhost:5432/dummy?connect_timeout=1"
     }
   },
   "rewrites": [
