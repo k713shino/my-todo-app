@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import PasswordChangeForm from '@/app/components/PasswordChangeForm'
 import AccountDeletionForm from '@/app/components/AccountDeletionForm'
+import ProfileSettingsForm from '@/app/components/ProfileSettingsForm'
+import DataExportForm from '@/app/components/DataExportForm'
+import OAuthManagementForm from '@/app/components/OAuthManagementForm'
 
 export default async function SettingsPage() {
   const session = await getAuthSession()
@@ -33,10 +36,28 @@ export default async function SettingsPage() {
       <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="space-y-8">
           
+          {/* プロフィール設定 */}
+          <section>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">👤 プロフィール</h2>
+            <ProfileSettingsForm user={session.user} />
+          </section>
+
+          {/* OAuth連携管理 */}
+          <section>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">🔗 連携サービス</h2>
+            <OAuthManagementForm />
+          </section>
+
           {/* セキュリティ設定 */}
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">🔒 セキュリティ</h2>
             <PasswordChangeForm />
+          </section>
+
+          {/* データ管理 */}
+          <section>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">📊 データ管理</h2>
+            <DataExportForm userId={session.user.id} />
           </section>
 
           {/* 危険なアクション */}

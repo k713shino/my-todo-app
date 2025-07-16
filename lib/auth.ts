@@ -14,6 +14,14 @@ export const authOptions: AuthOptions = {
       GithubProvider({
         clientId: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        // OAuth削除時の再認証を強制
+        authorization: {
+          params: {
+            prompt: "consent",
+            access_type: "offline",
+            response_type: "code"
+          }
+        }
       })
     ] : []),
     
@@ -22,6 +30,14 @@ export const authOptions: AuthOptions = {
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        // OAuth削除時の再認証を強制
+        authorization: {
+          params: {
+            prompt: "consent",
+            access_type: "offline",
+            response_type: "code"
+          }
+        }
       })
     ] : []),
     
@@ -88,11 +104,47 @@ export const authOptions: AuthOptions = {
       }
       return token
     },
+    // OAuth削除後の適切なリダイレクト
     redirect: async ({ url, baseUrl }) => {
+      // OAuth削除後のリダイレクト先を制御
+      if (url.includes('/auth/oauth-removed')) {
+        return `${baseUrl}/auth/oauth-removed`
+      }
       if (url.startsWith("/")) return `${baseUrl}${url}`
       else if (new URL(url).origin === baseUrl) return url
       return baseUrl
     },
+    // サインイン時の追加検証
+    signIn: async ({ user, account, profile }) => {
+      // OAuth認証の場合、削除されたアカウントでないかチェック
+      if (account?.provider && account.provider !== 'credentials') {
+        try {
+          const existingAccount = await prisma.account.findFirst({
+            where: {
+              provider: account.provider,
+              providerAccountId: account.providerAccountId
+            }
+          })
+          
+          // 削除されたOAuthアカウントの場合は認証を拒否
+          if (!existingAccount) {
+            console.log(`OAuth account not found: ${account.provider}:${account.providerAccountId}`)
+            return false
+          }
+        } catch (error) {
+          console.error('SignIn callback error:', error)
+          return false
+        }
+      }
+      
+      return true
+    }
+  },
+  events: {
+    // OAuth連携削除時のログ記録
+    signOut: async ({ token }) => {
+      console.log(`User signed out: ${token?.sub}`)
+    }
   },
   session: {
     strategy: "jwt",
