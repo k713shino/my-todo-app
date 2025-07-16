@@ -43,8 +43,8 @@ model Account {
   scope             String?
   id_token          String?  @db.Text
   session_state     String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())  // デフォルト値追加
+  updatedAt         DateTime @default(now()) @updatedAt  // デフォルト値追加
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

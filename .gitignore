@@ -70,3 +70,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .env
+
+# セキュリティ: データベースダンプとログ
+*.sql
+*.dump
+*.log
+d
+accounts
+.env.local
+.env.production
+OAuth_tokens*
