@@ -1,8 +1,8 @@
 'use client'
 
-import { signIn } from 'next-auth/react'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { signIn, getProviders } from 'next-auth/react'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 export default function SignIn() {
@@ -12,29 +12,70 @@ export default function SignIn() {
     email: '',
     password: ''
   })
+  const [providers, setProviders] = useState<any>(null)
+  const [error, setError] = useState('')
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // URLパラメータからエラーを取得
+  useEffect(() => {
+    const errorParam = searchParams.get('error')
+    if (errorParam) {
+      const errorMessages: { [key: string]: string } = {
+        'Configuration': 'OAuth設定に問題があります。管理者にお問い合わせください。',
+        'AccessDenied': 'アクセスが拒否されました。',
+        'Verification': '認証に失敗しました。',
+        'Default': 'ログインに失敗しました。しばらく後に再試行してください。',
+        'OAuthCallback': 'OAuth認証でエラーが発生しました。設定を確認してください。',
+        'OAuthAccountNotLinked': 'このメールアドレスは既に別の方法で登録されています。',
+        'CredentialsSignin': 'メールアドレスまたはパスワードが間違っています。'
+      }
+      setError(errorMessages[errorParam] || errorMessages['Default'])
+    }
+  }, [searchParams])
+
+  // プロバイダー情報を取得
+  useEffect(() => {
+    const fetchProviders = async () => {
+      const res = await getProviders()
+      setProviders(res)
+    }
+    fetchProviders()
+  }, [])
 
   const handleOAuthSignIn = async (provider: 'github' | 'google') => {
     setIsLoading(true)
+    setError('')
+    
     try {
       console.log(`${provider}認証を開始...`)
+      
+      // 環境変数チェック
+      const hasGithub = providers?.github
+      const hasGoogle = providers?.google
+      
+      if (provider === 'github' && !hasGithub) {
+        setError('GitHub認証が設定されていません。管理者にお問い合わせください。')
+        setIsLoading(false)
+        return
+      }
+      
+      if (provider === 'google' && !hasGoogle) {
+        setError('Google認証が設定されていません。管理者にお問い合わせください。')
+        setIsLoading(false)
+        return
+      }
+      
       const result = await signIn(provider, {
         callbackUrl: '/dashboard',
-        redirect: false,
+        redirect: true, // 自動リダイレクトを有効化
       })
       
       console.log('認証結果:', result)
       
-      if (result?.ok) {
-        console.log('認証成功、ダッシュボードへリダイレクト')
-        router.push('/dashboard')
-      } else if (result?.error) {
-        console.error('認証エラー:', result.error)
-        alert(`ログインに失敗しました: ${result.error}`)
-      }
     } catch (err) {
       console.error('ログインエラー:', err)
-      alert('ログインに失敗しました。もう一度お試しください。')
+      setError('ログインに失敗しました。もう一度お試しください。')
     } finally {
       setIsLoading(false)
     }
@@ -43,6 +84,7 @@ export default function SignIn() {
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError('')
     
     try {
       const result = await signIn('credentials', {
@@ -54,11 +96,11 @@ export default function SignIn() {
       if (result?.ok) {
         router.push('/dashboard')
       } else {
-        alert('メールアドレスまたはパスワードが間違っています')
+        setError(result?.error || 'メールアドレスまたはパスワードが間違っています')
       }
     } catch (err) {
       console.error('ログインエラー:', err)
-      alert('ログインに失敗しました')
+      setError('ログインに失敗しました')
     } finally {
       setIsLoading(false)
     }
@@ -76,33 +118,60 @@ export default function SignIn() {
           </p>
         </div>
         
+        {/* エラーメッセージ */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <span className="text-red-400">⚠️</span>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="mt-8 space-y-6">
           {!showEmailLogin ? (
             // OAuth ログイン画面
             <>
               {/* GitHub認証ボタン */}
-              <button
-                onClick={() => handleOAuthSignIn('github')}
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                  🐙
-                </span>
-                {isLoading ? '認証中...' : 'GitHubでログイン'}
-              </button>
+              {providers?.github && (
+                <button
+                  onClick={() => handleOAuthSignIn('github')}
+                  disabled={isLoading}
+                  className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                >
+                  <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                    🐙
+                  </span>
+                  {isLoading ? '認証中...' : 'GitHubでログイン'}
+                </button>
+              )}
 
-              {/* Google認証ボタン（常に表示、設定不備の場合はエラー表示） */}
-              <button
-                onClick={() => handleOAuthSignIn('google')}
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                  🔴
-                </span>
-                {isLoading ? '認証中...' : 'Googleでログイン'}
-              </button>
+              {/* Google認証ボタン */}
+              {providers?.google && (
+                <button
+                  onClick={() => handleOAuthSignIn('google')}
+                  disabled={isLoading}
+                  className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                >
+                  <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                    🔴
+                  </span>
+                  {isLoading ? '認証中...' : 'Googleでログイン'}
+                </button>
+              )}
+
+              {/* OAuth設定チェック */}
+              {!providers?.github && !providers?.google && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+                  <p className="text-sm text-yellow-800">
+                    OAuth認証が設定されていません。メールアドレスでのログインをご利用ください。
+                  </p>
+                </div>
+              )}
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -184,6 +253,18 @@ export default function SignIn() {
               新規会員登録
             </Link>
           </div>
+
+          {/* デバッグ情報（開発環境のみ） */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-xs text-gray-400 p-2 bg-gray-50 rounded">
+              <p>利用可能な認証方法:</p>
+              <ul>
+                {providers?.github && <li>✅ GitHub</li>}
+                {providers?.google && <li>✅ Google</li>}
+                <li>✅ メールアドレス</li>
+              </ul>
+            </div>
+          )}
         </div>
       </div>
     </div>

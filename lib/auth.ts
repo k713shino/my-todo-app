@@ -15,14 +15,7 @@ export const authOptions: AuthOptions = {
       GithubProvider({
         clientId: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
-        // OAuth削除時の再認証を強制
-        authorization: {
-          params: {
-            prompt: "consent",
-            access_type: "offline",
-            response_type: "code"
-          }
-        }
+        allowDangerousEmailAccountLinking: true, // メール連携を許可
       })
     ] : []),
     
@@ -31,14 +24,7 @@ export const authOptions: AuthOptions = {
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        // OAuth削除時の再認証を強制
-        authorization: {
-          params: {
-            prompt: "consent",
-            access_type: "offline",
-            response_type: "code"
-          }
-        }
+        allowDangerousEmailAccountLinking: true, // メール連携を許可
       })
     ] : []),
     
@@ -67,7 +53,7 @@ export const authOptions: AuthOptions = {
             id: user.id,
             email: user.email,
             name: user.name,
-            hasPassword: true, // パスワード認証フラグ
+            hasPassword: true,
           }
         } catch (error) {
           console.error('認証エラー:', error)
@@ -87,11 +73,9 @@ export const authOptions: AuthOptions = {
     jwt: async ({ user, token, account }: { user?: User; token: JWT; account?: any }) => {
       if (user) {
         token.sub = user.id
-        // OAuth認証かパスワード認証かを判定
         if (account?.provider === 'credentials') {
           token.hasPassword = true
         } else {
-          // OAuth認証の場合、DBでパスワードの有無を確認
           try {
             const dbUser = await prisma.user.findUnique({
               where: { id: user.id },
@@ -105,46 +89,45 @@ export const authOptions: AuthOptions = {
       }
       return token
     },
-    // OAuth削除後の適切なリダイレクト
     redirect: async ({ url, baseUrl }: { url: string; baseUrl: string }) => {
-      // OAuth削除後のリダイレクト先を制御
-      if (url.includes('/auth/oauth-removed')) {
-        return `${baseUrl}/auth/oauth-removed`
-      }
+      // 相対URLの場合はbaseUrlを前に付ける
       if (url.startsWith("/")) return `${baseUrl}${url}`
+      // 同じオリジンの場合はそのまま返す
       else if (new URL(url).origin === baseUrl) return url
-      return baseUrl
+      // それ以外はダッシュボードにリダイレクト
+      return `${baseUrl}/dashboard`
     },
-    // サインイン時の追加検証
-    signIn: async ({ user: _user, account, profile: _profile }: { user: User; account: any; profile?: any }) => {
-      // OAuth認証の場合、削除されたアカウントでないかチェック
-      if (account?.provider && account.provider !== 'credentials') {
-        try {
-          const existingAccount = await prisma.account.findFirst({
-            where: {
-              provider: account.provider,
-              providerAccountId: account.providerAccountId
-            }
-          })
+    signIn: async ({ user, account, profile }: { user: User; account: any; profile?: any }) => {
+      try {
+        // OAuth認証の場合の追加処理
+        if (account?.provider && account.provider !== 'credentials') {
+          console.log(`OAuth sign in: ${account.provider} for ${user.email}`)
           
-          // 削除されたOAuthアカウントの場合は認証を拒否
-          if (!existingAccount) {
-            console.log(`OAuth account not found: ${account.provider}:${account.providerAccountId}`)
-            return false
+          // メールアドレスが既存ユーザーと重複している場合の処理
+          if (user.email) {
+            const existingUser = await prisma.user.findUnique({
+              where: { email: user.email }
+            })
+            
+            if (existingUser) {
+              console.log(`Linking OAuth account to existing user: ${user.email}`)
+            }
           }
-        } catch (error) {
-          console.error('SignIn callback error:', error)
-          return false
         }
+        
+        return true
+      } catch (error) {
+        console.error('SignIn callback error:', error)
+        return true // エラーでもサインインを継続
       }
-      
-      return true
     }
   },
   events: {
-    // OAuth連携削除時のログ記録
     signOut: async ({ token }: { token: JWT }) => {
       console.log(`User signed out: ${token?.sub}`)
+    },
+    signIn: async ({ user, account }: { user: User; account: any }) => {
+      console.log(`User signed in: ${user.email} via ${account?.provider}`)
     }
   },
   session: {
@@ -153,7 +136,7 @@ export const authOptions: AuthOptions = {
   },
   pages: {
     signIn: "/auth/signin",
-    error: "/auth/error",
+    error: "/auth/signin", // エラー時もサインインページにリダイレクト
   },
   debug: process.env.NODE_ENV === 'development',
 }
