@@ -78,9 +78,11 @@ const createDummyPrismaClient = () => {
       deleteMany: async () => ({ count: 0 }),
     },
     account: {
+      findUnique: async () => null,  // 🔥 この行を追加！
       findFirst: async () => null,
       findMany: async () => [],
       create: async () => ({}),
+      update: async () => ({}),
       delete: async () => ({}),
       deleteMany: async () => ({ count: 0 }),
     },
@@ -88,8 +90,15 @@ const createDummyPrismaClient = () => {
       findUnique: async () => null,
       findMany: async () => [],
       create: async () => ({}),
+      update: async () => ({}),
       delete: async () => ({}),
       deleteMany: async () => ({ count: 0 }),
+    },
+    verificationToken: {
+      findUnique: async () => null,
+      findFirst: async () => null,
+      create: async () => ({}),
+      delete: async () => ({}),
     },
     todo: {
       findMany: async () => [],

@@ -1,12 +1,11 @@
 import type { AuthOptions, Session, User } from "next-auth"
-import { PrismaAdapter } from "@auth/prisma-adapter"
+import { PrismaAdapter } from "@next-auth/prisma-adapter"  // 🔥 修正: 正しいパッケージ
 import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "./prisma"
 import type { JWT } from "next-auth/jwt"
-
 
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -153,18 +152,19 @@ export const authOptions: AuthOptions = {
     error: "/auth/signin", // エラー時もサインインページにリダイレクト
   },
   debug: process.env.NODE_ENV === 'development',
-  // CSRF保護を有効化
-  useSecureCookies: true,
-  cookies: {
-    sessionToken: {
-      name: '__Secure-next-auth.session-token',
-      options: {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: true,
-        domain: process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).hostname : undefined
+  // 本番環境でのクッキー設定を簡素化
+  ...(process.env.NODE_ENV === 'production' && {
+    useSecureCookies: true,
+    cookies: {
+      sessionToken: {
+        name: '__Secure-next-auth.session-token',
+        options: {
+          httpOnly: true,
+          sameSite: 'lax',
+          path: '/',
+          secure: true,
+        }
       }
     }
-  }
+  })
 }
