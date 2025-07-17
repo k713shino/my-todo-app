@@ -117,6 +117,15 @@ export default function PasswordChangeForm() {
       </h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* アクセシビリティのためのhiddenユーザー名フィールド */}
+        <input
+          type="text"
+          autoComplete="username"
+          value={session?.user?.email || ''}
+          aria-hidden="true"
+          className="hidden"
+          readOnly
+        />
         {/* 現在のパスワード */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
