@@ -135,49 +135,17 @@ export const authOptions: AuthOptions = {
       // それ以外はダッシュボードにリダイレクト
       return `${baseUrl}/dashboard`
     },
-    signIn: async ({ user, account, profile }: { user: User; account: any; profile?: any }) => {
+    signIn: async ({ user, account }: { user: User; account: any }) => {
       try {
-        // OAuth認証の場合の追加処理
+        // OAuth認証時の基本ログ
         if (account?.provider && account.provider !== 'credentials') {
-          console.log('=== OAuth認証デバッグ情報 ===')
-          console.log(`プロバイダー: ${account.provider}`)
-          console.log(`メールアドレス: ${user.email}`)
-          console.log(`アカウント情報:`, account)
-          console.log(`プロフィール情報:`, profile)
-          
-          // メールアドレスが既存ユーザーと重複している場合の処理
-          if (user.email) {
-            const existingUser = await prisma.user.findUnique({
-              where: { email: user.email }
-            })
-            
-            if (existingUser) {
-              console.log(`既存ユーザーとのアカウント連携: ${user.email}`)
-              console.log(`既存ユーザー情報:`, existingUser)
-            }
-          }
+          console.log(`OAuth認証成功: ${user.email} (${account.provider})`)
         }
-        
         return true
       } catch (error) {
-        console.error('=== 認証エラー ===')
-        console.error('エラー詳細:', error)
-        console.error('認証情報:', { user, account, profile })
+        console.error('認証エラー:', error)
         return true // エラーでもサインインを継続
       }
-    }
-  },
-  events: {
-    signOut: async ({ token }: { token: JWT }) => {
-      console.log('=== サインアウト ===')
-      console.log(`ユーザーID: ${token?.sub}`)
-      console.log('トークン情報:', token)
-    },
-    signIn: async ({ user, account }: { user: User; account: any }) => {
-      console.log('=== サインイン成功 ===')
-      console.log(`ユーザー: ${user.email}`)
-      console.log(`認証方法: ${account?.provider}`)
-      console.log('アカウント詳細:', account)
     }
   },
   session: {
@@ -186,10 +154,10 @@ export const authOptions: AuthOptions = {
   },
   pages: {
     signIn: "/auth/signin",
-    error: "/auth/signin", // エラー時もサインインページにリダイレクト
+    error: "/auth/signin",
   },
   debug: process.env.NODE_ENV === 'development',
-  // 本番環境でのクッキー設定を簡素化
+  // 本番環境でのセキュリティ設定
   ...(process.env.NODE_ENV === 'production' && {
     useSecureCookies: true,
     cookies: {
