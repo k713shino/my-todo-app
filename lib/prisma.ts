@@ -21,12 +21,9 @@ const getDatabaseUrl = (): string => {
 // ビルド時の環境判定
 const isBuildTime = (): boolean => {
   return (
-    process.env.NODE_ENV === 'production' && 
-    (
-      process.env.VERCEL === '1' || 
-      process.env.CI === 'true' ||
-      process.env.NEXT_PHASE === 'phase-production-build'
-    )
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    // Vercelのビルド時を正確に判定
+    (process.env.VERCEL === '1' && process.env.VERCEL_ENV === undefined)
   )
 }
 
@@ -76,15 +73,17 @@ const createDummyPrismaClient = () => {
       update: async () => ({}),
       delete: async () => ({}),
       deleteMany: async () => ({ count: 0 }),
+      count: async () => 0, // 🔥 count メソッド追加
     },
     account: {
-      findUnique: async () => null,  // 🔥 この行を追加！
+      findUnique: async () => null,
       findFirst: async () => null,
       findMany: async () => [],
       create: async () => ({}),
       update: async () => ({}),
       delete: async () => ({}),
       deleteMany: async () => ({ count: 0 }),
+      count: async () => 0, // 🔥 count メソッド追加
     },
     session: {
       findUnique: async () => null,
@@ -93,12 +92,14 @@ const createDummyPrismaClient = () => {
       update: async () => ({}),
       delete: async () => ({}),
       deleteMany: async () => ({ count: 0 }),
+      count: async () => 0, // 🔥 count メソッド追加
     },
     verificationToken: {
       findUnique: async () => null,
       findFirst: async () => null,
       create: async () => ({}),
       delete: async () => ({}),
+      count: async () => 0, // 🔥 count メソッド追加
     },
     todo: {
       findMany: async () => [],
