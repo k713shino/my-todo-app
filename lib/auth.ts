@@ -9,6 +9,7 @@ import type { JWT } from "next-auth/jwt"
 
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     // GitHub OAuth
     ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET ? [
@@ -139,4 +140,17 @@ export const authOptions: AuthOptions = {
     error: "/auth/signin", // エラー時もサインインページにリダイレクト
   },
   debug: process.env.NODE_ENV === 'development',
+  // CSRF保護を有効化
+  useSecureCookies: process.env.NODE_ENV === 'production',
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
+  }
 }
