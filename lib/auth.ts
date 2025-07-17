@@ -57,7 +57,8 @@ export const authOptions: AuthOptions = {
               id: true,
               email: true,
               name: true,
-              password: true
+              password: true,
+              image: true
             }
           })
           
@@ -87,6 +88,7 @@ export const authOptions: AuthOptions = {
             id: user.id,
             email: user.email,
             name: user.name,
+            image: user.image,
             hasPassword: true,
           }
         } catch (error) {
@@ -110,6 +112,11 @@ export const authOptions: AuthOptions = {
       return session
     },
     jwt: async ({ user, token, account }: { user?: User; token: JWT; account?: any }) => {
+      console.log('JWT更新前:', {
+        tokenPicture: token.picture,
+        userImage: user?.image
+      })
+
       if (user) {
         token.sub = user.id
         token.picture = user.image

@@ -27,6 +27,10 @@ export default async function Dashboard() {
               <span className="text-sm text-gray-700">
                 こんにちは、{session.user?.name}さん 👋
               </span>
+              {/* デバッグ出力 */}
+              <div className="text-xs text-gray-400">
+                Image URL: {session.user?.image}
+              </div>
               {session.user?.image && (
                 <Image
                   src={session.user.image}
@@ -34,6 +38,7 @@ export default async function Dashboard() {
                   width={32}
                   height={32}
                   className="rounded-full"
+                  unoptimized
                 />
               )}
               {/* 設定リンク追加 */}
