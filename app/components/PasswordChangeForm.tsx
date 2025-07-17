@@ -56,6 +56,11 @@ export default function PasswordChangeForm() {
     setIsLoading(true)
     
     try {
+      if (!session?.user?.email) {
+        toast.error('セッションが無効です。再度ログインしてください。')
+        return
+      }
+
       console.log('パスワード変更APIを呼び出します')
       const response = await fetch('/api/auth/change-password', {
         method: 'PUT',
@@ -63,11 +68,17 @@ export default function PasswordChangeForm() {
         body: JSON.stringify({
           currentPassword: formData.currentPassword,
           newPassword: formData.newPassword
-        })
+        }),
+        credentials: 'include'
       })
       
       const data = await response.json()
-      console.log('APIレスポンスを受信:', { status: response.status, ok: response.ok })
+      console.log('APIレスポンスを受信:', {
+        status: response.status,
+        ok: response.ok,
+        hasError: !!data.error,
+        hasFailedRequirements: !!data.failedRequirements
+      })
       
       if (response.ok) {
         toast.success('パスワードが正常に変更されました')
@@ -76,12 +87,12 @@ export default function PasswordChangeForm() {
           newPassword: '',
           confirmPassword: ''
         })
+      } else if (response.status === 401) {
+        toast.error('セッションが無効です。再度ログインしてください。')
+      } else if (data.failedRequirements) {
+        toast.error(data.error, { duration: 5000 })
       } else {
-        if (data.failedRequirements) {
-          toast.error(data.error, { duration: 5000 })
-        } else {
-          toast.error(data.error || 'パスワード変更に失敗しました')
-        }
+        toast.error(data.error || 'パスワード変更に失敗しました')
       }
     } catch (error) {
       console.error('パスワード変更エラー:', error)

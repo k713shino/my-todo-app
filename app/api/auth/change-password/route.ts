@@ -8,6 +8,11 @@ export async function PUT(request: NextRequest) {
   console.log('パスワード変更リクエストを受信しました')
   try {
     const session = await getAuthSession()
+    console.log('セッション情報:', {
+      hasSession: !!session,
+      hasUserId: !!session?.user?.id,
+      email: session?.user?.email
+    })
     
     if (!isAuthenticated(session)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -62,7 +67,6 @@ export async function PUT(request: NextRequest) {
     console.log('パスワード強度検証:', requirements)
 
     const failedRequirements = []
-    if (!requirements.length) failedRequirements.push('8文字以上')
     if (!requirements.lowercase) failedRequirements.push('小文字')
     if (!requirements.uppercase) failedRequirements.push('大文字')
     if (!requirements.number) failedRequirements.push('数字')
