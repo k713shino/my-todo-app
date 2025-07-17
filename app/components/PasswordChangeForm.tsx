@@ -77,7 +77,11 @@ export default function PasswordChangeForm() {
           confirmPassword: ''
         })
       } else {
-        toast.error(data.error || 'パスワード変更に失敗しました')
+        if (data.failedRequirements) {
+          toast.error(data.error, { duration: 5000 })
+        } else {
+          toast.error(data.error || 'パスワード変更に失敗しました')
+        }
       }
     } catch (error) {
       console.error('パスワード変更エラー:', error)
@@ -126,6 +130,7 @@ export default function PasswordChangeForm() {
               className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
               disabled={isLoading}
+              autoComplete="current-password"
             />
             <button
               type="button"
@@ -150,6 +155,7 @@ export default function PasswordChangeForm() {
               className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
               disabled={isLoading}
+              autoComplete="new-password"
             />
             <button
               type="button"
@@ -192,6 +198,7 @@ export default function PasswordChangeForm() {
               className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
               disabled={isLoading}
+              autoComplete="new-password"
             />
             <button
               type="button"

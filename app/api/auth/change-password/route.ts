@@ -32,6 +32,11 @@ export async function PUT(request: NextRequest) {
     const { currentPassword, newPassword } = body
 
     // バリデーション
+    console.log('リクエストパラメータ検証:', {
+      hasCurrentPassword: !!currentPassword,
+      hasNewPassword: !!newPassword
+    })
+    
     if (!currentPassword || !newPassword) {
       return NextResponse.json(
         { error: '現在のパスワードと新しいパスワードの両方が必要です' }, 
@@ -47,10 +52,28 @@ export async function PUT(request: NextRequest) {
     }
 
     // パスワード強度チェック
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/
-    if (!passwordRegex.test(newPassword)) {
+    const requirements = {
+      length: newPassword.length >= 8,
+      lowercase: /[a-z]/.test(newPassword),
+      uppercase: /[A-Z]/.test(newPassword),
+      number: /\d/.test(newPassword),
+      special: /[@$!%*?&]/.test(newPassword)
+    }
+    console.log('パスワード強度検証:', requirements)
+
+    const failedRequirements = []
+    if (!requirements.length) failedRequirements.push('8文字以上')
+    if (!requirements.lowercase) failedRequirements.push('小文字')
+    if (!requirements.uppercase) failedRequirements.push('大文字')
+    if (!requirements.number) failedRequirements.push('数字')
+    if (!requirements.special) failedRequirements.push('特殊文字(@$!%*?&のいずれか)')
+
+    if (failedRequirements.length > 0) {
       return NextResponse.json(
-        { error: 'パスワードには大文字、小文字、数字、特殊文字を含める必要があります' }, 
+        {
+          error: `パスワードには以下の要件が必要です: ${failedRequirements.join(', ')}`,
+          failedRequirements
+        },
         { status: 400 }
       )
     }
@@ -69,6 +92,11 @@ export async function PUT(request: NextRequest) {
     }
 
     // 現在のパスワード確認
+    console.log('ユーザー情報取得:', {
+      hasUser: !!user,
+      hasPassword: !!user?.password,
+      email: user?.email
+    })
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password)
     console.log('現在のパスワード検証結果:', { isValid: isCurrentPasswordValid, email: user.email })
     
@@ -81,6 +109,7 @@ export async function PUT(request: NextRequest) {
 
     // 新しいパスワードが現在のパスワードと同じでないことを確認
     const isSamePassword = await bcrypt.compare(newPassword, user.password)
+    console.log('新旧パスワード比較:', { isSamePassword })
     if (isSamePassword) {
       return NextResponse.json(
         { error: '新しいパスワードは現在のパスワードと異なる必要があります' }, 
