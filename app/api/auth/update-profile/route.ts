@@ -60,12 +60,24 @@ export async function PUT(request: NextRequest) {
       }
     }
 
+    // 現在のユーザー情報を取得
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { image: true }
+    })
+
+    console.log('現在のユーザー情報:', {
+      userId: session.user.id,
+      currentImage: currentUser?.image
+    })
+
     // プロフィール更新
     const updatedUser = await prisma.user.update({
       where: { id: session.user.id },
       data: {
         ...(name !== undefined && { name: name.trim() || null }),
         ...(email !== undefined && { email: email.toLowerCase().trim() }),
+        image: currentUser?.image, // 既存の画像URLを保持
         updatedAt: new Date()
       },
       select: {
@@ -77,7 +89,11 @@ export async function PUT(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ 
+    console.log('更新後のユーザー情報:', {
+      updatedImage: updatedUser.image
+    })
+
+    return NextResponse.json({
       message: 'プロフィールが正常に更新されました',
       user: updatedUser
     })

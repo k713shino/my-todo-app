@@ -40,6 +40,10 @@ export default function ProfileSettingsForm({ user }: ProfileSettingsFormProps) 
       
       if (response.ok) {
         toast.success('プロフィールが更新されました')
+        console.log('セッション更新前:', {
+          sessionImage: session?.user.image,
+          dataImage: data.user.image
+        })
         // セッション更新（image属性を保持）
         await update({
           ...session,
@@ -49,6 +53,9 @@ export default function ProfileSettingsForm({ user }: ProfileSettingsFormProps) 
             email: formData.email,
             image: data.user.image || session?.user.image
           }
+        })
+        console.log('セッション更新後:', {
+          newImage: session?.user.image
         })
       } else {
         toast.error(data.error || 'プロフィール更新に失敗しました')
@@ -116,15 +123,21 @@ export default function ProfileSettingsForm({ user }: ProfileSettingsFormProps) 
         <h4 className="text-sm font-medium text-gray-900 mb-3">🔗 接続済みアカウント</h4>
         <div className="space-y-2">
           {user.image && (
-            <div className="flex items-center space-x-3">
-              <Image 
-                src={user.image} 
-                alt="プロフィール画像" 
-                width={32}
-                height={32}
-                className="rounded-full"
-              />
-              <span className="text-sm text-gray-600">プロフィール画像</span>
+            <div>
+              <div className="text-xs text-gray-500 mb-2">
+                画像URL: {user.image}
+              </div>
+              <div className="flex items-center space-x-3">
+                <Image
+                  src={user.image}
+                  alt="プロフィール画像"
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                  unoptimized
+                />
+                <span className="text-sm text-gray-600">プロフィール画像</span>
+              </div>
             </div>
           )}
           <p className="text-sm text-gray-500">
