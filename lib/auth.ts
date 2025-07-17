@@ -37,19 +37,52 @@ export const authOptions: AuthOptions = {
         password: { label: "パスワード", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null
+        console.log('🔍 === 認証開始 ===')
+        console.log('リクエスト情報:', {
+          email: credentials?.email,
+          hasPassword: !!credentials?.password,
+          passwordLength: credentials?.password?.length
+        })
+
+        if (!credentials?.email || !credentials?.password) {
+          console.log('❌ 認証失敗: メールまたはパスワードが未入力')
+          return null
+        }
         
         try {
+          console.log('🔍 データベースでユーザー検索中...')
           const user = await prisma.user.findUnique({
-            where: { email: credentials.email }
+            where: { email: credentials.email },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              password: true
+            }
           })
           
-          if (!user || !user.password) return null
+          console.log('👤 ユーザー検索結果:', {
+            found: !!user,
+            email: user?.email,
+            hasPassword: !!user?.password,
+            passwordHash: user?.password ? `${user.password.substring(0, 10)}...` : 'none'
+          })
           
+          if (!user || !user.password) {
+            console.log('❌ 認証失敗: ユーザーが見つからないか、パスワードが設定されていません')
+            return null
+          }
+          
+          console.log('🔐 パスワード検証中...')
           const isValid = await bcrypt.compare(credentials.password, user.password)
+          console.log('🔐 パスワード検証結果:', isValid)
           
-          if (!isValid) return null
+          if (!isValid) {
+            console.log('❌ 認証失敗: パスワードが一致しません')
+            return null
+          }
           
+          console.log('✅ 認証成功!')
           return {
             id: user.id,
             email: user.email,
@@ -57,7 +90,11 @@ export const authOptions: AuthOptions = {
             hasPassword: true,
           }
         } catch (error) {
-          console.error('認証エラー:', error)
+          console.error('🚨 認証エラー:', error)
+          console.error('エラー詳細:', {
+            message: error.message,
+            stack: error.stack
+          })
           return null
         }
       }
