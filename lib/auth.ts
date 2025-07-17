@@ -105,12 +105,14 @@ export const authOptions: AuthOptions = {
       if (session?.user && token.sub) {
         session.user.id = token.sub
         session.user.hasPassword = token.hasPassword || false
+        session.user.image = token.picture || null
       }
       return session
     },
     jwt: async ({ user, token, account }: { user?: User; token: JWT; account?: any }) => {
       if (user) {
         token.sub = user.id
+        token.picture = user.image
         if (account?.provider === 'credentials') {
           token.hasPassword = true
         } else {
