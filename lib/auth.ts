@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs"
 import { prisma } from "./prisma"
 import type { JWT } from "next-auth/jwt"
 
+
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
   secret: process.env.NEXTAUTH_SECRET,
