@@ -40,13 +40,14 @@ export default function ProfileSettingsForm({ user }: ProfileSettingsFormProps) 
       
       if (response.ok) {
         toast.success('プロフィールが更新されました')
-        // セッション更新
+        // セッション更新（image属性を保持）
         await update({
           ...session,
           user: {
             ...session?.user,
             name: formData.name,
-            email: formData.email
+            email: formData.email,
+            image: data.user.image || session?.user.image
           }
         })
       } else {
