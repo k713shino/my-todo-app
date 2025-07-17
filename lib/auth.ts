@@ -102,7 +102,11 @@ export const authOptions: AuthOptions = {
       try {
         // OAuth認証の場合の追加処理
         if (account?.provider && account.provider !== 'credentials') {
-          console.log(`OAuth sign in: ${account.provider} for ${user.email}`)
+          console.log('=== OAuth認証デバッグ情報 ===')
+          console.log(`プロバイダー: ${account.provider}`)
+          console.log(`メールアドレス: ${user.email}`)
+          console.log(`アカウント情報:`, account)
+          console.log(`プロフィール情報:`, profile)
           
           // メールアドレスが既存ユーザーと重複している場合の処理
           if (user.email) {
@@ -111,24 +115,32 @@ export const authOptions: AuthOptions = {
             })
             
             if (existingUser) {
-              console.log(`Linking OAuth account to existing user: ${user.email}`)
+              console.log(`既存ユーザーとのアカウント連携: ${user.email}`)
+              console.log(`既存ユーザー情報:`, existingUser)
             }
           }
         }
         
         return true
       } catch (error) {
-        console.error('SignIn callback error:', error)
+        console.error('=== 認証エラー ===')
+        console.error('エラー詳細:', error)
+        console.error('認証情報:', { user, account, profile })
         return true // エラーでもサインインを継続
       }
     }
   },
   events: {
     signOut: async ({ token }: { token: JWT }) => {
-      console.log(`User signed out: ${token?.sub}`)
+      console.log('=== サインアウト ===')
+      console.log(`ユーザーID: ${token?.sub}`)
+      console.log('トークン情報:', token)
     },
     signIn: async ({ user, account }: { user: User; account: any }) => {
-      console.log(`User signed in: ${user.email} via ${account?.provider}`)
+      console.log('=== サインイン成功 ===')
+      console.log(`ユーザー: ${user.email}`)
+      console.log(`認証方法: ${account?.provider}`)
+      console.log('アカウント詳細:', account)
     }
   },
   session: {
@@ -141,15 +153,16 @@ export const authOptions: AuthOptions = {
   },
   debug: process.env.NODE_ENV === 'development',
   // CSRF保護を有効化
-  useSecureCookies: process.env.NODE_ENV === 'production',
+  useSecureCookies: true,
   cookies: {
     sessionToken: {
-      name: process.env.NODE_ENV === 'production' ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
+      name: '__Secure-next-auth.session-token',
       options: {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
-        secure: process.env.NODE_ENV === 'production'
+        secure: true,
+        domain: process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).hostname : undefined
       }
     }
   }
