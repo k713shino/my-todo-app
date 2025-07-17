@@ -1,11 +1,8 @@
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
-export default async function handler(req: any, res: any) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-
+export async function GET(request: NextRequest) {
   try {
     // 1. データベース接続テスト
     await prisma.$queryRaw`SELECT 1`
@@ -45,19 +42,21 @@ export default async function handler(req: any, res: any) {
     }
 
     // 4. パスワード検証テスト
+    let passwordTestResult = false
     if (testUser.password) {
-      const isValidPassword = await bcrypt.compare('password123', testUser.password)
-      console.log('🔐 Password validation test:', isValidPassword)
+      passwordTestResult = await bcrypt.compare('password123', testUser.password)
+      console.log('🔐 Password validation test:', passwordTestResult)
     }
 
-    return res.status(200).json({
+    return NextResponse.json({
       status: 'success',
       database: 'connected',
       totalUsers: users.length,
       testUser: {
         email: testUser.email,
         hasPassword: !!testUser.password,
-        id: testUser.id
+        id: testUser.id,
+        passwordTest: passwordTestResult
       },
       users: users.map(u => ({
         email: u.email,
@@ -68,9 +67,9 @@ export default async function handler(req: any, res: any) {
 
   } catch (error) {
     console.error('❌ Test Auth Error:', error)
-    return res.status(500).json({ 
+    return NextResponse.json({ 
       error: 'Database error',
       details: error.message 
-    })
+    }, { status: 500 })
   }
 }
