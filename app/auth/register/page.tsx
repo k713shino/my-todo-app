@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
+import PasswordStrengthIndicator from '@/app/components/PasswordStrengthIndicator'
 
 // 登録フォームのメインコンポーネント
 function RegisterContent() {
@@ -127,6 +128,7 @@ function RegisterContent() {
               minLength={8}
               disabled={isLoading}
             />
+            {formData.password && <PasswordStrengthIndicator password={formData.password} />}
           </div>
           
           <button

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { RateLimiter } from '@/lib/cache'
 
 export async function PUT(request: NextRequest) {
+  console.log('パスワード変更リクエストを受信しました')
   try {
     const session = await getAuthSession()
     
@@ -27,6 +28,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
+    console.log('リクエストボディを受信:', { email: session.user.email })
     const { currentPassword, newPassword } = body
 
     // バリデーション
@@ -68,6 +70,7 @@ export async function PUT(request: NextRequest) {
 
     // 現在のパスワード確認
     const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password)
+    console.log('現在のパスワード検証結果:', { isValid: isCurrentPasswordValid, email: user.email })
     
     if (!isCurrentPasswordValid) {
       return NextResponse.json(
@@ -89,6 +92,7 @@ export async function PUT(request: NextRequest) {
     const hashedNewPassword = await bcrypt.hash(newPassword, 12)
 
     // パスワード更新
+    console.log('パスワード更新を開始:', { email: user.email })
     await prisma.user.update({
       where: { id: session.user.id },
       data: { 
@@ -106,7 +110,12 @@ export async function PUT(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Password change error:', error)
+    console.error('パスワード変更エラー:', error)
+    console.error('エラー詳細:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    })
     return NextResponse.json(
       { error: 'パスワード変更に失敗しました' }, 
       { status: 500 }

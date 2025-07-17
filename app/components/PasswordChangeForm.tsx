@@ -35,6 +35,7 @@ export default function PasswordChangeForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('パスワード変更フォームが送信されました')
     
     if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) {
       toast.error('すべてのフィールドを入力してください')
@@ -55,6 +56,7 @@ export default function PasswordChangeForm() {
     setIsLoading(true)
     
     try {
+      console.log('パスワード変更APIを呼び出します')
       const response = await fetch('/api/auth/change-password', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -65,6 +67,7 @@ export default function PasswordChangeForm() {
       })
       
       const data = await response.json()
+      console.log('APIレスポンスを受信:', { status: response.status, ok: response.ok })
       
       if (response.ok) {
         toast.success('パスワードが正常に変更されました')
@@ -77,7 +80,12 @@ export default function PasswordChangeForm() {
         toast.error(data.error || 'パスワード変更に失敗しました')
       }
     } catch (error) {
-      console.error('Password change error:', error)
+      console.error('パスワード変更エラー:', error)
+      console.error('エラー詳細:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
       toast.error('エラーが発生しました')
     } finally {
       setIsLoading(false)
