@@ -60,7 +60,13 @@ function SignInContent() {
     setError('')
     
     try {
-      console.log(`${provider}認証を開始...`)
+      console.log('=== OAuth認証開始 ===')
+      console.log(`プロバイダー: ${provider}`)
+      console.log('環境変数:', {
+        NEXTAUTH_URL: process.env.NEXT_PUBLIC_NEXTAUTH_URL,
+        hasGithub: !!providers?.github,
+        hasGoogle: !!providers?.google
+      })
       
       // 環境変数チェック
       const hasGithub = providers?.github
@@ -83,7 +89,12 @@ function SignInContent() {
         redirect: true, // 自動リダイレクトを有効化
       })
       
-      console.log('認証結果:', result)
+      console.log('=== OAuth認証結果 ===')
+      console.log('結果:', result)
+      console.log('プロバイダー状態:', {
+        github: providers?.github,
+        google: providers?.google
+      })
       
     } catch (err) {
       console.error('ログインエラー:', err)
