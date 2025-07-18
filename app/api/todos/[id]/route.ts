@@ -4,7 +4,20 @@ import { prisma } from '@/lib/prisma'
 import { CacheManager } from '@/lib/cache'
 import { PubSubManager } from '@/lib/pubsub'
 
-// PUT: Todo更新（PubSub・キャッシュ対応）
+/**
+ * PUT: Todo更新API
+ *
+ * 機能:
+ * - 認証済みユーザーのTodoを更新
+ * - 所有者確認による不正更新防止
+ * - 部分更新対応（指定フィールドのみ更新）
+ * - 完了状態変更時の特別なアクティビティ記録
+ *
+ * データ整合性:
+ * - キャッシュの自動無効化
+ * - PubSubによるリアルタイム通知
+ * - 更新前後の状態比較による適切なイベント発行
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -72,7 +85,19 @@ export async function PUT(
   }
 }
 
-// DELETE: Todo削除（PubSub・キャッシュ対応）
+/**
+ * DELETE: Todo削除API
+ *
+ * 機能:
+ * - 認証済みユーザーのTodoを削除
+ * - 所有者確認による不正削除防止
+ * - 削除前のTodo情報保持（ログ・通知用）
+ *
+ * データ整合性:
+ * - キャッシュの自動無効化
+ * - PubSubによる削除イベントの発行
+ * - ユーザーアクティビティへの記録
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

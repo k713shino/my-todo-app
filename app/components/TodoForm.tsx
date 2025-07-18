@@ -4,6 +4,14 @@ import { useState } from 'react'
 import { Priority } from '@prisma/client'
 import { format } from 'date-fns'
 
+/**
+ * Todoフォームコンポーネントのプロパティ定義
+ *
+ * @param onSubmit フォーム送信時のコールバック関数
+ * @param onCancel 編集モード時のキャンセルボタン用コールバック関数（任意）
+ * @param initialData 編集時の初期データ（任意）
+ * @param isLoading 送信中の状態を示すフラグ
+ */
 interface TodoFormProps {
   onSubmit: (data: {
     title: string
@@ -21,6 +29,10 @@ interface TodoFormProps {
   isLoading?: boolean
 }
 
+/**
+ * 優先度の表示ラベル
+ * データベース上の英語表記を日本語表示に変換
+ */
 const priorityLabels = {
   LOW: '低',
   MEDIUM: '中',
@@ -28,7 +40,17 @@ const priorityLabels = {
   URGENT: '緊急',
 }
 
-export default function TodoForm({ 
+/**
+ * Todoの作成・編集フォームコンポーネント
+ *
+ * 機能:
+ * - 新規Todo作成
+ * - 既存Todoの編集
+ * - バリデーション（タイトル必須）
+ * - ローディング状態の制御
+ * - フォームリセット（新規作成時のみ）
+ */
+export default function TodoForm({
   onSubmit, 
   onCancel, 
   initialData, 
@@ -41,6 +63,14 @@ export default function TodoForm({
     initialData?.dueDate ? format(initialData.dueDate, 'yyyy-MM-dd\'T\'HH:mm') : ''
   )
 
+  /**
+   * フォーム送信処理
+   * @param e フォームイベント
+   *
+   * - タイトルの入力チェック
+   * - 入力値のトリミング
+   * - 新規作成時はフォームをリセット
+   */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     

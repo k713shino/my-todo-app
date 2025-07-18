@@ -5,7 +5,20 @@ import { CacheManager, RateLimiter } from '@/lib/cache'
 import { PubSubManager } from '@/lib/pubsub'
 import { Priority } from '@prisma/client'
 
-// GET: Todo一覧取得（キャッシュ対応）
+/**
+ * GET: Todo一覧の取得API
+ *
+ * 機能:
+ * - 認証済みユーザーのTodo一覧を取得
+ * - キャッシュによる高速なレスポンス
+ * - レート制限による不正アクセス防止
+ * - 完了状態・優先度によるフィルタリング
+ *
+ * キャッシュ戦略:
+ * - フィルターがない場合のみキャッシュを使用
+ * - キャッシュミス時はDBから取得して保存
+ * - cache=falseクエリでキャッシュ無効化可能
+ */
 export async function GET(request: NextRequest) {
   try {
     const session = await getAuthSession()
@@ -85,7 +98,20 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: Todo作成（PubSub・キャッシュ無効化対応）
+/**
+ * POST: 新規Todo作成API
+ *
+ * 機能:
+ * - 認証済みユーザーのTodoを作成
+ * - 厳格なレート制限（1時間に100件まで）
+ * - タイトルのバリデーション
+ * - リアルタイム更新のイベント発行
+ *
+ * データ整合性:
+ * - キャッシュの自動無効化
+ * - PubSubによるリアルタイム通知
+ * - ユーザーアクティビティの記録
+ */
 export async function POST(request: NextRequest) {
   try {
     const session = await getAuthSession()

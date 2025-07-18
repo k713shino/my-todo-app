@@ -10,6 +10,10 @@ import TodoStatsDisplay from './TodoStatsDisplay'
 import RealtimeUpdates from './RealtimeUpdates'
 import { Toaster } from 'react-hot-toast'
 
+/**
+ * APIレスポンスのTodoデータ型定義
+ * バックエンドから返される日付は文字列形式
+ */
 interface TodoResponse {
   id: string
   title: string
@@ -22,6 +26,10 @@ interface TodoResponse {
   userId: string
 }
 
+/**
+ * Todo更新時のリクエストデータ型定義
+ * 各フィールドは任意更新可能
+ */
 interface UpdateTodoData {
   completed?: boolean
   title?: string
@@ -30,6 +38,15 @@ interface UpdateTodoData {
   dueDate?: Date | null
 }
 
+/**
+ * Todoリストコンポーネント
+ *
+ * 主な機能:
+ * - Todoの一覧表示、作成、更新、削除
+ * - 完了状態、優先度、検索キーワードによるフィルタリング
+ * - リアルタイム更新
+ * - Todo統計情報の表示
+ */
 export default function TodoList() {
   const [todos, setTodos] = useState<Todo[]>([])
   const [filteredTodos, setFilteredTodos] = useState<Todo[]>([])
@@ -42,7 +59,10 @@ export default function TodoList() {
     search?: string
   }>({})
 
-  // Todo一覧取得
+  /**
+   * サーバーからTodo一覧を取得
+   * 取得したデータの日付文字列をDateオブジェクトに変換
+   */
   const fetchTodos = async () => {
     try {
       const response = await fetch('/api/todos')
@@ -63,7 +83,12 @@ export default function TodoList() {
     }
   }
 
-  // Todo作成
+  /**
+   * 新規Todoの作成
+   * @param data 作成するTodoのデータ
+   * - 作成中は送信ボタンを無効化
+   * - エラー時はユーザーに通知
+   */
   const handleCreateTodo = async (data: CreateTodoData) => {
     setIsSubmitting(true)
     try {
@@ -87,7 +112,12 @@ export default function TodoList() {
     }
   }
 
-  // Todo更新
+  /**
+   * Todoの更新
+   * @param id 更新対象のTodoID
+   * @param data 更新するデータ（部分更新可能）
+   * - 更新後は一覧を再取得して表示を更新
+   */
   const handleUpdateTodo = async (id: string, data: UpdateTodoData) => {
     try {
       const response = await fetch(`/api/todos/${id}`, {
@@ -108,7 +138,12 @@ export default function TodoList() {
     }
   }
 
-  // Todo削除
+  /**
+   * Todoの削除
+   * @param id 削除対象のTodoID
+   * - 削除後は一覧を再取得
+   * - エラー時はユーザーに通知
+   */
   const handleDeleteTodo = async (id: string) => {
     try {
       const response = await fetch(`/api/todos/${id}`, {
@@ -127,7 +162,12 @@ export default function TodoList() {
     }
   }
 
-  // 編集処理
+  /**
+   * Todo編集フォームの送信処理
+   * @param data 編集後のTodoデータ
+   * - 編集中は送信ボタンを無効化
+   * - 更新完了後は編集モードを解除
+   */
   const handleEditSubmit = async (data: CreateTodoData) => {
     if (!editingTodo) return
 
@@ -140,7 +180,11 @@ export default function TodoList() {
     }
   }
 
-  // リアルタイム更新ハンドラー
+  /**
+   * WebSocketによるリアルタイム更新ハンドラー群
+   * - 他ユーザーによる更新をリアルタイムに反映
+   * - 更新、作成、削除それぞれに対応
+   */
   const handleRealtimeUpdate = (updatedTodo: Todo) => {
     setTodos(prev => prev.map(todo => 
       todo.id === updatedTodo.id ? updatedTodo : todo
@@ -155,7 +199,13 @@ export default function TodoList() {
     setTodos(prev => prev.filter(todo => todo.id !== todoId))
   }
 
-  // フィルタリング
+  /**
+   * Todoリストのフィルタリング処理
+   * - 完了状態でフィルタリング
+   * - 優先度でフィルタリング
+   * - タイトルと説明文で検索
+   * - フィルター条件やTodo一覧が変更される度に再計算
+   */
   useEffect(() => {
     let filtered = todos
 
@@ -178,7 +228,13 @@ export default function TodoList() {
     setFilteredTodos(filtered)
   }, [todos, filter])
 
-  // 統計計算
+  /**
+   * Todoの統計情報を計算
+   * - 全体の件数
+   * - 完了・未完了の件数
+   * - 期限切れの件数
+   * - 優先度ごとの件数
+   */
   const stats: TodoStats = {
     total: todos.length,
     completed: todos.filter(t => t.completed).length,
@@ -194,7 +250,10 @@ export default function TodoList() {
     }
   }
 
-  // 初回読み込み
+  /**
+   * コンポーネントマウント時の初期化処理
+   * - Todo一覧の初回読み込みを実行
+   */
   useEffect(() => {
     fetchTodos()
   }, [])

@@ -5,6 +5,15 @@ import { format, isAfter } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Todo } from '@/types/todo'
 
+/**
+ * Todoアイテムコンポーネントのプロパティ定義
+ *
+ * @param todo 表示するTodoデータ
+ * @param onUpdate 完了状態更新時のコールバック関数
+ * @param onEdit 編集ボタンクリック時のコールバック関数
+ * @param onDelete 削除ボタンクリック時のコールバック関数
+ * @param isLoading ローディング状態を示すフラグ
+ */
 interface TodoItemProps {
   todo: Todo
   onUpdate: (id: string, data: { completed?: boolean }) => void
@@ -13,6 +22,10 @@ interface TodoItemProps {
   isLoading?: boolean
 }
 
+/**
+ * 優先度の表示ラベル
+ * データベース上の英語表記を日本語表示に変換
+ */
 const priorityLabels = {
   LOW: '低',
   MEDIUM: '中',
@@ -20,6 +33,10 @@ const priorityLabels = {
   URGENT: '緊急',
 }
 
+/**
+ * 優先度ごとの表示色定義
+ * Tailwindのユーティリティクラスを使用
+ */
 const priorityColors = {
   LOW: 'text-green-600 bg-green-100',
   MEDIUM: 'text-yellow-600 bg-yellow-100',
@@ -27,6 +44,10 @@ const priorityColors = {
   URGENT: 'text-red-600 bg-red-100',
 }
 
+/**
+ * 優先度ごとのアイコン定義
+ * 色付きの円で優先度を視覚的に表現
+ */
 const priorityIcons = {
   LOW: '🟢',
   MEDIUM: '🟡',
@@ -34,7 +55,17 @@ const priorityIcons = {
   URGENT: '🔴',
 }
 
-export default function TodoItem({ 
+/**
+ * 個別のTodoアイテムを表示するコンポーネント
+ *
+ * 機能:
+ * - Todoの表示（タイトル、説明、優先度、期限など）
+ * - 完了状態の切り替え
+ * - 編集・削除機能
+ * - 期限切れの表示
+ * - ローディング状態の制御
+ */
+export default function TodoItem({
   todo, 
   onUpdate, 
   onEdit, 
@@ -43,9 +74,20 @@ export default function TodoItem({
 }: TodoItemProps) {
   const [isUpdating, setIsUpdating] = useState(false)
 
-  const isOverdue = todo.dueDate && !todo.completed && 
+  /**
+   * 期限切れ判定
+   * - 期限が設定されている
+   * - 未完了のタスク
+   * - 現在時刻が期限を超えている
+   */
+  const isOverdue = todo.dueDate && !todo.completed &&
     isAfter(new Date(), new Date(todo.dueDate))
 
+  /**
+   * 完了状態切り替えハンドラー
+   * - ローディング状態を制御
+   * - 完了状態を反転して更新
+   */
   const handleToggleComplete = async () => {
     setIsUpdating(true)
     try {
@@ -55,6 +97,11 @@ export default function TodoItem({
     }
   }
 
+  /**
+   * 削除ハンドラー
+   * - 削除前に確認ダイアログを表示
+   * - 確認が取れたら削除を実行
+   */
   const handleDelete = () => {
     if (confirm(`「${todo.title}」を削除してもよろしいですか？`)) {
       onDelete(todo.id)
