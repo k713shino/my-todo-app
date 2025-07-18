@@ -167,7 +167,7 @@ export const authOptions: AuthOptions = {
   },
   debug: process.env.NODE_ENV === 'development',
   // 本番環境でのセキュリティ設定
-  ...(process.env.NODE_ENV === 'production' && {
+  ...(process.env.NODE_ENV === 'production' && process.env.NEXTAUTH_URL?.startsWith('https://') && {
     useSecureCookies: true,
     cookies: {
       sessionToken: {

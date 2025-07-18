@@ -122,9 +122,20 @@ const createDummyPrismaClient = () => {
 }
 
 // シングルトンパターンでPrismaクライアントを管理
-const prisma = globalThis.__prisma ?? (
-  isBuildTime() ? createDummyPrismaClient() : createPrismaClient()
-)
+const prisma = globalThis.__prisma ?? (() => {
+  // ビルド時はダミークライアント
+  if (isBuildTime()) {
+    return createDummyPrismaClient()
+  }
+  
+  // 実行時でダミーDBの場合もダミークライアント
+  if (process.env.DATABASE_URL?.includes('dummy')) {
+    console.warn('⚠️ Using dummy Prisma client due to dummy DATABASE_URL')
+    return createDummyPrismaClient()
+  }
+  
+  return createPrismaClient()
+})()
 
 if (process.env.NODE_ENV !== 'production') {
   globalThis.__prisma = prisma

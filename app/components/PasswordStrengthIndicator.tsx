@@ -17,7 +17,7 @@ export default function PasswordStrengthIndicator({ password }: PasswordStrength
     const levels = ['とても弱い', '弱い', '普通', '強い', 'とても強い']
     const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500']
     
-    return { level: levels[strength] || '弱い', color: colors[strength] || 'bg-red-500', score: strength }
+    return { level: levels[strength] || 'とても弱い', color: colors[strength] || 'bg-red-500', score: strength }
   }
 
   const passwordStrength = getPasswordStrength(password)

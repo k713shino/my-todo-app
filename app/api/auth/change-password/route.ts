@@ -6,12 +6,20 @@ import { RateLimiter } from '@/lib/cache'
 
 export async function PUT(request: NextRequest) {
   console.log('パスワード変更リクエストを受信しました')
+  console.log('環境情報:', {
+    nodeEnv: process.env.NODE_ENV,
+    nextauthUrl: process.env.NEXTAUTH_URL,
+    hasSecret: !!process.env.NEXTAUTH_SECRET,
+    databaseUrl: process.env.DATABASE_URL ? 'configured' : 'missing'
+  })
+  
   try {
     const session = await getAuthSession()
     console.log('セッション情報:', {
       hasSession: !!session,
       hasUserId: !!session?.user?.id,
-      email: session?.user?.email
+      email: session?.user?.email,
+      hasPassword: session?.user?.hasPassword
     })
     
     if (!isAuthenticated(session)) {
@@ -83,12 +91,28 @@ export async function PUT(request: NextRequest) {
     }
 
     // ユーザー情報取得
+    console.log('データベースからユーザー情報を取得中...')
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { id: true, email: true, password: true }
     })
 
-    if (!user || !user.password) {
+    console.log('ユーザー情報取得結果:', {
+      hasUser: !!user,
+      hasPassword: !!user?.password,
+      email: user?.email
+    })
+
+    if (!user) {
+      console.error('ユーザーが見つかりませんでした:', session.user.id)
+      return NextResponse.json(
+        { error: 'ユーザーが見つかりません' }, 
+        { status: 404 }
+      )
+    }
+
+    if (!user.password) {
+      console.log('パスワードが設定されていないユーザー:', user.email)
       return NextResponse.json(
         { error: 'パスワード認証を使用していないアカウントです' }, 
         { status: 400 }
