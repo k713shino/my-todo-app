@@ -23,17 +23,31 @@ export async function PUT(request: NextRequest) {
     })
     
     if (!isAuthenticated(session)) {
+      console.error('認証されていないリクエスト')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // OAuth認証ユーザーまたはパスワード認証でないユーザーの場合は拒否
+    if (!session.user.hasPassword) {
+      console.log('パスワード認証でないユーザーからのリクエスト:', session.user.email)
+      return NextResponse.json(
+        { error: 'OAuth認証ユーザーはパスワード変更できません' }, 
+        { status: 400 }
+      )
+    }
+
     // レート制限（1時間に5回まで）
+    console.log('レート制限チェック中:', session.user.id)
     const rateLimitResult = await RateLimiter.checkRateLimit(
       `change_password:${session.user.id}`, 
       3600, 
       5
     )
     
+    console.log('レート制限結果:', rateLimitResult)
+    
     if (!rateLimitResult.allowed) {
+      console.warn('レート制限に達しました:', session.user.id)
       return NextResponse.json(
         { error: 'パスワード変更の試行回数が上限に達しました。1時間後に再試行してください。' },
         { status: 429 }
@@ -41,13 +55,22 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    console.log('リクエストボディを受信:', { email: session.user.email })
+    console.log('リクエストボディを受信:', { 
+      email: session.user.email,
+      bodyKeys: Object.keys(body),
+      hasCurrentPassword: !!body.currentPassword,
+      hasNewPassword: !!body.newPassword,
+      currentPasswordLength: body.currentPassword?.length,
+      newPasswordLength: body.newPassword?.length
+    })
     const { currentPassword, newPassword } = body
 
     // バリデーション
     console.log('リクエストパラメータ検証:', {
       hasCurrentPassword: !!currentPassword,
-      hasNewPassword: !!newPassword
+      hasNewPassword: !!newPassword,
+      currentPasswordType: typeof currentPassword,
+      newPasswordType: typeof newPassword
     })
     
     if (!currentPassword || !newPassword) {

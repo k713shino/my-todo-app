@@ -77,7 +77,9 @@ export default function PasswordChangeForm() {
         status: response.status,
         ok: response.ok,
         hasError: !!data.error,
-        hasFailedRequirements: !!data.failedRequirements
+        hasFailedRequirements: !!data.failedRequirements,
+        errorMessage: data.error,
+        responseData: data
       })
       
       if (response.ok) {
@@ -89,8 +91,14 @@ export default function PasswordChangeForm() {
         })
       } else if (response.status === 401) {
         toast.error('セッションが無効です。再度ログインしてください。')
-      } else if (data.failedRequirements) {
-        toast.error(data.error, { duration: 5000 })
+      } else if (response.status === 400) {
+        // 400エラーの詳細を表示
+        console.error('400エラーの詳細:', data)
+        if (data.failedRequirements) {
+          toast.error(data.error, { duration: 5000 })
+        } else {
+          toast.error(data.error || 'リクエストが無効です')
+        }
       } else {
         toast.error(data.error || 'パスワード変更に失敗しました')
       }
