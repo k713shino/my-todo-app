@@ -84,6 +84,15 @@ function SignInContent() {
         return
       }
       
+      console.log('=== OAuth認証リクエスト開始 ===')
+      console.log('設定値:', {
+        provider,
+        callbackUrl: '/dashboard',
+        redirect: true,
+        NEXTAUTH_URL: process.env.NEXT_PUBLIC_NEXTAUTH_URL,
+        windowLocation: typeof window !== 'undefined' ? window.location.href : 'undefined'
+      })
+
       const result = await signIn(provider, {
         callbackUrl: '/dashboard',
         redirect: true, // 自動リダイレクトを有効化
