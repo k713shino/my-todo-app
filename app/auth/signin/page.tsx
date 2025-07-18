@@ -28,10 +28,20 @@ function SignInContent() {
         'Verification': '認証に失敗しました。',
         'Default': 'ログインに失敗しました。しばらく後に再試行してください。',
         'OAuthCallback': 'OAuth認証でエラーが発生しました。設定を確認してください。',
-        'OAuthAccountNotLinked': 'このメールアドレスは既に別の方法で登録されています。',
-        'CredentialsSignin': 'メールアドレスまたはパスワードが間違っています。'
+        'OAuthAccountNotLinked': 'このメールアドレスは既に別の方法で登録されています。別のログイン方法をお試しください。',
+        'CredentialsSignin': 'メールアドレスまたはパスワードが間違っています。入力内容をご確認ください。',
+        'USER_NOT_FOUND': '入力されたメールアドレスは登録されていません。新規会員登録をお試しください。',
+        'OAUTH_USER_NO_PASSWORD': 'このアカウントはOAuth認証（GitHub/Google）で登録されています。該当のサービスでログインしてください。',
+        'INVALID_PASSWORD': 'パスワードが間違っています。正しいパスワードを入力してください。'
       }
-      setError(errorMessages[errorParam] || errorMessages['Default'])
+      
+      // エラーコードと日本語メッセージを両方表示
+      const message = errorMessages[errorParam] || errorMessages['Default']
+      const displayError = errorParam === 'CredentialsSignin' ? 
+        `認証エラー: ${message}` : 
+        message
+      
+      setError(displayError)
     }
   }, [searchParams])
 
@@ -97,11 +107,30 @@ function SignInContent() {
       if (result?.ok) {
         router.push('/dashboard')
       } else {
-        setError(result?.error || 'メールアドレスまたはパスワードが間違っています')
+        // 詳細なエラーメッセージのマッピング
+        const errorMessages: { [key: string]: string } = {
+          'CredentialsSignin': 'メールアドレスまたはパスワードが間違っています。入力内容をご確認ください。',
+          'USER_NOT_FOUND': '入力されたメールアドレスは登録されていません。新規会員登録をお試しください。',
+          'OAUTH_USER_NO_PASSWORD': 'このアカウントはOAuth認証（GitHub/Google）で登録されています。該当のサービスでログインしてください。',
+          'INVALID_PASSWORD': 'パスワードが間違っています。正しいパスワードを入力してください。'
+        }
+        
+        const errorCode = result?.error || 'CredentialsSignin'
+        const message = errorMessages[errorCode] || 'ログインに失敗しました。入力内容をご確認ください。'
+        
+        // エラーコードと日本語メッセージを両方表示
+        setError(`認証エラー: ${message}`)
+        
+        // コンソールにデバッグ情報を出力
+        console.error('ログイン失敗:', {
+          errorCode,
+          originalError: result?.error,
+          email: formData.email
+        })
       }
     } catch (err) {
       console.error('ログインエラー:', err)
-      setError('ログインに失敗しました')
+      setError('ネットワークエラーが発生しました。しばらく後に再試行してください。')
     } finally {
       setIsLoading(false)
     }
@@ -127,7 +156,20 @@ function SignInContent() {
                 <span className="text-red-400">⚠️</span>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-800">{error}</p>
+                <p className="text-sm text-red-800 font-medium">{error}</p>
+                {error.includes('OAuth認証') && (
+                  <p className="text-xs text-red-600 mt-1">
+                    GitHubまたはGoogleのアカウントでログインしてください。
+                  </p>
+                )}
+                {error.includes('登録されていません') && (
+                  <p className="text-xs text-red-600 mt-1">
+                    <Link href="/auth/register" className="underline hover:text-red-800">
+                      こちらから新規会員登録
+                    </Link>
+                    ができます。
+                  </p>
+                )}
               </div>
             </div>
           </div>

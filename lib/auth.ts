@@ -69,9 +69,15 @@ export const authOptions: AuthOptions = {
             passwordHash: user?.password ? `${user.password.substring(0, 10)}...` : 'none'
           })
           
-          if (!user || !user.password) {
-            console.log('❌ 認証失敗: ユーザーが見つからないか、パスワードが設定されていません')
-            return null
+          if (!user) {
+            console.log('❌ 認証失敗: ユーザーが見つかりません')
+            // より詳細なエラー情報を返すためにthrowを使用
+            throw new Error('USER_NOT_FOUND')
+          }
+          
+          if (!user.password) {
+            console.log('❌ 認証失敗: パスワードが設定されていません（OAuth認証ユーザー）')
+            throw new Error('OAUTH_USER_NO_PASSWORD')
           }
           
           console.log('🔐 パスワード検証中...')
@@ -80,7 +86,7 @@ export const authOptions: AuthOptions = {
           
           if (!isValid) {
             console.log('❌ 認証失敗: パスワードが一致しません')
-            return null
+            throw new Error('INVALID_PASSWORD')
           }
           
           console.log('✅ 認証成功!')
