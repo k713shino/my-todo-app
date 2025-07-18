@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import toast from 'react-hot-toast'
+import Image from 'next/image'
 
 interface OAuthAccount {
   provider: string
@@ -99,13 +100,13 @@ ${providerNames[provider as keyof typeof providerNames] || provider}連携を削
   const providerConfig = {
     github: {
       name: 'GitHub',
-      icon: '🐙',
+      icon: <Image src="/icons/github.svg" alt="GitHub" width={24} height={24} className="filter invert" />,
       color: 'bg-gray-800 text-white',
       description: 'GitHubアカウントでログイン'
     },
     google: {
       name: 'Google',
-      icon: '🔴',
+      icon: <Image src="/icons/google.svg" alt="Google" width={24} height={24} />,
       color: 'bg-red-600 text-white',
       description: 'Googleアカウントでログイン'
     }

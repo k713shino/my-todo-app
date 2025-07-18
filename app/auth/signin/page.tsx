@@ -4,6 +4,7 @@ import { signIn, getProviders } from 'next-auth/react'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 
 // SearchParams を使用するコンポーネントを分離
 function SignInContent() {
@@ -187,7 +188,13 @@ function SignInContent() {
                   className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                    🐙
+                    <Image
+                      src="/icons/github.svg"
+                      alt="GitHub"
+                      width={16}
+                      height={16}
+                      className="filter invert"
+                    />
                   </span>
                   {isLoading ? '認証中...' : 'GitHubでログイン'}
                 </button>
@@ -201,7 +208,12 @@ function SignInContent() {
                   className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
                   <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                    🔴
+                    <Image
+                      src="/icons/google.svg"
+                      alt="Google"
+                      width={16}
+                      height={16}
+                    />
                   </span>
                   {isLoading ? '認証中...' : 'Googleでログイン'}
                 </button>

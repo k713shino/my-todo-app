@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
+import Image from 'next/image'
 import PasswordStrengthIndicator from '@/app/components/PasswordStrengthIndicator'
 
 // 登録フォームのメインコンポーネント
@@ -146,20 +147,34 @@ function RegisterContent() {
           <button
             onClick={() => handleOAuthRegister('github')}
             disabled={isLoading}
-            className="w-full py-3 px-4 bg-gray-800 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-3 px-4 bg-gray-800 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors relative"
           >
             <span className="inline-flex items-center">
-              🐙 GitHubで登録
+              <Image
+                src="/icons/github.svg"
+                alt="GitHub"
+                width={16}
+                height={16}
+                className="absolute left-4"
+              />
+              <span className="ml-6">GitHubで登録</span>
             </span>
           </button>
           
           <button
             onClick={() => handleOAuthRegister('google')}
             disabled={isLoading}
-            className="w-full py-3 px-4 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full py-3 px-4 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors relative"
           >
             <span className="inline-flex items-center">
-              🔴 Googleで登録
+              <Image
+                src="/icons/google.svg"
+                alt="Google"
+                width={16}
+                height={16}
+                className="absolute left-4"
+              />
+              <span className="ml-6">Googleで登録</span>
             </span>
           </button>
         </div>
