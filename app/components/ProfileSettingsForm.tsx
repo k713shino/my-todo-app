@@ -124,9 +124,6 @@ export default function ProfileSettingsForm({ user }: ProfileSettingsFormProps) 
         <div className="space-y-2">
           {user.image && (
             <div>
-              <div className="text-xs text-gray-500 mb-2">
-                画像URL: {user.image}
-              </div>
               <div className="flex items-center space-x-3">
                 <Image
                   src={user.image}
