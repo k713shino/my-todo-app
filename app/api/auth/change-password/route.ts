@@ -98,16 +98,20 @@ export async function PUT(request: NextRequest) {
     console.log('パスワード強度検証:', requirements)
 
     const failedRequirements = []
+    if (!requirements.length) failedRequirements.push('8文字以上')
     if (!requirements.lowercase) failedRequirements.push('小文字')
     if (!requirements.uppercase) failedRequirements.push('大文字')
     if (!requirements.number) failedRequirements.push('数字')
     if (!requirements.special) failedRequirements.push('特殊文字(@$!%*?&のいずれか)')
 
-    if (failedRequirements.length > 0) {
+    // 最低3つの要件を満たす必要がある
+    const fulfilledCount = Object.values(requirements).filter(Boolean).length
+    if (fulfilledCount < 3) {
       return NextResponse.json(
         {
-          error: `パスワードには以下の要件が必要です: ${failedRequirements.join(', ')}`,
-          failedRequirements
+          error: `パスワードが弱すぎます。以下の要件のうち最低3つを満たしてください: ${failedRequirements.join(', ')}`,
+          failedRequirements,
+          score: fulfilledCount
         },
         { status: 400 }
       )
