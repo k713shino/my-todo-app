@@ -214,6 +214,12 @@ function SignInContent() {
                       width={16}
                       height={16}
                       className="filter invert"
+                      onError={(e) => {
+                        console.error('GitHub icon failed to load:', e)
+                      }}
+                      onLoad={() => {
+                        console.log('GitHub icon loaded successfully')
+                      }}
                     />
                   </span>
                   {isLoading ? '認証中...' : 'GitHubでログイン'}
@@ -233,6 +239,12 @@ function SignInContent() {
                       alt="Google"
                       width={16}
                       height={16}
+                      onError={(e) => {
+                        console.error('Google icon failed to load:', e)
+                      }}
+                      onLoad={() => {
+                        console.log('Google icon loaded successfully')
+                      }}
                     />
                   </span>
                   {isLoading ? '認証中...' : 'Googleでログイン'}
