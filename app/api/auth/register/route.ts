@@ -4,9 +4,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('=== Registration API called ===')
     const { name, email, password } = await request.json()
-    console.log('Request data:', { name, email, passwordLength: password?.length })
     
     // バリデーション
     if (!email || !password || password.length < 8) {
@@ -26,11 +24,9 @@ export async function POST(request: NextRequest) {
     }
     
     // 既存ユーザーチェック
-    console.log('Checking for existing user...')
     const existingUser = await prisma.user.findUnique({
       where: { email }
     })
-    console.log('Existing user check result:', existingUser ? 'User exists' : 'User not found')
     
     if (existingUser) {
       return NextResponse.json(
@@ -40,12 +36,9 @@ export async function POST(request: NextRequest) {
     }
     
     // パスワードハッシュ化
-    console.log('Hashing password...')
     const hashedPassword = await bcrypt.hash(password, 12)
-    console.log('Password hashed successfully')
     
     // ユーザー作成
-    console.log('Creating user in database...')
     const user = await prisma.user.create({
       data: {
         name: name?.trim(),
@@ -58,7 +51,6 @@ export async function POST(request: NextRequest) {
         name: true,
       }
     })
-    console.log('User created successfully:', { id: user.id, email: user.email })
     
     return NextResponse.json({ 
       message: '会員登録が完了しました',
@@ -66,15 +58,7 @@ export async function POST(request: NextRequest) {
     })
     
   } catch (err) {
-    console.error('=== Registration error ===')
-    console.error('Error:', err)
-    console.error('Error message:', err instanceof Error ? err.message : 'Unknown error')
-    console.error('Error stack:', err instanceof Error ? err.stack : null)
-    console.error('Environment check:', {
-      DATABASE_URL: process.env.DATABASE_URL ? 'Set' : 'Not set',
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL: process.env.VERCEL
-    })
+    console.error('Registration error:', err)
     return NextResponse.json(
       { error: '会員登録に失敗しました' }, 
       { status: 500 }
