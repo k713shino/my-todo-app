@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,49 +7,43 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ユーザーモデル
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String    @unique
-  password      String?   // パスワードフィールド追加
+  password      String?
   emailVerified DateTime?
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  
-  // リレーション
-  accounts Account[]
-  sessions Session[]
-  todos    Todo[]
+  accounts      Account[]
+  sessions      Session[]
+  todos         Todo[]
 
   @@map("users")
 }
 
-// NextAuth用のAccountモデル（タイムスタンプ付き）
 model Account {
   id                String   @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?  @db.Text
-  access_token      String?  @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?  @db.Text
+  id_token          String?
   session_state     String?
-  createdAt         DateTime @default(now())  // デフォルト値追加
-  updatedAt         DateTime @default(now()) @updatedAt  // デフォルト値追加
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@map("accounts")
 }
 
-// NextAuth用のSessionモデル
 model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique
@@ -63,7 +54,6 @@ model Session {
   @@map("sessions")
 }
 
-// NextAuth用のVerificationTokenモデル
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -73,7 +63,6 @@ model VerificationToken {
   @@map("verificationtokens")
 }
 
-// Todoモデル
 model Todo {
   id          String    @id @default(cuid())
   title       String
@@ -83,12 +72,9 @@ model Todo {
   dueDate     DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  
-  // ユーザーとのリレーション
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // インデックス
   @@index([userId])
   @@index([completed])
   @@index([priority])
@@ -96,7 +82,6 @@ model Todo {
   @@map("todos")
 }
 
-// 優先度列挙型
 enum Priority {
   LOW
   MEDIUM

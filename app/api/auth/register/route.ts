@@ -59,6 +59,14 @@ export async function POST(request: NextRequest) {
     
   } catch (err) {
     console.error('Registration error:', err)
+    console.error('Error details:', {
+      message: err instanceof Error ? err.message : 'Unknown error',
+      stack: err instanceof Error ? err.stack : null,
+      env: {
+        DATABASE_URL: process.env.DATABASE_URL ? 'Set' : 'Not set',
+        NODE_ENV: process.env.NODE_ENV
+      }
+    })
     return NextResponse.json(
       { error: '会員登録に失敗しました' }, 
       { status: 500 }
