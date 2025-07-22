@@ -16,7 +16,20 @@ export const authOptions: AuthOptions = {
       GithubProvider({
         clientId: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
-        allowDangerousEmailAccountLinking: true, // メール連携を許可
+        allowDangerousEmailAccountLinking: true,
+        authorization: {
+          params: {
+            scope: "read:user user:email"
+          }
+        },
+        profile(profile) {
+          return {
+            id: profile.id.toString(),
+            name: profile.name || profile.login,
+            email: profile.email,
+            image: profile.avatar_url,
+          }
+        },
       })
     ] : []),
     
@@ -25,7 +38,20 @@ export const authOptions: AuthOptions = {
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        allowDangerousEmailAccountLinking: true, // メール連携を許可
+        allowDangerousEmailAccountLinking: true,
+        authorization: {
+          params: {
+            scope: "openid email profile"
+          }
+        },
+        profile(profile) {
+          return {
+            id: profile.sub,
+            name: profile.name,
+            email: profile.email,
+            image: profile.picture,
+          }
+        },
       })
     ] : []),
     
@@ -152,14 +178,42 @@ export const authOptions: AuthOptions = {
     },
     signIn: async ({ user, account }: { user: User; account: any }) => {
       try {
+        console.log('🔐 signIn callback 実行中', {
+          provider: account?.provider,
+          email: user?.email,
+          userId: user?.id,
+          accountId: account?.providerAccountId
+        })
+        
         // OAuth認証時の基本ログ
         if (account?.provider && account.provider !== 'credentials') {
-          console.log(`OAuth認証成功: ${user.email} (${account.provider})`)
+          console.log(`✅ OAuth認証成功: ${user.email} (${account.provider})`)
+          
+          // GitHub/Googleの設定チェック
+          if (account.provider === 'github') {
+            console.log('GitHub設定確認:', {
+              clientId: !!process.env.GITHUB_CLIENT_ID,
+              clientSecret: !!process.env.GITHUB_CLIENT_SECRET,
+              nextauthUrl: process.env.NEXTAUTH_URL
+            })
+          }
+          
+          if (account.provider === 'google') {
+            console.log('Google設定確認:', {
+              clientId: !!process.env.GOOGLE_CLIENT_ID,
+              clientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+              nextauthUrl: process.env.NEXTAUTH_URL
+            })
+          }
         }
         return true
       } catch (error) {
-        console.error('認証エラー:', error)
-        return true // エラーでもサインインを継続
+        console.error('🚨 signIn callback エラー:', {
+          error: error.message,
+          provider: account?.provider,
+          email: user?.email
+        })
+        return false // 認証を停止
       }
     }
   },
@@ -171,7 +225,7 @@ export const authOptions: AuthOptions = {
     signIn: "/auth/signin",
     error: "/auth/signin",
   },
-  debug: process.env.NODE_ENV === 'development',
+  debug: process.env.NODE_ENV === 'development' || process.env.NEXTAUTH_DEBUG === 'true',
   // 本番環境でのセキュリティ設定
   ...(process.env.NODE_ENV === 'production' && process.env.NEXTAUTH_URL?.startsWith('https://') && {
     useSecureCookies: true,
