@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Priority } from '@prisma/client'
 import { format } from 'date-fns'
 
@@ -56,12 +56,24 @@ export default function TodoForm({
   initialData, 
   isLoading = false 
 }: TodoFormProps) {
-  const [title, setTitle] = useState(initialData?.title || '')
-  const [description, setDescription] = useState(initialData?.description || '')
-  const [priority, setPriority] = useState<Priority>(initialData?.priority || 'MEDIUM')
-  const [dueDate, setDueDate] = useState(
-    initialData?.dueDate ? format(initialData.dueDate, 'yyyy-MM-dd\'T\'HH:mm') : ''
-  )
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState<Priority>('MEDIUM')
+  const [dueDate, setDueDate] = useState('')
+
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.title || '')
+      setDescription(initialData.description || '')
+      setPriority(initialData.priority || 'MEDIUM')
+      setDueDate(initialData.dueDate ? format(initialData.dueDate, 'yyyy-MM-dd\'T\'HH:mm') : '')
+    } else {
+      setTitle('')
+      setDescription('')
+      setPriority('MEDIUM')
+      setDueDate('')
+    }
+  }, [initialData])
 
   /**
    * フォーム送信処理

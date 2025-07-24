@@ -8,7 +8,7 @@ import TodoItem from './TodoItem'
 import TodoFilters from './TodoFilters'
 import TodoStatsDisplay from './TodoStatsDisplay'
 import RealtimeUpdates from './RealtimeUpdates'
-import { Toaster } from 'react-hot-toast'
+import { Toaster, toast } from 'react-hot-toast'
 
 /**
  * APIレスポンスのTodoデータ型定義
@@ -100,6 +100,7 @@ export default function TodoList() {
 
       if (response.ok) {
         await fetchTodos()
+        toast.success('📝 新しいTodoを作成しました！')
       } else {
         const error = await response.json()
         alert(error.error || 'Todoの作成に失敗しました')
@@ -128,9 +129,10 @@ export default function TodoList() {
 
       if (response.ok) {
         await fetchTodos()
+        toast.success('✅ Todoを更新しました！')
       } else {
         const error = await response.json()
-        alert(error.error || 'Todoの更新に失敗しました')
+        toast.error(error.error || 'Todoの更新に失敗しました')
       }
     } catch (error) {
       console.error('Todo更新エラー:', error)
