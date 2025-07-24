@@ -1,20 +1,30 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build:prod",
   "outputDirectory": ".next",
-  "installCommand": "npm install --legacy-peer-deps && npx prisma generate",
+  "installCommand": "npm ci && npx prisma generate",
   "framework": "nextjs",
   "functions": {
     "app/api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 10
     }
   },
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1",
-      "SKIP_ENV_VALIDATION": "1",
-      "ESLint_NO_DEV_ERRORS": "true"
+      "NODE_ENV": "production"
     }
   },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "s-maxage=60, stale-while-revalidate=300"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/auth/(.*)",

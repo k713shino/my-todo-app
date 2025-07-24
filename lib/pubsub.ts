@@ -35,7 +35,7 @@ export interface GlobalNotificationData {
 type MessageCallback = (data: TodoEventData | UserActivityData | GlobalNotificationData) => void
 type PatternMessageCallback = (channel: string, data: TodoEventData | UserActivityData | GlobalNotificationData) => void
 
-// PubSub管理クラス
+// PubSub管理クラス（Upstash最適化版）
 export class PubSubManager {
   // 具体的な型を使用して型安全性を確保します
   private static subscribers = new Map<string, Set<MessageCallback>>()

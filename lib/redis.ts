@@ -1,8 +1,31 @@
 import Redis from 'ioredis'
 
-// Redis接続設定を取得する関数
-const getRedisConfig = (): string => {
-  return process.env.REDIS_URL || 'redis://localhost:6379'
+// Upstash Redis用の最適化設定
+const getRedisConfig = () => {
+  const redisUrl = process.env.REDIS_URL
+  if (!redisUrl) {
+    throw new Error('REDIS_URL environment variable is required')
+  }
+  
+  // ioredis用の正しい設定オプション
+  return {
+    // 基本設定
+    lazyConnect: true,
+    maxRetriesPerRequest: 3,
+    retryDelayOnFailover: 100,
+    enableReadyCheck: false,
+    
+    // タイムアウト設定
+    connectTimeout: 10000,
+    commandTimeout: 5000,
+    
+    // TLS設定（Upstashは必須）
+    tls: {},
+    
+    // 接続プール設定
+    family: 6, // IPv6優先
+    keepAlive: 30000,
+  }
 }
 
 // ビルド時の接続問題を回避する関数です
@@ -112,10 +135,11 @@ class RedisClient {
 
     if (!this.instance) {
       try {
-        const redisUrl = getRedisConfig()
+        const redisUrl = process.env.REDIS_URL!
+        const options = getRedisConfig()
         
-        // 最もシンプルな設定
-        this.instance = new Redis(redisUrl)
+        // 正しいioredis初期化方法
+        this.instance = new Redis(redisUrl, options)
 
         // 接続イベントの監視
         this.instance.on('connect', () => {
@@ -149,6 +173,58 @@ class RedisClient {
       }
     }
     return this.instance
+  }
+
+  // メッセージ送信用クライアント
+  static getPubClient(): Redis | MockRedis {
+    if (this.isDisabled || !shouldConnectRedis()) {
+      return this.createMockRedis()
+    }
+
+    if (!this.pubClient) {
+      try {
+        const redisUrl = process.env.REDIS_URL!
+        const options = getRedisConfig()
+        this.pubClient = new Redis(redisUrl, options)
+        
+        this.pubClient.on('error', (err: Error) => {
+          console.error('❌ Redis Pub client error:', err.message)
+          if (err.message.includes('ECONNREFUSED')) {
+            this.isDisabled = true
+          }
+        })
+      } catch (error) {
+        console.error('Pub client creation error:', error)
+        return this.createMockRedis()
+      }
+    }
+    return this.pubClient
+  }
+
+  // メッセージ受信用クライアント
+  static getSubClient(): Redis | MockRedis {
+    if (this.isDisabled || !shouldConnectRedis()) {
+      return this.createMockRedis()
+    }
+
+    if (!this.subClient) {
+      try {
+        const redisUrl = process.env.REDIS_URL!
+        const options = getRedisConfig()
+        this.subClient = new Redis(redisUrl, options)
+        
+        this.subClient.on('error', (err: Error) => {
+          console.error('❌ Redis Sub client error:', err.message)
+          if (err.message.includes('ECONNREFUSED')) {
+            this.isDisabled = true
+          }
+        })
+      } catch (error) {
+        console.error('Sub client creation error:', error)
+        return this.createMockRedis()
+      }
+    }
+    return this.subClient
   }
 
   // モックRedisクライアント
@@ -243,56 +319,6 @@ class RedisClient {
 
     console.log('🎭 Using graceful mock Redis client')
     return mockRedis
-  }
-
-  // メッセージ送信用クライアント
-  static getPubClient(): Redis | MockRedis {
-    if (this.isDisabled || !shouldConnectRedis()) {
-      return this.createMockRedis()
-    }
-
-    if (!this.pubClient) {
-      try {
-        const redisUrl = getRedisConfig()
-        this.pubClient = new Redis(redisUrl)
-        
-        this.pubClient.on('error', (err: Error) => {
-          console.error('❌ Redis Pub client error:', err.message)
-          if (err.message.includes('ECONNREFUSED')) {
-            this.isDisabled = true
-          }
-        })
-      } catch (error) {
-        console.error('Pub client creation error:', error)
-        return this.createMockRedis()
-      }
-    }
-    return this.pubClient
-  }
-
-  // メッセージ受信用クライアント
-  static getSubClient(): Redis | MockRedis {
-    if (this.isDisabled || !shouldConnectRedis()) {
-      return this.createMockRedis()
-    }
-
-    if (!this.subClient) {
-      try {
-        const redisUrl = getRedisConfig()
-        this.subClient = new Redis(redisUrl)
-        
-        this.subClient.on('error', (err: Error) => {
-          console.error('❌ Redis Sub client error:', err.message)
-          if (err.message.includes('ECONNREFUSED')) {
-            this.isDisabled = true
-          }
-        })
-      } catch (error) {
-        console.error('Sub client creation error:', error)
-        return this.createMockRedis()
-      }
-    }
-    return this.subClient
   }
 
   // 全ての接続を閉じる

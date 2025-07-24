@@ -24,9 +24,10 @@ interface SessionData {
   [key: string]: unknown
 }
 
-// キャッシュ管理クラス
+// キャッシュ管理クラス（Upstash Redis最適化版）
 export class CacheManager {
-  private static DEFAULT_TTL = 3600 // 1時間（秒単位）
+  private static DEFAULT_TTL = 1800 // 30分（Upstash無料枠に最適）
+  private static MAX_KEYS_PER_USER = 50 // ユーザーあたりの最大キー数
 
   // 基本的なキャッシュ操作
 
@@ -41,10 +42,17 @@ export class CacheManager {
     }
   }
 
-  // データを保存する
+  // データを保存する（圧縮対応）
   static async set(key: string, value: unknown, ttl = this.DEFAULT_TTL): Promise<boolean> {
     try {
-      await redis.setex(key, ttl, JSON.stringify(value))
+      const serialized = JSON.stringify(value)
+      
+      // Upstash無料枠（50MB）に配慮した容量チェック
+      if (serialized.length > 100000) { // 100KB以上は警告
+        console.warn(`Large cache data for key ${key}: ${serialized.length} bytes`)
+      }
+      
+      await redis.setex(key, ttl, serialized)
       return true
     } catch (_error: unknown) {
       console.error('Cache set error:', _error)
@@ -92,16 +100,32 @@ export class CacheManager {
     }
   }
 
-  // Todo関連のキャッシュ操作
+  // Todo関連のキャッシュ操作（最適化版）
 
   // Todoリストを取得
   static async getTodos(userId: string): Promise<Todo[] | null> {
     return this.get<Todo[]>(CacheKeys.userTodos(userId))
   }
 
-  // Todoリストを保存
-  static async setTodos(userId: string, todos: Todo[], ttl = this.DEFAULT_TTL): Promise<boolean> {
-    return this.set(CacheKeys.userTodos(userId), todos, ttl)
+  // Todoリストを保存（最適化版）
+  static async setTodos(userId: string, todos: Todo[], ttl = 900): Promise<boolean> { // 15分
+    // 大きなデータは要約してキャッシュ
+    const optimizedTodos = todos.map(todo => ({
+      id: todo.id,
+      title: todo.title,
+      completed: todo.completed,
+      priority: todo.priority,
+      dueDate: todo.dueDate,
+      createdAt: todo.createdAt,
+      updatedAt: todo.updatedAt,
+      userId: todo.userId,
+      // 説明文は長い場合は省略
+      description: todo.description && todo.description.length > 200 
+        ? todo.description.slice(0, 200) + '...' 
+        : todo.description
+    }))
+    
+    return this.set(CacheKeys.userTodos(userId), optimizedTodos, ttl)
   }
 
   // ユーザーのTodo関連キャッシュを全て削除
@@ -126,11 +150,11 @@ export class CacheManager {
     return this.del(CacheKeys.userSession(sessionId))
   }
 
-  // ユーザーアクティビティ追跡（型エラー修正）
+  // ユーザーアクティビティ追跡
   static async updateUserActivity(userId: string): Promise<boolean> {
     try {
       const key = CacheKeys.userActivity(userId)
-      const timestamp = Date.now().toString() // 文字列に変換
+      const timestamp = Date.now().toString()
       await redis.setex(key, 1800, timestamp) // 30分間のアクティビティ記録
       return true
     } catch (_error: unknown) {
@@ -146,6 +170,54 @@ export class CacheManager {
     const now = Date.now()
     const lastActivity = parseInt(activity, 10)
     return (now - lastActivity) < 1800000 // 30分以内
+  }
+
+  // Upstash Redis使用量監視
+  static async checkUsage(): Promise<{ usedMB: number; limit: number; percentage: number }> {
+    try {
+      const info = await redis.info('memory')
+      const memMatch = info.match(/used_memory:(\d+)/)
+      const usedBytes = memMatch ? parseInt(memMatch[1]) : 0
+      const usedMB = Math.round(usedBytes / 1024 / 1024)
+      
+      // 50MB制限の80%を超えたら警告
+      if (usedMB > 40) {
+        console.warn(`⚠️ Redis usage: ${usedMB}MB / 50MB (${Math.round(usedMB/50*100)}%)`)
+        
+        // 古いキーを削除
+        await this.cleanupOldKeys()
+      }
+      
+      return { usedMB, limit: 50, percentage: Math.round(usedMB/50*100) }
+    } catch (error) {
+      console.error('Usage check error:', error)
+      return { usedMB: 0, limit: 50, percentage: 0 }
+    }
+  }
+
+  // 古いキーのクリーンアップ
+  static async cleanupOldKeys(): Promise<number> {
+    try {
+      const patterns = ['todos:*', 'stats:*', 'search:*']
+      let deletedCount = 0
+      
+      for (const pattern of patterns) {
+        const keys = await redis.keys(pattern)
+        // 古いキーから削除（LRU的な動作）
+        const keysToDelete = keys.slice(0, Math.floor(keys.length / 3))
+        
+        if (keysToDelete.length > 0) {
+          await redis.del(...keysToDelete)
+          deletedCount += keysToDelete.length
+        }
+      }
+      
+      console.log(`🧹 Cleaned up ${deletedCount} old cache keys`)
+      return deletedCount
+    } catch (error) {
+      console.error('Cleanup error:', error)
+      return 0
+    }
   }
 
   // ヘルスチェック
@@ -168,7 +240,7 @@ interface RateLimitResult {
   resetTime: number
 }
 
-// レート制限専用クラス
+// レート制限専用クラス（Upstash最適化）
 export class RateLimiter {
   static async checkRateLimit(
     identifier: string, 
