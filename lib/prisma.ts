@@ -18,46 +18,16 @@ const getDatabaseUrl = (): string => {
   return url
 }
 
-// ビルド時の環境判定
+// ビルド時の環境判定を強化
 const isBuildTime = (): boolean => {
   return (
     process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.CI === 'true' ||
     // Vercelのビルド時を正確に判定
-    (process.env.VERCEL === '1' && process.env.VERCEL_ENV === undefined)
+    (process.env.VERCEL === '1' && !process.env.DATABASE_URL) ||
+    // 一般的なビルド環境の判定
+    process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL
   )
-}
-
-// Prismaクライアントのシングルトンインスタンス
-const createPrismaClient = () => {
-  const databaseUrl = getDatabaseUrl()
-  
-  try {
-    const client = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-      datasources: {
-        db: {
-          url: databaseUrl,
-        },
-      },
-      // ビルド時は接続しない
-      errorFormat: 'minimal',
-    })
-
-    // ビルド時以外でのみ接続テストを実行
-    if (!isBuildTime()) {
-      // 接続テストは非同期で実行（ビルドをブロックしない）
-      client.$connect().catch((error) => {
-        console.warn('Prisma connection warning (non-blocking):', error.message)
-      })
-    }
-
-    return client
-  } catch (error) {
-    console.error('Prisma client creation error:', error)
-    
-    // フォールバック用のダミークライアント
-    return createDummyPrismaClient()
-  }
 }
 
 // ダミーPrismaクライアント（ビルド時用）
@@ -73,7 +43,7 @@ const createDummyPrismaClient = () => {
       update: async () => ({}),
       delete: async () => ({}),
       deleteMany: async () => ({ count: 0 }),
-      count: async () => 0, // 🔥 count メソッド追加
+      count: async () => 0,
     },
     account: {
       findUnique: async () => null,
@@ -83,7 +53,7 @@ const createDummyPrismaClient = () => {
       update: async () => ({}),
       delete: async () => ({}),
       deleteMany: async () => ({ count: 0 }),
-      count: async () => 0, // 🔥 count メソッド追加
+      count: async () => 0,
     },
     session: {
       findUnique: async () => null,
@@ -92,14 +62,14 @@ const createDummyPrismaClient = () => {
       update: async () => ({}),
       delete: async () => ({}),
       deleteMany: async () => ({ count: 0 }),
-      count: async () => 0, // 🔥 count メソッド追加
+      count: async () => 0,
     },
     verificationToken: {
       findUnique: async () => null,
       findFirst: async () => null,
       create: async () => ({}),
       delete: async () => ({}),
-      count: async () => 0, // 🔥 count メソッド追加
+      count: async () => 0,
     },
     todo: {
       findMany: async () => [],
@@ -121,10 +91,41 @@ const createDummyPrismaClient = () => {
   return dummyClient
 }
 
+// Prismaクライアントの作成
+const createPrismaClient = () => {
+  const databaseUrl = getDatabaseUrl()
+  
+  try {
+    const client = new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+      datasources: {
+        db: {
+          url: databaseUrl,
+        },
+      },
+      errorFormat: 'minimal',
+    })
+
+    // ビルド時以外でのみ接続テストを実行
+    if (!isBuildTime()) {
+      // 接続テストは非同期で実行（ビルドをブロックしない）
+      client.$connect().catch((error) => {
+        console.warn('Prisma connection warning (non-blocking):', error.message)
+      })
+    }
+
+    return client
+  } catch (error) {
+    console.error('Prisma client creation error:', error)
+    return createDummyPrismaClient()
+  }
+}
+
 // シングルトンパターンでPrismaクライアントを管理
 const prisma = globalThis.__prisma ?? (() => {
-  // ビルド時はダミークライアント
+  // ビルド時は常にダミークライアント
   if (isBuildTime()) {
+    console.log('🎭 Build time detected - using dummy Prisma client')
     return createDummyPrismaClient()
   }
   
@@ -137,12 +138,13 @@ const prisma = globalThis.__prisma ?? (() => {
   return createPrismaClient()
 })()
 
-if (process.env.NODE_ENV !== 'production') {
+// 開発環境でのみグローバルに保存
+if (process.env.NODE_ENV !== 'production' && !isBuildTime()) {
   globalThis.__prisma = prisma
 }
 
 // 接続テスト関数（ランタイムでのみ実行）
-export async function testDatabaseConnection() {
+export async function testDatabaseConnection(): Promise<boolean> {
   // ビルド時やダミークライアント使用時はスキップ
   if (isBuildTime() || !process.env.DATABASE_URL || process.env.DATABASE_URL.includes('dummy')) {
     console.log('⏭️ Database connection test skipped (build time or dummy URL)')
@@ -159,13 +161,11 @@ export async function testDatabaseConnection() {
   }
 }
 
-// グレースフルシャットダウン
-if (typeof process !== 'undefined') {
+// グレースフルシャットダウン（ビルド時以外）
+if (typeof process !== 'undefined' && !isBuildTime()) {
   process.on('beforeExit', async () => {
     try {
-      if (!isBuildTime()) {
-        await prisma.$disconnect()
-      }
+      await prisma.$disconnect()
     } catch (error) {
       console.error('Error during Prisma disconnect:', error)
     }

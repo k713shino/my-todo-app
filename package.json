@@ -4,13 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npm run build:prod",
-    "build:safe": "DATABASE_URL='postgresql://dummy:dummy@localhost:5432/dummy?connect_timeout=1' prisma generate && SKIP_ENV_VALIDATION=1 DISABLE_TYPE_CHECKING=1 next build",
-    "build:prod": "prisma generate && next build",
-    "build:vercel": "npm run build:prod",
-    "postbuild": "echo 'Build completed successfully'",
-    "vercel-build": "npm run build:prod",
-    "build:no-check": "DATABASE_URL='postgresql://dummy:dummy@localhost:5432/dummy' prisma generate && next build --no-lint",
+    "build": "next build",
+    "build:prod": "next build",
+    "build:vercel": "npx prisma generate && next build",
+    "vercel-build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "next lint --fix",
     "lint:fix": "next lint --fix --quiet",
@@ -23,7 +20,7 @@
     "redis:info": "redis-cli -h localhost -p 6379 info",
     "cache:clear": "node --experimental-modules scripts/cache-stats.js clear",
     "cache:stats": "node --experimental-modules scripts/cache-stats.js",
-    "postinstall": "prisma generate || echo 'Prisma generation failed, continuing...'"
+    "postinstall": "npx prisma generate || echo 'Prisma generation failed, continuing...'"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",
