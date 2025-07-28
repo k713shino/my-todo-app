@@ -63,9 +63,10 @@ export default function TodoList() {
    * サーバーからTodo一覧を取得
    * 取得したデータの日付文字列をDateオブジェクトに変換
    */
-  const fetchTodos = async () => {
+  const fetchTodos = async (bypassCache = false) => {
     try {
-      const response = await fetch('/api/todos')
+      const url = bypassCache ? '/api/todos?cache=false' : '/api/todos'
+      const response = await fetch(url)
       if (response.ok) {
         const data: TodoResponse[] = await response.json()
         setTodos(data.map((todo) => ({
@@ -91,6 +92,24 @@ export default function TodoList() {
    */
   const handleCreateTodo = async (data: CreateTodoData) => {
     setIsSubmitting(true)
+    
+    // 楽観的UI更新：即座に新しいTodoをUIに追加
+    const tempId = `temp-${Date.now()}`
+    const optimisticTodo: Todo = {
+      id: tempId,
+      title: data.title,
+      description: data.description || null,
+      completed: false,
+      priority: data.priority || 'MEDIUM',
+      dueDate: data.dueDate || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      userId: 'current-user'
+    }
+    
+    // UIを即座に更新
+    setTodos(prev => [optimisticTodo, ...prev])
+    
     try {
       const response = await fetch('/api/todos', {
         method: 'POST',
@@ -99,13 +118,28 @@ export default function TodoList() {
       })
 
       if (response.ok) {
-        await fetchTodos()
+        const newTodo: TodoResponse = await response.json()
+        // 一時的なTodoを実際のTodoで置き換え
+        setTodos(prev => prev.map(todo => 
+          todo.id === tempId 
+            ? {
+                ...newTodo,
+                createdAt: new Date(newTodo.createdAt),
+                updatedAt: new Date(newTodo.updatedAt),
+                dueDate: newTodo.dueDate ? new Date(newTodo.dueDate) : null,
+              }
+            : todo
+        ))
         toast.success('📝 新しいTodoを作成しました！')
       } else {
+        // エラー時は楽観的更新を取り消し
+        setTodos(prev => prev.filter(todo => todo.id !== tempId))
         const error = await response.json()
         alert(error.error || 'Todoの作成に失敗しました')
       }
     } catch (error) {
+      // エラー時は楽観的更新を取り消し
+      setTodos(prev => prev.filter(todo => todo.id !== tempId))
       console.error('Todo作成エラー:', error)
       alert('Todoの作成に失敗しました')
     } finally {
@@ -120,6 +154,14 @@ export default function TodoList() {
    * - 更新後は一覧を再取得して表示を更新
    */
   const handleUpdateTodo = async (id: string, data: UpdateTodoData) => {
+    // 楽観的UI更新：即座にUIを更新
+    const originalTodos = todos
+    setTodos(prev => prev.map(todo => 
+      todo.id === id 
+        ? { ...todo, ...data, updatedAt: new Date() }
+        : todo
+    ))
+    
     try {
       const response = await fetch(`/api/todos/${id}`, {
         method: 'PUT',
@@ -128,13 +170,28 @@ export default function TodoList() {
       })
 
       if (response.ok) {
-        await fetchTodos()
+        const updatedTodo: TodoResponse = await response.json()
+        // 実際のレスポンスでUIを更新
+        setTodos(prev => prev.map(todo => 
+          todo.id === id 
+            ? {
+                ...updatedTodo,
+                createdAt: new Date(updatedTodo.createdAt),
+                updatedAt: new Date(updatedTodo.updatedAt),
+                dueDate: updatedTodo.dueDate ? new Date(updatedTodo.dueDate) : null,
+              }
+            : todo
+        ))
         toast.success('✅ Todoを更新しました！')
       } else {
+        // エラー時は元の状態に戻す
+        setTodos(originalTodos)
         const error = await response.json()
         toast.error(error.error || 'Todoの更新に失敗しました')
       }
     } catch (error) {
+      // エラー時は元の状態に戻す
+      setTodos(originalTodos)
       console.error('Todo更新エラー:', error)
       alert('Todoの更新に失敗しました')
     }
@@ -147,18 +204,26 @@ export default function TodoList() {
    * - エラー時はユーザーに通知
    */
   const handleDeleteTodo = async (id: string) => {
+    // 楽観的UI更新：即座にUIから削除
+    const originalTodos = todos
+    setTodos(prev => prev.filter(todo => todo.id !== id))
+    
     try {
       const response = await fetch(`/api/todos/${id}`, {
         method: 'DELETE',
       })
 
       if (response.ok) {
-        await fetchTodos()
+        toast.success('🗑️ Todoを削除しました！')
       } else {
+        // エラー時は元の状態に戻す
+        setTodos(originalTodos)
         const error = await response.json()
         alert(error.error || 'Todoの削除に失敗しました')
       }
     } catch (error) {
+      // エラー時は元の状態に戻す
+      setTodos(originalTodos)
       console.error('Todo削除エラー:', error)
       alert('Todoの削除に失敗しました')
     }
