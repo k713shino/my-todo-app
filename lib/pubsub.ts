@@ -43,10 +43,16 @@ export class PubSubManager {
   // メッセージ発行
   static async publish(channel: string, data: TodoEventData | UserActivityData | GlobalNotificationData): Promise<boolean> {
     try {
-      await pubClient.publish(channel, JSON.stringify({
-        ...data,
-        timestamp: Date.now()
-      }))
+      // タイムアウト付きでRedis Pub操作
+      await Promise.race([
+        pubClient.publish(channel, JSON.stringify({
+          ...data,
+          timestamp: Date.now()
+        })),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Redis publish timeout')), 1500)
+        )
+      ])
       return true
     } catch (error) {
       console.error('Publish error:', error)

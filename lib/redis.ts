@@ -11,20 +11,20 @@ const getRedisConfig = () => {
   return {
     // 基本設定
     lazyConnect: true,
-    maxRetriesPerRequest: 3,
-    retryDelayOnFailover: 100,
+    maxRetriesPerRequest: 1, // Vercel serverless最適化
+    retryDelayOnFailover: 50,
     enableReadyCheck: false,
     
-    // タイムアウト設定
-    connectTimeout: 10000,
-    commandTimeout: 5000,
+    // タイムアウト設定（Vercel serverless最適化）
+    connectTimeout: 3000,
+    commandTimeout: 2000,
     
     // TLS設定（Upstashは必須）
     tls: {},
     
     // 接続プール設定
-    family: 6, // IPv6優先
-    keepAlive: 30000,
+    family: 4, // IPv4優先（Vercel推奨）
+    keepAlive: 10000,
   }
 }
 

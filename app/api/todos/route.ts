@@ -83,8 +83,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ユーザーアクティビティ更新
-    await CacheManager.updateUserActivity(session.user.id)
+    // ユーザーアクティビティ更新（非同期）
+    CacheManager.updateUserActivity(session.user.id).catch(error => {
+      console.error('User activity update error (non-blocking):', error)
+    })
 
     return NextResponse.json(todos, {
       headers: {
@@ -152,24 +154,25 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // キャッシュ無効化（新しいTodoが追加されたので古いキャッシュを削除）
-    await CacheManager.invalidateUserTodos(session.user.id)
-    console.log('🗑️ Cache invalidated after todo creation')
-
-    // リアルタイムイベント発行
-    await PubSubManager.publishTodoEvent({
-      type: 'created',
-      todo,
-      userId: session.user.id,
-      timestamp: Date.now()
-    })
-
-    // ユーザーアクティビティ発行
-    await PubSubManager.publishUserActivity({
-      userId: session.user.id,
-      action: 'todo_created',
-      timestamp: Date.now(),
-      metadata: { todoId: todo.id, title: todo.title }
+    // 非同期でキャッシュ無効化とイベント発行（レスポンスをブロックしない）
+    Promise.allSettled([
+      CacheManager.invalidateUserTodos(session.user.id).then(() => {
+        console.log('🗑️ Cache invalidated after todo creation')
+      }),
+      PubSubManager.publishTodoEvent({
+        type: 'created',
+        todo,
+        userId: session.user.id,
+        timestamp: Date.now()
+      }),
+      PubSubManager.publishUserActivity({
+        userId: session.user.id,
+        action: 'todo_created',
+        timestamp: Date.now(),
+        metadata: { todoId: todo.id, title: todo.title }
+      })
+    ]).catch(error => {
+      console.error('Background task error (non-blocking):', error)
     })
 
     return NextResponse.json(todo, { 

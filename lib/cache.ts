@@ -52,7 +52,13 @@ export class CacheManager {
         console.warn(`Large cache data for key ${key}: ${serialized.length} bytes`)
       }
       
-      await redis.setex(key, ttl, serialized)
+      // タイムアウト付きでRedis操作
+      await Promise.race([
+        redis.setex(key, ttl, serialized),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Redis setex timeout')), 2000)
+        )
+      ])
       return true
     } catch (_error: unknown) {
       console.error('Cache set error:', _error)
@@ -108,7 +114,7 @@ export class CacheManager {
   }
 
   // Todoリストを保存（最適化版）
-  static async setTodos(userId: string, todos: Todo[], ttl = 900): Promise<boolean> { // 15分
+  static async setTodos(userId: string, todos: Todo[], ttl = 300): Promise<boolean> { // 5分
     // 大きなデータは要約してキャッシュ
     const optimizedTodos = todos.map(todo => ({
       id: todo.id,
