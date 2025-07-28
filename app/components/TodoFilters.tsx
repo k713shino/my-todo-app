@@ -42,13 +42,13 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
   const hasActiveFilters = filter.completed !== undefined || filter.priority || filter.search
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md space-y-4">
+    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md dark:shadow-gray-900/50 space-y-4 border border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">🔍 フィルター</h3>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">🔍 フィルター</h3>
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
-            className="text-sm text-purple-600 hover:text-purple-800 transition-colors"
+            className="text-sm text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 transition-colors"
           >
             すべてクリア
           </button>
@@ -58,7 +58,7 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* 検索 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             検索
           </label>
           <input
@@ -66,13 +66,13 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
             value={filter.search || ''}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="タイトルや説明で検索..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
           />
         </div>
 
         {/* 完了状態 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             完了状態
           </label>
           <select
@@ -83,7 +83,7 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
                 value === '' ? undefined : value === 'true'
               )
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
           >
             <option value="">すべて</option>
             <option value="false">未完了</option>
@@ -93,7 +93,7 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
 
         {/* 優先度 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             優先度
           </label>
           <select
@@ -102,7 +102,7 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
               const value = e.target.value
               handlePriorityFilter(value === '' ? undefined : value as Priority)
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
           >
             <option value="">すべて</option>
             {Object.entries(priorityLabels).map(([value, label]) => (

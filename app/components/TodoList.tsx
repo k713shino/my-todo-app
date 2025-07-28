@@ -328,7 +328,7 @@ export default function TodoList() {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 dark:border-purple-400"></div>
       </div>
     )
   }
@@ -382,7 +382,7 @@ export default function TodoList() {
             />
           ))
         ) : (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             {filter.completed !== undefined || filter.priority || filter.search ? (
               <p>🔍 条件に一致するTodoがありません</p>
             ) : (

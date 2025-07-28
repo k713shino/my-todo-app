@@ -35,13 +35,13 @@ const priorityLabels = {
 
 /**
  * 優先度ごとの表示色定義
- * Tailwindのユーティリティクラスを使用
+ * Tailwindのユーティリティクラスを使用（ダークモード対応）
  */
 const priorityColors = {
-  LOW: 'text-green-600 bg-green-100',
-  MEDIUM: 'text-yellow-600 bg-yellow-100',
-  HIGH: 'text-orange-600 bg-orange-100',
-  URGENT: 'text-red-600 bg-red-100',
+  LOW: 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30',
+  MEDIUM: 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/30',
+  HIGH: 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30',
+  URGENT: 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30',
 }
 
 /**
@@ -109,12 +109,12 @@ export default function TodoItem({
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow-md p-4 border-l-4 transition-all duration-200 ${
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/20 p-4 border-l-4 transition-all duration-200 ${
       todo.completed 
-        ? 'border-green-400 opacity-75' 
+        ? 'border-green-400 dark:border-green-500 opacity-75' 
         : isOverdue 
-        ? 'border-red-400' 
-        : 'border-purple-400'
+        ? 'border-red-400 dark:border-red-500' 
+        : 'border-purple-400 dark:border-purple-500'
     } ${isUpdating ? 'opacity-50' : ''}`}>
       
       {/* ヘッダー */}
@@ -125,10 +125,10 @@ export default function TodoItem({
             checked={todo.completed}
             onChange={handleToggleComplete}
             disabled={isLoading || isUpdating}
-            className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+            className="w-5 h-5 text-purple-600 dark:text-purple-400 rounded focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600"
           />
           <h3 className={`text-lg font-medium ${
-            todo.completed ? 'line-through text-gray-500' : 'text-gray-900'
+            todo.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'
           }`}>
             {priorityIcons[todo.priority]} {todo.title}
           </h3>
@@ -138,7 +138,7 @@ export default function TodoItem({
           <button
             onClick={() => onEdit(todo)}
             disabled={isLoading}
-            className="text-gray-400 hover:text-purple-600 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
             title="編集"
           >
             ✏️
@@ -146,7 +146,7 @@ export default function TodoItem({
           <button
             onClick={handleDelete}
             disabled={isLoading}
-            className="text-gray-400 hover:text-red-600 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
             title="削除"
           >
             🗑️
@@ -157,7 +157,7 @@ export default function TodoItem({
       {/* 説明 */}
       {todo.description && (
         <p className={`text-sm mb-3 ${
-          todo.completed ? 'text-gray-400' : 'text-gray-600'
+          todo.completed ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'
         }`}>
           {todo.description}
         </p>
@@ -174,10 +174,10 @@ export default function TodoItem({
         {todo.dueDate && (
           <span className={`text-xs ${
             isOverdue && !todo.completed 
-              ? 'text-red-600 font-medium' 
+              ? 'text-red-600 dark:text-red-400 font-medium' 
               : todo.completed 
-              ? 'text-gray-400' 
-              : 'text-gray-600'
+              ? 'text-gray-400 dark:text-gray-500' 
+              : 'text-gray-600 dark:text-gray-300'
           }`}>
             📅 {format(new Date(todo.dueDate), 'yyyy年M月d日 HH:mm', { locale: ja })}
             {isOverdue && !todo.completed && ' (期限切れ)'}
@@ -185,7 +185,7 @@ export default function TodoItem({
         )}
 
         {/* 作成日 */}
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-gray-400 dark:text-gray-500">
           作成: {format(new Date(todo.createdAt), 'M月d日 HH:mm', { locale: ja })}
         </span>
       </div>
