@@ -159,7 +159,7 @@ function SignInContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 dark:from-slate-900 dark:via-indigo-900 dark:to-purple-900 transition-all duration-500">
       <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
         <div className="text-center">
           <div className="flex justify-end mb-4">
@@ -175,21 +175,21 @@ function SignInContent() {
         
         {/* エラーメッセージ */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
             <div className="flex">
               <div className="flex-shrink-0">
                 <span className="text-red-400">⚠️</span>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-800 font-medium">{error}</p>
+                <p className="text-sm text-red-800 dark:text-red-300 font-medium">{error}</p>
                 {error.includes('OAuth認証') && (
-                  <p className="text-xs text-red-600 mt-1">
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">
                     GitHubまたはGoogleのアカウントでログインしてください。
                   </p>
                 )}
                 {error.includes('登録されていません') && (
-                  <p className="text-xs text-red-600 mt-1">
-                    <Link href="/auth/register" className="underline hover:text-red-800">
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                    <Link href="/auth/register" className="underline hover:text-red-800 dark:hover:text-red-300">
                       こちらから新規会員登録
                     </Link>
                     ができます。
@@ -285,14 +285,14 @@ function SignInContent() {
             <>
               <form onSubmit={handleEmailSignIn} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     メールアドレス
                   </label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="you@example.com"
                     required
                     disabled={isLoading}
@@ -300,14 +300,14 @@ function SignInContent() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     パスワード
                   </label>
                   <input
                     type="password"
                     value={formData.password}
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="パスワードを入力"
                     required
                     disabled={isLoading}
@@ -325,7 +325,7 @@ function SignInContent() {
 
               <button
                 onClick={() => setShowEmailLogin(false)}
-                className="w-full text-sm text-purple-600 hover:text-purple-800 transition-colors"
+                className="w-full text-sm text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 transition-colors"
               >
                 ← 他の方法でログイン
               </button>
@@ -334,12 +334,12 @@ function SignInContent() {
 
           {/* 新規登録リンク */}
           <div className="text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               アカウントをお持ちでない方は
             </p>
             <Link 
               href="/auth/register" 
-              className="text-purple-600 hover:text-purple-800 font-medium transition-colors"
+              className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 font-medium transition-colors"
             >
               新規会員登録
             </Link>
@@ -365,7 +365,7 @@ function SignInContent() {
 // ローディング中のフォールバック
 function SignInLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 dark:from-slate-900 dark:via-indigo-900 dark:to-purple-900 transition-all duration-500">
       <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
         <div className="text-center">
           <div className="flex justify-end mb-4">

@@ -1,43 +1,99 @@
 @import 'tailwindcss';
 
+/* 基本的なテーマ設定 */
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f0f0f;
 }
 
+.dark {
+  --background: #0f0f0f;
+  --foreground: #ededed;
+}
+
+/* 明示的なライトテーマクラス */
+.light {
+  --background: #ffffff;
+  --foreground: #0f0f0f;
+}
+
+/* body要素の基本スタイル */
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* フォーム要素のダークモード対応 */
+input,
+textarea,
+select {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ダークモード時のフォーム要素（システム設定を無視） */
+html.dark input:not([type="submit"]):not([type="button"]),
+html.dark textarea,
+html.dark select {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+  border-color: #374151 !important;
+}
+
+html.dark input:not([type="submit"]):not([type="button"]):focus,
+html.dark textarea:focus,
+html.dark select:focus {
+  border-color: #8b5cf6 !important;
+  outline: 2px solid #8b5cf6 !important;
+  outline-offset: 2px;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* ライトモード時のフォーム要素も明示 */
+html.light input:not([type="submit"]):not([type="button"]),
+html.light textarea,
+html.light select {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #d1d5db !important;
+}
+
+/* スクロールバーのダークモード対応（システム設定を無視） */
+html.dark::-webkit-scrollbar {
+  width: 8px;
+}
+
+html.dark::-webkit-scrollbar-track {
+  background: #1f2937 !important;
+}
+
+html.dark::-webkit-scrollbar-thumb {
+  background: #4b5563 !important;
+  border-radius: 4px;
+}
+
+html.dark::-webkit-scrollbar-thumb:hover {
+  background: #6b7280 !important;
+}
+
+/* システム設定の影響を制限しつつ、デザインを保持 */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
+  html:not(.dark):not(.light) {
+    /* システムテーマ時のみシステム設定を適用 */
+    --background: #0f0f0f;
     --foreground: #ededed;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-/* フォーム要素のスタイル */
-input,
-textarea,
-select {
-  color: var(--foreground);
-  background-color: var(--background);
-  border-color: #4a4a4a;
-}
-
-@media (prefers-color-scheme: dark) {
-  input,
-  textarea,
-  select {
-    color: #ffffff;
-    background-color: #1a1a1a;
-    border-color: #6b6b6b;
-  }
-
-  input::placeholder,
-  textarea::placeholder {
-    color: #9ca3af;
+@media (prefers-color-scheme: light) {
+  html:not(.dark):not(.light) {
+    /* システムテーマ時のみシステム設定を適用 */
+    --background: #ffffff;
+    --foreground: #0f0f0f;
   }
 }

@@ -20,8 +20,8 @@ export default function Home() {
   // ローディング中
   if (status === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     )
   }
@@ -33,12 +33,12 @@ export default function Home() {
 
   // 未ログインユーザー用のランディングページ
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800 dark:from-slate-900 dark:via-purple-900 dark:to-slate-800 transition-all duration-500">
       {/* ヘッダー */}
-      <header className="bg-white/10 backdrop-blur-sm">
+      <header className="bg-white/10 dark:bg-black/20 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <h1 className="text-2xl font-bold text-white dark:text-gray-200">
+            <h1 className="text-2xl font-bold text-white dark:text-gray-100">
               ✨ Todo管理システム
             </h1>
             <div className="flex items-center space-x-4">
@@ -63,12 +63,12 @@ export default function Home() {
       {/* メインコンテンツ */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center">
-          <h2 className="text-5xl font-extrabold text-white mb-6">
+          <h2 className="text-5xl font-extrabold text-white dark:text-gray-100 mb-6">
             効率的なタスク管理で
             <br />
-            <span className="text-yellow-300">生産性向上</span>
+            <span className="text-yellow-300 dark:text-yellow-400">生産性向上</span>
           </h2>
-          <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
+          <p className="text-xl text-white/90 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
             優先度設定、期限管理、進捗追跡などの機能で、
             あなたのタスクを効率的に管理しましょう。
           </p>
@@ -76,13 +76,13 @@ export default function Home() {
           <div className="space-x-4">
             <Link
               href="/auth/register"
-              className="inline-block bg-yellow-400 text-gray-900 px-8 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"
+              className="inline-block bg-yellow-400 dark:bg-yellow-500 text-gray-900 dark:text-gray-800 px-8 py-3 rounded-lg font-semibold hover:bg-yellow-300 dark:hover:bg-yellow-400 transition-colors"
             >
               今すぐ始める
             </Link>
             <Link
               href="/auth/signin"
-              className="inline-block bg-white/20 text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/30 transition-colors backdrop-blur-sm"
+              className="inline-block bg-white/20 dark:bg-white/10 text-white dark:text-gray-200 px-8 py-3 rounded-lg font-semibold hover:bg-white/30 dark:hover:bg-white/20 transition-colors backdrop-blur-sm"
             >
               ログイン
             </Link>
@@ -91,32 +91,32 @@ export default function Home() {
 
         {/* 機能紹介 */}
         <div className="mt-20 grid md:grid-cols-3 gap-8">
-          <div className="bg-white/10 backdrop-blur-sm p-6 rounded-lg">
+          <div className="bg-white/10 dark:bg-white/5 backdrop-blur-sm p-6 rounded-lg border border-white/20 dark:border-white/10">
             <div className="text-4xl mb-4">🔐</div>
-            <h3 className="text-xl font-semibold text-white mb-2">
+            <h3 className="text-xl font-semibold text-white dark:text-gray-100 mb-2">
               セキュアな認証
             </h3>
-            <p className="text-white/80">
+            <p className="text-white/80 dark:text-gray-300">
               GitHub、Google、またはメールアドレスで安全にログイン
             </p>
           </div>
           
-          <div className="bg-white/10 backdrop-blur-sm p-6 rounded-lg">
+          <div className="bg-white/10 dark:bg-white/5 backdrop-blur-sm p-6 rounded-lg border border-white/20 dark:border-white/10">
             <div className="text-4xl mb-4">📊</div>
-            <h3 className="text-xl font-semibold text-white mb-2">
+            <h3 className="text-xl font-semibold text-white dark:text-gray-100 mb-2">
               優先度管理
             </h3>
-            <p className="text-white/80">
+            <p className="text-white/80 dark:text-gray-300">
               4段階の優先度でタスクを効率的に管理
             </p>
           </div>
           
-          <div className="bg-white/10 backdrop-blur-sm p-6 rounded-lg">
+          <div className="bg-white/10 dark:bg-white/5 backdrop-blur-sm p-6 rounded-lg border border-white/20 dark:border-white/10">
             <div className="text-4xl mb-4">📅</div>
-            <h3 className="text-xl font-semibold text-white mb-2">
+            <h3 className="text-xl font-semibold text-white dark:text-gray-100 mb-2">
               期限管理
             </h3>
-            <p className="text-white/80">
+            <p className="text-white/80 dark:text-gray-300">
               期限設定とアラートで重要なタスクを見逃さない
             </p>
           </div>
