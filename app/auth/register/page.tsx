@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react'
 import Link from 'next/link'
 import Image from 'next/image'
 import PasswordStrengthIndicator from '@/app/components/PasswordStrengthIndicator'
+import ThemeToggle from '@/app/components/ThemeToggle'
 
 // 登録フォームのメインコンポーネント
 function RegisterContent() {
@@ -65,10 +66,13 @@ function RegisterContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-2xl">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
         <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900">
+          <div className="flex justify-end mb-4">
+            <ThemeToggle />
+          </div>
+          <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">
             新規会員登録
           </h2>
         </div>
@@ -192,15 +196,18 @@ function RegisterContent() {
 // ローディング中のフォールバック
 function RegisterLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-2xl">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
         <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900">
+          <div className="flex justify-end mb-4">
+            <ThemeToggle />
+          </div>
+          <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white">
             新規会員登録
           </h2>
         </div>
         <div className="flex justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
+import ThemeToggle from './components/ThemeToggle'
 
 export default function Home() {
   const { data: session, status } = useSession()
@@ -32,24 +33,25 @@ export default function Home() {
 
   // 未ログインユーザー用のランディングページ
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* ヘッダー */}
       <header className="bg-white/10 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-2xl font-bold text-white dark:text-gray-200">
               ✨ Todo管理システム
             </h1>
-            <div className="space-x-4">
+            <div className="flex items-center space-x-4">
+              <ThemeToggle />
               <Link
                 href="/auth/signin"
-                className="text-white hover:text-gray-200 transition-colors"
+                className="text-white dark:text-gray-300 hover:text-gray-200 dark:hover:text-white transition-colors"
               >
                 ログイン
               </Link>
               <Link
                 href="/auth/register"
-                className="bg-white text-purple-600 px-4 py-2 rounded-md font-medium hover:bg-gray-100 transition-colors"
+                className="bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 px-4 py-2 rounded-md font-medium hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
               >
                 新規登録
               </Link>
