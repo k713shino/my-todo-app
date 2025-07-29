@@ -1,7 +1,7 @@
 {
   "buildCommand": "npm run vercel-build",
   "outputDirectory": ".next",
-  "installCommand": "npm ci",
+  "installCommand": "npm ci --include=dev",
   "framework": "nextjs",
   "functions": {
     "app/api/**/*.ts": {
