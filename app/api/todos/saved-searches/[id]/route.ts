@@ -16,6 +16,19 @@ export async function DELETE(
 
     const { id } = await params
 
+    // テーブルが存在するかチェック
+    const tableExists = await prisma.$queryRaw`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'saved_searches'
+      );
+    `
+    
+    if (!(tableExists as any[])[0]?.exists) {
+      return NextResponse.json({ error: 'SavedSearch table does not exist' }, { status: 500 })
+    }
+
     // 所有者確認
     const existingSavedSearch = await prisma.savedSearch.findFirst({
       where: {

@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { Priority } from '@prisma/client'
-import { Todo, CreateTodoData, TodoStats } from '@/types/todo'
+import type { Todo, CreateTodoData, TodoStats, TodoFilters } from '@/types/todo'
 import TodoForm from './TodoForm'
 import TodoItem from './TodoItem'
-import TodoFilters from './TodoFilters'
+import TodoFiltersComponent from './TodoFilters'
 import TodoStatsDisplay from './TodoStatsDisplay'
 import RealtimeUpdates from './RealtimeUpdates'
 import { Toaster, toast } from 'react-hot-toast'
@@ -53,11 +53,7 @@ export default function TodoList() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
-  const [filter, setFilter] = useState<{
-    completed?: boolean
-    priority?: Priority
-    search?: string
-  }>({})
+  const [filter, setFilter] = useState<TodoFilters>({})
 
   /**
    * サーバーからTodo一覧を取得
@@ -267,33 +263,65 @@ export default function TodoList() {
   }
 
   /**
-   * Todoリストのフィルタリング処理
-   * - 完了状態でフィルタリング
-   * - 優先度でフィルタリング
-   * - タイトルと説明文で検索
-   * - フィルター条件やTodo一覧が変更される度に再計算
+   * フィルター条件に基づいてTodoを検索
+   * 検索APIを使用して高度なフィルタリングを実行
+   */
+  const searchTodos = async (filters: TodoFilters) => {
+    try {
+      setIsLoading(true)
+      
+      // フィルター条件が空の場合は通常のTodo一覧を取得
+      const hasFilters = Object.keys(filters).some(key => 
+        filters[key as keyof TodoFilters] !== undefined && 
+        filters[key as keyof TodoFilters] !== '' &&
+        !(Array.isArray(filters[key as keyof TodoFilters]) && (filters[key as keyof TodoFilters] as any[]).length === 0)
+      )
+      
+      if (!hasFilters) {
+        await fetchTodos()
+        return
+      }
+
+      // 検索APIを呼び出し
+      const params = new URLSearchParams()
+      if (filters.search) params.append('q', filters.search)
+      if (filters.completed !== undefined) params.append('completed', filters.completed.toString())
+      if (filters.priority) params.append('priority', filters.priority)
+      if (filters.category) params.append('category', filters.category)
+      if (filters.tags && filters.tags.length > 0) params.append('tags', filters.tags.join(','))
+      if (filters.dateRange) params.append('dateRange', filters.dateRange)
+
+      const response = await fetch(`/api/todos/search?${params.toString()}`)
+      if (response.ok) {
+        const data = await response.json()
+        setTodos(data.results.map((todo: any) => ({
+          ...todo,
+          createdAt: new Date(todo.createdAt),
+          updatedAt: new Date(todo.updatedAt),
+          dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
+        })))
+      }
+    } catch (error) {
+      console.error('検索エラー:', error)
+      toast.error('検索に失敗しました')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  /**
+   * フィルター条件変更時の処理
    */
   useEffect(() => {
-    let filtered = todos
+    searchTodos(filter)
+  }, [filter])
 
-    if (filter.completed !== undefined) {
-      filtered = filtered.filter(todo => todo.completed === filter.completed)
-    }
-
-    if (filter.priority) {
-      filtered = filtered.filter(todo => todo.priority === filter.priority)
-    }
-
-    if (filter.search) {
-      const searchLower = filter.search.toLowerCase()
-      filtered = filtered.filter(todo => 
-        todo.title.toLowerCase().includes(searchLower) ||
-        todo.description?.toLowerCase().includes(searchLower)
-      )
-    }
-
-    setFilteredTodos(filtered)
-  }, [todos, filter])
+  /**
+   * 基本的なクライアントサイドフィルタリング（検索結果の表示用）
+   */
+  useEffect(() => {
+    setFilteredTodos(todos)
+  }, [todos])
 
   /**
    * Todoの統計情報を計算
@@ -366,7 +394,7 @@ export default function TodoList() {
       />
 
       {/* フィルター */}
-      <TodoFilters filter={filter} onFilterChange={setFilter} />
+      <TodoFiltersComponent filter={filter} onFilterChange={setFilter} />
 
       {/* Todoリスト */}
       <div className="space-y-4">

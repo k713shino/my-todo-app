@@ -11,6 +11,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // テーブルが存在するかチェック
+    const tableExists = await prisma.$queryRaw`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'saved_searches'
+      );
+    `
+    
+    if (!(tableExists as any[])[0]?.exists) {
+      return NextResponse.json([])
+    }
+
     const savedSearches = await prisma.savedSearch.findMany({
       where: {
         userId: session.user.id,
@@ -23,7 +36,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(savedSearches)
   } catch (error) {
     console.error('Error fetching saved searches:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json([])
   }
 }
 
@@ -41,6 +54,19 @@ export async function POST(request: NextRequest) {
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Search name is required' }, { status: 400 })
+    }
+
+    // テーブルが存在するかチェック
+    const tableExists = await prisma.$queryRaw`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'saved_searches'
+      );
+    `
+    
+    if (!(tableExists as any[])[0]?.exists) {
+      return NextResponse.json({ error: 'SavedSearch table does not exist' }, { status: 500 })
     }
 
     const savedSearch = await prisma.savedSearch.create({

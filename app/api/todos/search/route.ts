@@ -137,16 +137,27 @@ export async function GET(request: NextRequest) {
     }
 
     // 検索履歴に保存（バックグラウンドで実行）
-    if (saveToHistory && (filters.search || Object.keys(filters).length > 1)) {
+    if (saveToHistory && (filters.search || Object.keys(filters).filter(key => filters[key as keyof TodoFilters] !== undefined).length > 0)) {
       Promise.resolve().then(async () => {
         try {
-          await prisma.searchHistory.create({
-            data: {
-              query: filters.search || '',
-              filters: JSON.stringify(filters),
-              userId: session.user.id,
-            }
-          })
+          // SearchHistoryテーブルが存在しない場合はスキップ
+          const tableExists = await prisma.$queryRaw`
+            SELECT EXISTS (
+              SELECT FROM information_schema.tables 
+              WHERE table_schema = 'public' 
+              AND table_name = 'search_history'
+            );
+          `
+          
+          if ((tableExists as any[])[0]?.exists) {
+            await prisma.searchHistory.create({
+              data: {
+                query: filters.search || '',
+                filters: JSON.stringify(filters),
+                userId: session.user.id,
+              }
+            })
+          }
         } catch (error) {
           console.error('Failed to save search history:', error)
         }
