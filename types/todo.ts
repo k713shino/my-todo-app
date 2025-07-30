@@ -38,6 +38,26 @@ export interface TodoFilters {
   priority?: Priority
   dueBefore?: Date
   dueAfter?: Date
+  search?: string
+  category?: string
+  tags?: string[]
+  dateRange?: 'today' | 'tomorrow' | 'this_week' | 'next_week' | 'this_month' | 'next_month' | 'overdue' | 'no_due_date'
+}
+
+export interface SavedSearch {
+  id: string
+  name: string
+  filters: string // JSON string of TodoFilters
+  createdAt: Date
+  userId: string
+}
+
+export interface SearchHistory {
+  id: string
+  query: string
+  filters: string // JSON string of TodoFilters
+  timestamp: Date
+  userId: string
 }
 
 export interface TodoStats {

@@ -20,6 +20,8 @@ model User {
   accounts      Account[]
   sessions      Session[]
   todos         Todo[]
+  savedSearches SavedSearch[]
+  searchHistory SearchHistory[]
 
   @@map("users")
 }
@@ -87,6 +89,31 @@ model Todo {
   @@map("todos")
 }
 
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  name      String
+  filters   String   // JSON string of TodoFilters
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("saved_searches")
+}
+
+model SearchHistory {
+  id        String   @id @default(cuid())
+  query     String
+  filters   String   // JSON string of TodoFilters
+  timestamp DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([timestamp])
+  @@map("search_history")
+}
 
 enum Priority {
   LOW
