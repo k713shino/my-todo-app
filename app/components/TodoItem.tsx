@@ -163,24 +163,6 @@ export default function TodoItem({
         </p>
       )}
 
-
-      <div className="text-sm text-gray-500 mt-1 space-y-1">
-        {/* カテゴリ */}
-        {todo.category && (
-          <div>
-            <span className="font-semibold text-gray-700 dark:text-gray-300">カテゴリ:</span>{' '}
-            {todo.category}
-          </div>
-        )}
-        {/* タグ */}
-        {todo.tags && todo.tags.length > 0 && (
-          <div>
-            <span className="font-semibold text-gray-700 dark:text-gray-300">タグ:</span>{' '}
-            {todo.tags.join(', ')}
-          </div>
-        )}
-      </div>
-
       {/* メタ情報 */}
       <div className="flex flex-wrap items-center gap-3 text-sm">
         {/* 優先度 */}
@@ -206,6 +188,28 @@ export default function TodoItem({
         <span className="text-xs text-gray-400 dark:text-gray-500">
           作成: {format(new Date(todo.createdAt), 'M月d日 HH:mm', { locale: ja })}
         </span>
+      </div>
+
+      {/* カテゴリ・タグ */}
+      <div className="text-sm text-gray-500 mt-1 space-y-1">
+        {/* カテゴリ */}
+        {todo.category && (
+          <div>
+            <span className="font-semibold text-gray-700 dark:text-gray-300">カテゴリ:</span>{' '}
+            {todo.category}
+          </div>
+        )}
+        {/* タグ */}
+        {todo.tags && todo.tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">タグ:</span>
+            {todo.tags.map((tag, index) => (
+              <span key={index} className="text-blue-600 dark:text-blue-400">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
