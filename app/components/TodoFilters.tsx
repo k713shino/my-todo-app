@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Priority } from '@prisma/client'
 import type { TodoFilters, SavedSearch } from '@/types/todo'
 import { dateRangeLabels, DateRangePreset } from '@/lib/date-utils'
@@ -24,22 +24,27 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveSearchName, setSaveSearchName] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  // 削除されたアイテムを追跡するフラグ
+  const [deletedSearchIds, setDeletedSearchIds] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    loadSavedSearches()
-    loadSearchHistory()
-  }, [])
-
-  const loadSavedSearches = async () => {
+  const loadSavedSearches = useCallback(async () => {
     try {
       const response = await fetch('/api/todos/saved-searches')
       if (response.ok) {
-        setSavedSearches(await response.json())
+        const data = await response.json()
+        // 削除されたIDを除外
+        const filteredData = data.filter((search: SavedSearch) => !deletedSearchIds.has(search.id))
+        setSavedSearches(filteredData)
       }
     } catch (error) {
       console.error('Failed to load saved searches:', error)
     }
-  }
+  }, [deletedSearchIds])
+
+  useEffect(() => {
+    loadSavedSearches()
+    loadSearchHistory()
+  }, [loadSavedSearches])
 
   const loadSearchHistory = async () => {
     try {
@@ -119,15 +124,32 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     }
 
     try {
+      // 即座にUIから削除（楽観的更新）
+      setSavedSearches(prev => prev.filter(search => search.id !== id))
+      setDeletedSearchIds(prev => new Set(prev).add(id))
+
       const response = await fetch(`/api/todos/saved-searches/${id}`, {
         method: 'DELETE'
       })
       
-      if (response.ok) {
-        // 即時削除: リストから該当アイテムを削除
-        setSavedSearches(prev => prev.filter(search => search.id !== id))
+      if (!response.ok) {
+        // 削除に失敗した場合は元に戻す
+        setDeletedSearchIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(id)
+          return newSet
+        })
+        loadSavedSearches() // リストを再読み込み
+        console.error('Failed to delete saved search')
       }
     } catch (error) {
+      // エラーの場合も元に戻す
+      setDeletedSearchIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(id)
+        return newSet
+      })
+      loadSavedSearches()
       console.error('Failed to delete saved search:', error)
     }
   }
@@ -172,42 +194,43 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
         </div>
       </div>
 
-      {/* 基本検索 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* 検索 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            検索
-          </label>
-          <div className="flex space-x-2">
-            <input
-              type="text"
-              value={filter.search || ''}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && onManualSearch) {
-                  onManualSearch()
-                }
-              }}
-              placeholder="タイトル・説明・カテゴリで検索"
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
-            />
-            {onManualSearch && (
-              <button
-                onClick={onManualSearch}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors"
-                title="検索実行"
-              >
-                🔍
-              </button>
-            )}
-          </div>
+      {/* 検索バー */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          🔍 キーワード検索
+        </label>
+        <div className="flex space-x-2">
+          <input
+            type="text"
+            value={filter.search || ''}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && onManualSearch) {
+                onManualSearch()
+              }
+            }}
+            placeholder="タイトル・説明・カテゴリで検索..."
+            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
+          />
+          {onManualSearch && (
+            <button
+              onClick={onManualSearch}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors flex items-center"
+              title="検索実行 (Enter)"
+            >
+              <span className="text-lg">🔍</span>
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* フィルター */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
         {/* 完了状態 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            完了状態
+            📋 完了状態
           </label>
           <select
             value={filter.completed === undefined ? '' : filter.completed.toString()}
@@ -228,7 +251,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
         {/* 優先度 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            優先度
+            ⚡ 優先度
           </label>
           <select
             value={filter.priority || ''}
@@ -250,7 +273,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
         {/* 日付範囲 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            期限
+            📅 期限
           </label>
           <select
             value={filter.dateRange || ''}
