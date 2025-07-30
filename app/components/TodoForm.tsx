@@ -152,6 +152,30 @@ export default function TodoForm({
         />
       </div>
 
+      {/* カテゴリ */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">カテゴリ</label>
+        <input
+          type="text"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="border rounded px-2 py-1 w-full"
+          placeholder="例: 学校, 家, 趣味"
+        />
+      </div>
+
+      {/* タグ */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">タグ</label>
+        <input
+          type="text"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          className="border rounded px-2 py-1 w-full"
+          placeholder="カンマで区切って入力（例: 緊急, 楽しい）"
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 優先度 */}
         <div>
@@ -185,30 +209,6 @@ export default function TodoForm({
             disabled={isLoading}
           />
         </div>
-      </div>
-
-      {/* カテゴリ */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium mb-1">カテゴリ</label>
-        <input
-          type="text"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="border rounded px-2 py-1 w-full"
-          placeholder="例: 学校, 家, 趣味"
-        />
-      </div>
-
-      {/* タグ */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium mb-1">タグ</label>
-        <input
-          type="text"
-          value={tags}
-          onChange={(e) => setTags(e.target.value)}
-          className="border rounded px-2 py-1 w-full"
-          placeholder="カンマで区切って入力（例: 緊急, 楽しい）"
-        />
       </div>
 
       {/* ボタン */}

@@ -6,6 +6,8 @@ export interface Todo {
   description?: string | null
   completed: boolean
   priority: Priority
+  category?: string
+  tags?: string[]
   dueDate?: Date | null
   createdAt: Date
   updatedAt: Date
