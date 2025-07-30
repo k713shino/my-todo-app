@@ -18,6 +18,8 @@ interface TodoFormProps {
     description?: string
     priority: Priority
     dueDate?: Date
+    category?: string
+    tags?: string[]
   }) => void
   onCancel?: () => void
   initialData?: {
@@ -25,6 +27,8 @@ interface TodoFormProps {
     description?: string | null | undefined 
     priority?: Priority
     dueDate?: Date | null
+    category?: string
+    tags?: string[]
   }
   isLoading?: boolean
 }
@@ -58,6 +62,8 @@ export default function TodoForm({
 }: TodoFormProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [category, setCategory] = useState('')
+  const [tags, setTags] = useState('')
   const [priority, setPriority] = useState<Priority>('MEDIUM')
   const [dueDate, setDueDate] = useState('')
 
@@ -67,6 +73,8 @@ export default function TodoForm({
       setDescription(initialData.description || '')
       setPriority(initialData.priority || 'MEDIUM')
       setDueDate(initialData.dueDate ? format(initialData.dueDate, 'yyyy-MM-dd\'T\'HH:mm') : '')
+      setCategory(initialData.category || '')
+      setTags(initialData.tags?.join(', ') || '')
     } else {
       setTitle('')
       setDescription('')
@@ -177,6 +185,30 @@ export default function TodoForm({
             disabled={isLoading}
           />
         </div>
+      </div>
+
+      {/* カテゴリ */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">カテゴリ</label>
+        <input
+          type="text"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="border rounded px-2 py-1 w-full"
+          placeholder="例: 学校, 家, 趣味"
+        />
+      </div>
+
+      {/* タグ */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">タグ</label>
+        <input
+          type="text"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          className="border rounded px-2 py-1 w-full"
+          placeholder="カンマで区切って入力（例: 緊急, 楽しい）"
+        />
       </div>
 
       {/* ボタン */}

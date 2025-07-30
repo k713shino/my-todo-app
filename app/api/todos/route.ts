@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { title, description, priority, dueDate } = body
+    const { title, description, dueDate, priority, category, tags } = body
 
     if (!title?.trim()) {
       return NextResponse.json({ error: 'タイトルは必須です' }, { status: 400 })
@@ -150,6 +150,10 @@ export async function POST(request: NextRequest) {
         description: description?.trim() || null,
         priority: priority || 'MEDIUM',
         dueDate: dueDate ? new Date(dueDate) : null,
+        category: category?.trim() || null,
+        tags: Array.isArray(tags)
+          ? tags.map((tag) => tag.trim()).filter(Boolean)
+          : [],
         userId: session.user.id,
       },
     })
