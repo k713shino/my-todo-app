@@ -8,6 +8,7 @@ import { dateRangeLabels, DateRangePreset } from '@/lib/date-utils'
 interface TodoFiltersProps {
   filter: TodoFilters
   onFilterChange: (filter: TodoFilters) => void
+  onManualSearch?: () => void
 }
 
 const priorityLabels = {
@@ -17,7 +18,7 @@ const priorityLabels = {
   URGENT: '緊急',
 }
 
-export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps) {
+export default function TodoFilters({ filter, onFilterChange, onManualSearch }: TodoFiltersProps) {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([])
   const [searchHistory, setSearchHistory] = useState<any[]>([])
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -90,7 +91,9 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
       })
       
       if (response.ok) {
-        loadSavedSearches()
+        const newSavedSearch = await response.json()
+        // 即時反映: 新しい保存済み検索をリストに追加
+        setSavedSearches(prev => [newSavedSearch, ...prev])
         setShowSaveDialog(false)
         setSaveSearchName('')
       }
@@ -102,16 +105,27 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
   const loadSavedSearch = (savedSearch: SavedSearch) => {
     const filters = JSON.parse(savedSearch.filters) as TodoFilters
     onFilterChange(filters)
+    // 手動検索を実行して即座に結果を表示
+    if (onManualSearch) {
+      setTimeout(() => {
+        onManualSearch()
+      }, 100) // フィルター更新後に実行
+    }
   }
 
-  const deleteSavedSearch = async (id: string) => {
+  const deleteSavedSearch = async (id: string, name: string) => {
+    if (!confirm(`「${name}」を削除してもよろしいですか？`)) {
+      return
+    }
+
     try {
       const response = await fetch(`/api/todos/saved-searches/${id}`, {
         method: 'DELETE'
       })
       
       if (response.ok) {
-        loadSavedSearches()
+        // 即時削除: リストから該当アイテムを削除
+        setSavedSearches(prev => prev.filter(search => search.id !== id))
       }
     } catch (error) {
       console.error('Failed to delete saved search:', error)
@@ -165,13 +179,29 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             検索
           </label>
-          <input
-            type="text"
-            value={filter.search || ''}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="タイトル・説明・カテゴリで検索"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
-          />
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              value={filter.search || ''}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && onManualSearch) {
+                  onManualSearch()
+                }
+              }}
+              placeholder="タイトル・説明・カテゴリで検索"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
+            />
+            {onManualSearch && (
+              <button
+                onClick={onManualSearch}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors"
+                title="検索実行"
+              >
+                🔍
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 完了状態 */}
@@ -289,7 +319,7 @@ export default function TodoFilters({ filter, onFilterChange }: TodoFiltersProps
                   {savedSearch.name}
                 </button>
                 <button
-                  onClick={() => deleteSavedSearch(savedSearch.id)}
+                  onClick={() => deleteSavedSearch(savedSearch.id, savedSearch.name)}
                   className="w-4 h-4 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   title="削除"
                 >

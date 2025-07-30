@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Priority } from '@prisma/client'
 import type { Todo, CreateTodoData, TodoStats, TodoFilters } from '@/types/todo'
 import TodoForm from './TodoForm'
@@ -9,6 +9,21 @@ import TodoFiltersComponent from './TodoFilters'
 import TodoStatsDisplay from './TodoStatsDisplay'
 import RealtimeUpdates from './RealtimeUpdates'
 import { Toaster, toast } from 'react-hot-toast'
+
+/**
+ * デバウンス関数
+ * 指定した時間待機してから関数を実行
+ */
+function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | null = null
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }
+}
 
 /**
  * APIレスポンスのTodoデータ型定義
@@ -310,11 +325,28 @@ export default function TodoList() {
   }
 
   /**
-   * フィルター条件変更時の処理
+   * デバウンス機能付きの検索関数
+   */
+  const debouncedSearchTodos = useCallback(
+    debounce((filters: TodoFilters) => {
+      searchTodos(filters)
+    }, 500),
+    []
+  )
+
+  /**
+   * フィルター条件変更時の処理（デバウンス適用）
    */
   useEffect(() => {
+    debouncedSearchTodos(filter)
+  }, [filter, debouncedSearchTodos])
+
+  /**
+   * 手動検索関数（即座に実行）
+   */
+  const handleManualSearch = () => {
     searchTodos(filter)
-  }, [filter])
+  }
 
   /**
    * 基本的なクライアントサイドフィルタリング（検索結果の表示用）
@@ -394,7 +426,11 @@ export default function TodoList() {
       />
 
       {/* フィルター */}
-      <TodoFiltersComponent filter={filter} onFilterChange={setFilter} />
+      <TodoFiltersComponent 
+        filter={filter} 
+        onFilterChange={setFilter}
+        onManualSearch={handleManualSearch}
+      />
 
       {/* Todoリスト */}
       <div className="space-y-4">
