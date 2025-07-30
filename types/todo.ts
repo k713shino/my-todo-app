@@ -19,6 +19,8 @@ export interface CreateTodoData {
   description?: string
   priority?: Priority
   dueDate?: Date
+  category?: string
+  tags?: string[]
 }
 
 export interface UpdateTodoData {
@@ -27,6 +29,8 @@ export interface UpdateTodoData {
   completed?: boolean
   priority?: Priority
   dueDate?: Date | null
+  category?: string
+  tags?: string[]
 }
 
 export interface TodoFilters {

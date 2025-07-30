@@ -31,7 +31,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { title, description, completed, priority, dueDate } = body
+    const { title, description, completed, priority, dueDate, category, tags } = body
 
     // 所有者確認
     const existingTodo = await prisma.todo.findFirst({
@@ -54,6 +54,12 @@ export async function PUT(
         ...(completed !== undefined && { completed }),
         ...(priority !== undefined && { priority }),
         ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+        ...(category !== undefined && { category: category?.trim() || null }),
+        ...(tags !== undefined && { 
+          tags: Array.isArray(tags)
+            ? tags.map((tag) => tag.trim()).filter(Boolean)
+            : []
+        }),
       },
     })
 
