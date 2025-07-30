@@ -163,13 +163,16 @@ export default function TodoItem({
         </p>
       )}
 
+
       <div className="text-sm text-gray-500 mt-1 space-y-1">
+        {/* カテゴリ */}
         {todo.category && (
           <div>
             <span className="font-semibold text-gray-700 dark:text-gray-300">カテゴリ:</span>{' '}
             {todo.category}
           </div>
         )}
+        {/* タグ */}
         {todo.tags && todo.tags.length > 0 && (
           <div>
             <span className="font-semibold text-gray-700 dark:text-gray-300">タグ:</span>{' '}
