@@ -115,6 +115,12 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   const loadSavedSearch = (savedSearch: SavedSearch) => {
     const filters = JSON.parse(savedSearch.filters) as TodoFilters
     onFilterChange(filters)
+    
+    // uncontrolled inputの値を手動更新
+    if (uncontrolledTagInputRef.current) {
+      uncontrolledTagInputRef.current.value = filters.tags?.join(', ') || ''
+    }
+    
     // 手動検索を実行して即座に結果を表示
     if (onManualSearch) {
       setTimeout(() => {
@@ -161,6 +167,11 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
 
   const clearFilters = () => {
     onFilterChange({})
+    
+    // uncontrolled inputもクリア
+    if (uncontrolledTagInputRef.current) {
+      uncontrolledTagInputRef.current.value = ''
+    }
   }
 
   const hasActiveFilters = Object.keys(filter).some(key => 
@@ -326,50 +337,25 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 タグ
               </label>
-              <div className="space-y-2">
-                {/* メインのタグ入力フィールド */}
-                <input
-                  type="text"
-                  value={filter.tags?.join(', ') || ''}
-                  onChange={(e) => handleTagsChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    console.log('Key pressed:', e.key, 'Value:', e.currentTarget.value)
-                    if (e.key === 'Enter' && onManualSearch) {
-                      e.preventDefault()
-                      onManualSearch()
-                    }
-                  }}
-                  placeholder="タグをカンマ区切りで入力"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
-                  autoComplete="off"
-                  spellCheck="false"
-                  inputMode="text"
-                />
-                {/* デバッグ用：uncontrolled input */}
-                <input
-                  ref={uncontrolledTagInputRef}
-                  type="text"
-                  defaultValue={filter.tags?.join(', ') || ''}
-                  onChange={(e) => {
-                    console.log('Uncontrolled input change:', e.target.value)
-                    handleTagsChange(e.target.value)
-                  }}
-                  onBlur={(e) => {
-                    console.log('Uncontrolled input blur:', e.target.value)
-                    handleTagsChange(e.target.value)
-                  }}
-                  placeholder="uncontrolled：こちらでカンマ入力をテスト"
-                  className="w-full px-3 py-2 border border-green-300 dark:border-green-600 rounded-md bg-green-50 dark:bg-green-900/20 text-gray-900 dark:text-gray-100 placeholder-green-500 dark:placeholder-green-400 focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-400 focus:border-transparent text-sm"
-                />
-                {/* デバッグ用：通常のテキストエリア */}
-                <textarea
-                  value={filter.tags?.join(', ') || ''}
-                  onChange={(e) => handleTagsChange(e.target.value)}
-                  placeholder="textarea：こちらでカンマ入力をテスト"
-                  className="w-full px-3 py-2 border border-red-300 dark:border-red-600 rounded-md bg-red-50 dark:bg-red-900/20 text-gray-900 dark:text-gray-100 placeholder-red-500 dark:placeholder-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 dark:focus:ring-red-400 focus:border-transparent text-sm"
-                  rows={2}
-                />
-              </div>
+              <input
+                ref={uncontrolledTagInputRef}
+                type="text"
+                key={`tags-${filter.tags?.join(',') || 'empty'}`}
+                defaultValue={filter.tags?.join(', ') || ''}
+                onChange={(e) => {
+                  handleTagsChange(e.target.value)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && onManualSearch) {
+                    e.preventDefault()
+                    onManualSearch()
+                  }
+                }}
+                placeholder="タグをカンマ区切りで入力"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
+                autoComplete="off"
+                spellCheck="false"
+              />
             </div>
           </div>
         </div>
