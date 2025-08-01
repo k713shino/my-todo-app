@@ -24,8 +24,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveSearchName, setSaveSearchName] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  // 削除されたアイテムを追跡するフラグ
-  const [deletedSearchIds, setDeletedSearchIds] = useState<Set<string>>(new Set())
   // uncontrolled inputのref
   const uncontrolledTagInputRef = useRef<HTMLInputElement>(null)
   // IME入力中かどうかのフラグ
@@ -36,14 +34,12 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
       const response = await fetch('/api/todos/saved-searches')
       if (response.ok) {
         const data = await response.json()
-        // 削除されたIDを除外
-        const filteredData = data.filter((search: SavedSearch) => !deletedSearchIds.has(search.id))
-        setSavedSearches(filteredData)
+        setSavedSearches(data)
       }
     } catch (error) {
       console.error('Failed to load saved searches:', error)
     }
-  }, [deletedSearchIds])
+  }, [])
 
   useEffect(() => {
     loadSavedSearches()
@@ -109,6 +105,9 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
         setSavedSearches(prev => [newSavedSearch, ...prev])
         setShowSaveDialog(false)
         setSaveSearchName('')
+      } else {
+        console.error('Failed to save search')
+        alert('検索の保存に失敗しました')
       }
     } catch (error) {
       console.error('Failed to save search:', error)
@@ -138,33 +137,20 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     }
 
     try {
-      // 即座にUIから削除（楽観的更新）
-      setSavedSearches(prev => prev.filter(search => search.id !== id))
-      setDeletedSearchIds(prev => new Set(prev).add(id))
-
       const response = await fetch(`/api/todos/saved-searches/${id}`, {
         method: 'DELETE'
       })
       
-      if (!response.ok) {
-        // 削除に失敗した場合は元に戻す
-        setDeletedSearchIds(prev => {
-          const newSet = new Set(prev)
-          newSet.delete(id)
-          return newSet
-        })
-        loadSavedSearches() // リストを再読み込み
+      if (response.ok) {
+        // 削除成功時のみUIから削除
+        setSavedSearches(prev => prev.filter(search => search.id !== id))
+      } else {
         console.error('Failed to delete saved search')
+        alert('削除に失敗しました')
       }
     } catch (error) {
-      // エラーの場合も元に戻す
-      setDeletedSearchIds(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(id)
-        return newSet
-      })
-      loadSavedSearches()
       console.error('Failed to delete saved search:', error)
+      alert('削除に失敗しました')
     }
   }
 
