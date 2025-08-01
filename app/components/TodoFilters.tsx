@@ -159,10 +159,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
           return updated
         })
         
-        // 保存後にリストを再読み込み（念のため）
-        setTimeout(() => {
-          loadSavedSearches()
-        }, 100)
+        // 楽観的更新で即座に反映済みなので、再読み込みは不要
         
         setShowSaveDialog(false)
         setSaveSearchName('')
@@ -190,12 +187,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
       uncontrolledTagInputRef.current.value = newValue
     }
     
-    // 手動検索を実行して即座に結果を表示
-    if (onManualSearch) {
-      setTimeout(() => {
-        onManualSearch()
-      }, 100) // フィルター更新後に実行
-    }
+    // 自動検索は実行せず、フィルター条件のみ読み込み
+    // ユーザーが手動で検索ボタンを押すまで待機
   }
 
   const deleteSavedSearch = async (id: string, name: string) => {
@@ -203,26 +196,15 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
       return
     }
 
-    try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🗑️ 削除対象:', { id, name })
-      }
-      const response = await fetch(`/api/todos/saved-searches/${id}`, {
-        method: 'DELETE'
+    // 楽観的UI更新：即座にUIから削除
+    setSavedSearches(prev => prev.filter(search => search.id !== id))
+
+    // バックグラウンドで削除API呼び出し（UIはすでに更新済み）
+    fetch(`/api/todos/saved-searches/${id}`, { method: 'DELETE' })
+      .catch(() => {
+        // エラーが発生してもUIは更新済みなので何もしない
+        // 404エラーやネットワークエラーは無視
       })
-      
-      if (response.ok) {
-        // 削除成功時のみUIから削除
-        setSavedSearches(prev => prev.filter(search => search.id !== id))
-      } else {
-        const errorData = await response.text()
-        console.error('❌ 削除失敗:', response.status, errorData)
-        alert('削除に失敗しました: ' + response.status)
-      }
-    } catch (error) {
-      console.error('Failed to delete saved search:', error)
-      alert('削除に失敗しました')
-    }
   }
 
   const clearFilters = () => {
