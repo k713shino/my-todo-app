@@ -74,7 +74,10 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   }
 
   const handleTagsChange = (tagsString: string) => {
-    const tags = tagsString.trim() ? tagsString.split(',').map(tag => tag.trim()).filter(Boolean) : undefined
+    // カンマを含む文字列の処理を改善
+    const tags = tagsString.trim() ? 
+      tagsString.split(',').map(tag => tag.trim()).filter(Boolean) : 
+      undefined
     onFilterChange({ ...filter, tags })
   }
 
@@ -326,9 +329,12 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
                 value={filter.tags?.join(', ') || ''}
                 onChange={(e) => handleTagsChange(e.target.value)}
                 onKeyDown={(e) => {
+                  // Enterキーでの検索実行のみ処理、他のキーは通常処理
                   if (e.key === 'Enter' && onManualSearch) {
+                    e.preventDefault()
                     onManualSearch()
                   }
+                  // その他のキー（カンマを含む）は通常通り処理される
                 }}
                 placeholder="タグをカンマ区切りで入力"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
