@@ -306,6 +306,11 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
                 type="text"
                 value={filter.category || ''}
                 onChange={(e) => handleCategoryChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && onManualSearch) {
+                    onManualSearch()
+                  }
+                }}
                 placeholder="カテゴリで絞り込み"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
               />
@@ -320,6 +325,11 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
                 type="text"
                 value={filter.tags?.join(', ') || ''}
                 onChange={(e) => handleTagsChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && onManualSearch) {
+                    onManualSearch()
+                  }
+                }}
                 placeholder="タグをカンマ区切りで入力"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
               />
