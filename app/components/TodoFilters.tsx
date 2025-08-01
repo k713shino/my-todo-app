@@ -31,12 +31,21 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   // debounce用のタイマー
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // 保存済み検索の状態変更をデバッグ
+  useEffect(() => {
+    console.log('🔍 保存済み検索state変更:', savedSearches.length, '件')
+  }, [savedSearches])
+
   const loadSavedSearches = useCallback(async () => {
     try {
+      console.log('🔄 保存済み検索を読み込み中...')
       const response = await fetch('/api/todos/saved-searches')
       if (response.ok) {
         const data = await response.json()
+        console.log('📋 読み込まれた保存済み検索:', data.length, '件')
         setSavedSearches(data)
+      } else {
+        console.error('保存済み検索の読み込みに失敗:', response.status)
       }
     } catch (error) {
       console.error('Failed to load saved searches:', error)
@@ -112,27 +121,43 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     if (!saveSearchName.trim()) return
 
     try {
+      console.log('💾 検索を保存中:', saveSearchName.trim())
+      const filtersToSave = JSON.stringify(filter)
+      console.log('📦 保存するフィルター:', filtersToSave)
+      
       const response = await fetch('/api/todos/saved-searches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: saveSearchName.trim(),
-          filters: filter
+          filters: filtersToSave
         })
       })
       
       if (response.ok) {
         const newSavedSearch = await response.json()
+        console.log('✅ 検索保存成功:', newSavedSearch)
         // 即時反映: 新しい保存済み検索をリストに追加
-        setSavedSearches(prev => [newSavedSearch, ...prev])
+        setSavedSearches(prev => {
+          const updated = [newSavedSearch, ...prev]
+          console.log('📋 更新後の保存済み検索数:', updated.length)
+          return updated
+        })
+        
+        // 保存後にリストを再読み込み（念のため）
+        setTimeout(() => {
+          loadSavedSearches()
+        }, 100)
+        
         setShowSaveDialog(false)
         setSaveSearchName('')
       } else {
-        console.error('Failed to save search')
+        console.error('Failed to save search:', response.status)
         alert('検索の保存に失敗しました')
       }
     } catch (error) {
       console.error('Failed to save search:', error)
+      alert('検索の保存に失敗しました')
     }
   }
 
@@ -388,9 +413,20 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
       )}
 
       {/* 保存済み検索 */}
-      {savedSearches.length > 0 && (
+      {savedSearches.length > 0 ? (
         <div className="border-t pt-4">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">保存済み検索</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              保存済み検索 ({savedSearches.length}件)
+            </h4>
+            <button
+              onClick={loadSavedSearches}
+              className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
+              title="再読み込み"
+            >
+              🔄
+            </button>
+          </div>
           <div className="flex flex-wrap gap-2">
             {savedSearches.map((savedSearch) => (
               <div key={savedSearch.id} className="flex items-center space-x-1">
@@ -411,6 +447,15 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
             ))}
           </div>
         </div>
+      ) : (
+        // 開発用デバッグ表示
+        process.env.NODE_ENV === 'development' && (
+          <div className="border-t pt-4">
+            <div className="text-xs text-gray-400">
+              💭 保存済み検索: {savedSearches.length}件（非表示）
+            </div>
+          </div>
+        )
       )}
 
       {/* 検索保存ダイアログ */}
