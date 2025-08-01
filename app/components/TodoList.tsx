@@ -293,7 +293,6 @@ export default function TodoList() {
       if (filters.category) params.append('category', filters.category)
       if (filters.tags && filters.tags.length > 0) {
         params.append('tags', filters.tags.join(','))
-        console.log('🔍 検索パラメータ:', { tags: filters.tags, joined: filters.tags.join(',') })
       }
       if (filters.dateRange) params.append('dateRange', filters.dateRange)
 

@@ -28,6 +28,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   const uncontrolledTagInputRef = useRef<HTMLInputElement>(null)
   // IME入力中かどうかのフラグ
   const [isComposing, setIsComposing] = useState(false)
+  // debounce用のタイマー
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const loadSavedSearches = useCallback(async () => {
     try {
@@ -45,6 +47,15 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     loadSavedSearches()
     loadSearchHistory()
   }, [loadSavedSearches])
+
+  // コンポーネントアンマウント時のクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+    }
+  }, [])
 
   const loadSearchHistory = async () => {
     try {
@@ -78,8 +89,18 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     const tags = tagsString.trim() ? 
       tagsString.split(',').map(tag => tag.trim()).filter(Boolean) : 
       undefined
-    console.log('🏷️ タグ変更:', { input: tagsString, parsed: tags, filterBefore: filter.tags })
     onFilterChange({ ...filter, tags })
+  }
+
+  // debounce版のタグ更新関数（直接入力用）
+  const debouncedHandleTagsChange = (tagsString: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    
+    debounceTimerRef.current = setTimeout(() => {
+      handleTagsChange(tagsString)
+    }, 300) // 300ms待機
   }
 
 
@@ -333,9 +354,13 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
                 key={`tags-${filter.tags?.join(',') || 'empty'}`}
                 defaultValue={filter.tags?.join(', ') || ''}
                 onChange={(e) => {
-                  // IME入力中は更新を停止（英数字入力は即座に反映）
-                  if (!isComposing) {
-                    handleTagsChange(e.target.value)
+                  // IME入力中は即座に更新、直接入力はdebounce
+                  if (isComposing) {
+                    // IME入力中は何もしない（onCompositionEndで処理）
+                    return
+                  } else {
+                    // 直接入力時はdebounce処理
+                    debouncedHandleTagsChange(e.target.value)
                   }
                 }}
                 onCompositionStart={() => {
@@ -343,7 +368,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
                 }}
                 onCompositionEnd={(e) => {
                   setIsComposing(false)
-                  // IME入力完了時に更新
+                  // IME入力完了時は即座に更新
                   handleTagsChange((e.target as HTMLInputElement).value)
                 }}
                 onKeyDown={(e) => {
