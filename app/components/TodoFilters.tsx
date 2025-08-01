@@ -31,24 +31,27 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   // debounce用のタイマー
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // 保存済み検索の状態変更をデバッグ
+  // 保存済み検索の状態変更をデバッグ（最適化）
   useEffect(() => {
-    console.log('🔍 保存済み検索state変更:', savedSearches.length, '件')
-    console.log('📝 詳細:', savedSearches.map(s => ({ id: s.id, name: s.name })))
-    
-    // スタックトレースで呼び出し元を特定
-    if (savedSearches.length === 0) {
-      console.trace('❌ 保存済み検索が0件になった原因')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 保存済み検索state変更:', savedSearches.length, '件')
+      if (savedSearches.length > 0) {
+        console.log('📝 詳細:', savedSearches.map(s => ({ id: s.id, name: s.name })))
+      }
     }
-  }, [savedSearches])
+  }, [savedSearches.length]) // lengthのみ監視してオブジェクト全体の監視を避ける
 
   const loadSavedSearches = useCallback(async () => {
     try {
-      console.log('🔄 保存済み検索を読み込み中...')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 保存済み検索を読み込み中...')
+      }
       const response = await fetch('/api/todos/saved-searches')
       if (response.ok) {
         const data = await response.json()
-        console.log('📋 読み込まれた保存済み検索:', data.length, '件')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📋 読み込まれた保存済み検索:', data.length, '件')
+        }
         setSavedSearches(data)
       } else {
         console.error('保存済み検索の読み込みに失敗:', response.status)
@@ -127,9 +130,11 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     if (!saveSearchName.trim()) return
 
     try {
-      console.log('💾 検索を保存中:', saveSearchName.trim())
+      if (process.env.NODE_ENV === 'development') {
+        console.log('💾 検索を保存中:', saveSearchName.trim())
+        console.log('📦 保存するフィルター:', JSON.stringify(filter))
+      }
       const filtersToSave = JSON.stringify(filter)
-      console.log('📦 保存するフィルター:', filtersToSave)
       
       const response = await fetch('/api/todos/saved-searches', {
         method: 'POST',
@@ -142,11 +147,15 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
       
       if (response.ok) {
         const newSavedSearch = await response.json()
-        console.log('✅ 検索保存成功:', newSavedSearch)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ 検索保存成功:', newSavedSearch)
+        }
         // 即時反映: 新しい保存済み検索をリストに追加
         setSavedSearches(prev => {
           const updated = [newSavedSearch, ...prev]
-          console.log('📋 更新後の保存済み検索数:', updated.length)
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📋 更新後の保存済み検索数:', updated.length)
+          }
           return updated
         })
         
@@ -168,22 +177,21 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   }
 
   const loadSavedSearch = (savedSearch: SavedSearch) => {
-    console.log('📖 保存済み検索を読み込み:', savedSearch.name)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📖 保存済み検索を読み込み:', savedSearch.name)
+    }
     const filters = JSON.parse(savedSearch.filters) as TodoFilters
-    console.log('🔍 読み込んだフィルター:', filters)
     
     onFilterChange(filters)
     
     // uncontrolled inputの値を手動更新
     if (uncontrolledTagInputRef.current) {
       const newValue = filters.tags?.join(', ') || ''
-      console.log('📝 タグ入力フィールドを更新:', newValue)
       uncontrolledTagInputRef.current.value = newValue
     }
     
     // 手動検索を実行して即座に結果を表示
     if (onManualSearch) {
-      console.log('🔍 自動検索を実行します')
       setTimeout(() => {
         onManualSearch()
       }, 100) // フィルター更新後に実行
@@ -196,21 +204,16 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     }
 
     try {
-      console.log('🗑️ 削除対象:', { id, name })
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🗑️ 削除対象:', { id, name })
+      }
       const response = await fetch(`/api/todos/saved-searches/${id}`, {
         method: 'DELETE'
       })
       
-      console.log('🗑️ 削除API応答:', response.status, response.statusText)
-      
       if (response.ok) {
-        console.log('✅ 削除成功 - UIから削除')
         // 削除成功時のみUIから削除
-        setSavedSearches(prev => {
-          const filtered = prev.filter(search => search.id !== id)
-          console.log('📋 削除後の保存済み検索数:', filtered.length)
-          return filtered
-        })
+        setSavedSearches(prev => prev.filter(search => search.id !== id))
       } else {
         const errorData = await response.text()
         console.error('❌ 削除失敗:', response.status, errorData)
@@ -227,7 +230,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     
     // uncontrolled inputもクリア
     if (uncontrolledTagInputRef.current) {
-      console.log('🧹 タグ入力フィールドをクリア')
       uncontrolledTagInputRef.current.value = ''
     }
   }
