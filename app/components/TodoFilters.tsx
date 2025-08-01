@@ -28,6 +28,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   const [deletedSearchIds, setDeletedSearchIds] = useState<Set<string>>(new Set())
   // uncontrolled inputのref
   const uncontrolledTagInputRef = useRef<HTMLInputElement>(null)
+  // IME入力中かどうかのフラグ
+  const [isComposing, setIsComposing] = useState(false)
 
   const loadSavedSearches = useCallback(async () => {
     try {
@@ -82,6 +84,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
       undefined
     onFilterChange({ ...filter, tags })
   }
+
 
   const handleDateRangeChange = (dateRange?: DateRangePreset) => {
     onFilterChange({ ...filter, dateRange })
@@ -343,10 +346,21 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
                 key={`tags-${filter.tags?.join(',') || 'empty'}`}
                 defaultValue={filter.tags?.join(', ') || ''}
                 onChange={(e) => {
-                  handleTagsChange(e.target.value)
+                  // IME入力中は更新を停止（英数字入力は即座に反映）
+                  if (!isComposing) {
+                    handleTagsChange(e.target.value)
+                  }
+                }}
+                onCompositionStart={() => {
+                  setIsComposing(true)
+                }}
+                onCompositionEnd={(e) => {
+                  setIsComposing(false)
+                  // IME入力完了時に更新
+                  handleTagsChange((e.target as HTMLInputElement).value)
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && onManualSearch) {
+                  if (e.key === 'Enter' && onManualSearch && !isComposing) {
                     e.preventDefault()
                     onManualSearch()
                   }
