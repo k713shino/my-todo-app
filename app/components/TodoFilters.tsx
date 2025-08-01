@@ -34,6 +34,12 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   // 保存済み検索の状態変更をデバッグ
   useEffect(() => {
     console.log('🔍 保存済み検索state変更:', savedSearches.length, '件')
+    console.log('📝 詳細:', savedSearches.map(s => ({ id: s.id, name: s.name })))
+    
+    // スタックトレースで呼び出し元を特定
+    if (savedSearches.length === 0) {
+      console.trace('❌ 保存済み検索が0件になった原因')
+    }
   }, [savedSearches])
 
   const loadSavedSearches = useCallback(async () => {
@@ -162,16 +168,22 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
   }
 
   const loadSavedSearch = (savedSearch: SavedSearch) => {
+    console.log('📖 保存済み検索を読み込み:', savedSearch.name)
     const filters = JSON.parse(savedSearch.filters) as TodoFilters
+    console.log('🔍 読み込んだフィルター:', filters)
+    
     onFilterChange(filters)
     
     // uncontrolled inputの値を手動更新
     if (uncontrolledTagInputRef.current) {
-      uncontrolledTagInputRef.current.value = filters.tags?.join(', ') || ''
+      const newValue = filters.tags?.join(', ') || ''
+      console.log('📝 タグ入力フィールドを更新:', newValue)
+      uncontrolledTagInputRef.current.value = newValue
     }
     
     // 手動検索を実行して即座に結果を表示
     if (onManualSearch) {
+      console.log('🔍 自動検索を実行します')
       setTimeout(() => {
         onManualSearch()
       }, 100) // フィルター更新後に実行
@@ -184,16 +196,25 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     }
 
     try {
+      console.log('🗑️ 削除対象:', { id, name })
       const response = await fetch(`/api/todos/saved-searches/${id}`, {
         method: 'DELETE'
       })
       
+      console.log('🗑️ 削除API応答:', response.status, response.statusText)
+      
       if (response.ok) {
+        console.log('✅ 削除成功 - UIから削除')
         // 削除成功時のみUIから削除
-        setSavedSearches(prev => prev.filter(search => search.id !== id))
+        setSavedSearches(prev => {
+          const filtered = prev.filter(search => search.id !== id)
+          console.log('📋 削除後の保存済み検索数:', filtered.length)
+          return filtered
+        })
       } else {
-        console.error('Failed to delete saved search')
-        alert('削除に失敗しました')
+        const errorData = await response.text()
+        console.error('❌ 削除失敗:', response.status, errorData)
+        alert('削除に失敗しました: ' + response.status)
       }
     } catch (error) {
       console.error('Failed to delete saved search:', error)
@@ -206,6 +227,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     
     // uncontrolled inputもクリア
     if (uncontrolledTagInputRef.current) {
+      console.log('🧹 タグ入力フィールドをクリア')
       uncontrolledTagInputRef.current.value = ''
     }
   }
@@ -376,7 +398,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
               <input
                 ref={uncontrolledTagInputRef}
                 type="text"
-                key={`tags-${filter.tags?.join(',') || 'empty'}`}
                 defaultValue={filter.tags?.join(', ') || ''}
                 onChange={(e) => {
                   // IME入力中は即座に更新、直接入力はdebounce
