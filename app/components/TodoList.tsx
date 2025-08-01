@@ -412,6 +412,7 @@ export default function TodoList() {
         filter={filter} 
         onFilterChange={setFilter}
         onManualSearch={handleManualSearch}
+        enablePersistence={true}
       />
 
       {/* Todoリスト */}
