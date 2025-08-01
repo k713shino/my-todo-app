@@ -78,6 +78,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch }: 
     const tags = tagsString.trim() ? 
       tagsString.split(',').map(tag => tag.trim()).filter(Boolean) : 
       undefined
+    console.log('🏷️ タグ変更:', { input: tagsString, parsed: tags, filterBefore: filter.tags })
     onFilterChange({ ...filter, tags })
   }
 

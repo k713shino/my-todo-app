@@ -85,9 +85,11 @@ export async function GET(request: NextRequest) {
 
       // タグフィルター
       if (filters.tags && filters.tags.length > 0) {
+        console.log('🏷️ API受信タグ:', filters.tags)
         where.tags = {
           hasSome: filters.tags
         }
+        console.log('🔍 DB検索条件:', { tags: where.tags })
       }
 
       // 日付範囲フィルター
@@ -121,6 +123,14 @@ export async function GET(request: NextRequest) {
           { updatedAt: 'desc' }
         ]
       })
+      
+      if (filters.tags && filters.tags.length > 0) {
+        console.log('📊 検索結果:', {
+          total: dbResults.length,
+          withTags: dbResults.filter(todo => todo.tags && todo.tags.length > 0).length,
+          sampleTags: dbResults.slice(0, 3).map(todo => ({ title: todo.title, tags: todo.tags }))
+        })
+      }
 
       // Prismaの結果をTodo型に変換
       searchResults = dbResults.map(todo => ({

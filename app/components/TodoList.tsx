@@ -7,7 +7,7 @@ import TodoForm from './TodoForm'
 import TodoItem from './TodoItem'
 import TodoFiltersComponent from './TodoFilters'
 import TodoStatsDisplay from './TodoStatsDisplay'
-import RealtimeUpdates from './RealtimeUpdates'
+// import RealtimeUpdates from './RealtimeUpdates'
 import { Toaster, toast } from 'react-hot-toast'
 
 
@@ -245,10 +245,11 @@ export default function TodoList() {
   }
 
   /**
-   * WebSocketによるリアルタイム更新ハンドラー群
+   * WebSocketによるリアルタイム更新ハンドラー群（一時的に無効化）
    * - 他ユーザーによる更新をリアルタイムに反映
    * - 更新、作成、削除それぞれに対応
    */
+  /*
   const handleRealtimeUpdate = (updatedTodo: Todo) => {
     setTodos(prev => prev.map(todo => 
       todo.id === updatedTodo.id ? updatedTodo : todo
@@ -262,6 +263,7 @@ export default function TodoList() {
   const handleRealtimeDelete = (todoId: string) => {
     setTodos(prev => prev.filter(todo => todo.id !== todoId))
   }
+  */
 
   /**
    * フィルター条件に基づいてTodoを検索
@@ -289,7 +291,10 @@ export default function TodoList() {
       if (filters.completed !== undefined) params.append('completed', filters.completed.toString())
       if (filters.priority) params.append('priority', filters.priority)
       if (filters.category) params.append('category', filters.category)
-      if (filters.tags && filters.tags.length > 0) params.append('tags', filters.tags.join(','))
+      if (filters.tags && filters.tags.length > 0) {
+        params.append('tags', filters.tags.join(','))
+        console.log('🔍 検索パラメータ:', { tags: filters.tags, joined: filters.tags.join(',') })
+      }
       if (filters.dateRange) params.append('dateRange', filters.dateRange)
 
       const response = await fetch(`/api/todos/search?${params.toString()}`)
@@ -385,12 +390,12 @@ export default function TodoList() {
         }}
       />
 
-      {/* リアルタイム更新コンポーネント */}
-      <RealtimeUpdates
+      {/* リアルタイム更新コンポーネント（一時的に無効化） */}
+      {/* <RealtimeUpdates
         onTodoUpdate={handleRealtimeUpdate}
         onTodoCreate={handleRealtimeCreate}
         onTodoDelete={handleRealtimeDelete}
-      />
+      /> */}
 
       {/* 統計表示 */}
       <TodoStatsDisplay stats={stats} />
