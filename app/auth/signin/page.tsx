@@ -159,8 +159,8 @@ function SignInContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 dark:from-slate-900 dark:via-indigo-900 dark:to-purple-900 transition-all duration-500">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 dark:from-slate-900 dark:via-indigo-900 dark:to-purple-900 transition-all duration-500 px-3 sm:px-6">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8 p-4 sm:p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
         <div className="text-center">
           <div className="flex justify-end mb-4">
             <ThemeToggle />
@@ -209,7 +209,7 @@ function SignInContent() {
                 <button
                   onClick={() => handleOAuthSignIn('github')}
                   disabled={isLoading}
-                  className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  className="group relative w-full flex justify-center py-3 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:hover:bg-gray-600"
                 >
                   <span className="absolute left-0 inset-y-0 flex items-center pl-3">
                     <Image
@@ -217,7 +217,7 @@ function SignInContent() {
                       alt="GitHub"
                       width={16}
                       height={16}
-                      className="filter invert"
+                      className="dark:filter dark:invert"
                       onError={(e) => {
                         console.error('GitHub icon failed to load:', e)
                       }}
@@ -235,7 +235,7 @@ function SignInContent() {
                 <button
                   onClick={() => handleOAuthSignIn('google')}
                   disabled={isLoading}
-                  className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  className="group relative w-full flex justify-center py-3 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 dark:bg-gray-700 dark:text-white dark:border-gray-600 dark:hover:bg-gray-600"
                 >
                   <span className="absolute left-0 inset-y-0 flex items-center pl-3">
                     <Image
@@ -365,8 +365,8 @@ function SignInContent() {
 // ローディング中のフォールバック
 function SignInLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 dark:from-slate-900 dark:via-indigo-900 dark:to-purple-900 transition-all duration-500">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 dark:from-slate-900 dark:via-indigo-900 dark:to-purple-900 transition-all duration-500 px-3 sm:px-6">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8 p-4 sm:p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl">
         <div className="text-center">
           <div className="flex justify-end mb-4">
             <ThemeToggle />

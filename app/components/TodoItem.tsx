@@ -109,7 +109,7 @@ export default function TodoItem({
   }
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/20 p-4 border-l-4 transition-all duration-200 ${
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/20 p-3 sm:p-4 border-l-4 transition-all duration-200 ${
       todo.completed 
         ? 'border-green-400 dark:border-green-500 opacity-75' 
         : isOverdue 
@@ -119,37 +119,39 @@ export default function TodoItem({
       
       {/* ヘッダー */}
       <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center space-x-3 flex-1">
+        <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
           <input
             type="checkbox"
             checked={todo.completed}
             onChange={handleToggleComplete}
             disabled={isLoading || isUpdating}
-            className="w-5 h-5 text-purple-600 dark:text-purple-400 rounded focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600"
+            className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400 rounded focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600"
           />
-          <h3 className={`text-lg font-medium ${
+          <h3 className={`text-base sm:text-lg font-medium truncate ${
             todo.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'
           }`}>
-            {priorityIcons[todo.priority]} {todo.title}
+            <span className="inline sm:hidden">{priorityIcons[todo.priority]}</span>
+            <span className="hidden sm:inline">{priorityIcons[todo.priority]} </span>
+            {todo.title}
           </h3>
         </div>
         
-        <div className="flex space-x-2">
+        <div className="flex space-x-1 sm:space-x-2 flex-shrink-0 ml-2">
           <button
             onClick={() => onEdit(todo)}
             disabled={isLoading}
-            className="text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors p-1 sm:p-0"
             title="編集"
           >
-            ✏️
+            <span className="text-sm sm:text-base">✏️</span>
           </button>
           <button
             onClick={handleDelete}
             disabled={isLoading}
-            className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1 sm:p-0"
             title="削除"
           >
-            🗑️
+            <span className="text-sm sm:text-base">🗑️</span>
           </button>
         </div>
       </div>
