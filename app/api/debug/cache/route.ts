@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { CacheManager } from '@/lib/cache'
 import { redis } from '@/lib/redis'
+import { Priority } from '@prisma/client'
 
 /**
  * GET: キャッシュ状態のデバッグ情報取得API
@@ -124,10 +125,11 @@ export async function POST(request: NextRequest) {
           id: `test-${i}`,
           title: `Test Todo ${i}`,
           completed: i % 2 === 0,
-          priority: 'MEDIUM',
+          priority: 'MEDIUM' as Priority,
           createdAt: new Date(),
           updatedAt: new Date(),
-          userId: session.user.id
+          userId: session.user.id,
+          description: null
         }))
         
         await CacheManager.setTodos(session.user.id, mockTodos)
