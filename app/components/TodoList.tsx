@@ -62,8 +62,21 @@ export default function TodoList() {
    */
   const fetchTodos = async (bypassCache = false) => {
     try {
-      const url = bypassCache ? '/api/todos?cache=false' : '/api/todos'
-      const response = await fetch(url)
+      // キャッシュバスター用のタイムスタンプを追加
+      const timestamp = Date.now()
+      const url = bypassCache 
+        ? `/api/todos?cache=false&_t=${timestamp}` 
+        : `/api/todos?_t=${timestamp}`
+      
+      const response = await fetch(url, {
+        // キャッシュを無効化
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
+      
       if (response.ok) {
         const data: TodoResponse[] = await response.json()
         setTodos(data.map((todo) => ({
@@ -128,6 +141,9 @@ export default function TodoList() {
             : todo
         ))
         toast.success('📝 新しいTodoを作成しました！')
+        
+        // 最新データを再読み込み（キャッシュ無効化対応）
+        setTimeout(() => fetchTodos(true), 100)
       } else {
         // エラー時は楽観的更新を取り消し
         setTodos(prev => prev.filter(todo => todo.id !== tempId))
@@ -180,6 +196,9 @@ export default function TodoList() {
             : todo
         ))
         toast.success('✅ Todoを更新しました！')
+        
+        // 最新データを再読み込み（キャッシュ無効化対応）
+        setTimeout(() => fetchTodos(true), 100)
       } else {
         // エラー時は元の状態に戻す
         setTodos(originalTodos)
@@ -212,6 +231,9 @@ export default function TodoList() {
 
       if (response.ok) {
         toast.success('🗑️ Todoを削除しました！')
+        
+        // 最新データを再読み込み（キャッシュ無効化対応）
+        setTimeout(() => fetchTodos(true), 100)
       } else {
         // エラー時は元の状態に戻す
         setTodos(originalTodos)

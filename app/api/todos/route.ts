@@ -91,7 +91,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(todos, {
       headers: {
         'X-Cache': todos ? 'HIT' : 'MISS',
-        'X-RateLimit-Remaining': rateLimitResult.remaining.toString()
+        'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     })
   } catch (error) {
@@ -158,11 +161,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 非同期でキャッシュ無効化とイベント発行（レスポンスをブロックしない）
+    // 同期的にキャッシュ無効化（即座に反映）
+    await CacheManager.invalidateUserTodos(session.user.id)
+    console.log('🗑️ Cache invalidated after todo creation')
+
+    // 非同期でイベント発行（レスポンスをブロックしない）
     Promise.allSettled([
-      CacheManager.invalidateUserTodos(session.user.id).then(() => {
-        console.log('🗑️ Cache invalidated after todo creation')
-      }),
       PubSubManager.publishTodoEvent({
         type: 'created',
         todo,
@@ -182,7 +186,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(todo, { 
       status: 201,
       headers: {
-        'X-Cache-Invalidated': 'true'
+        'X-Cache-Invalidated': 'true',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     })
   } catch (error) {

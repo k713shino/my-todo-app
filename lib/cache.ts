@@ -134,13 +134,25 @@ export class CacheManager {
     return this.set(CacheKeys.userTodos(userId), optimizedTodos, ttl)
   }
 
-  // ユーザーのTodo関連キャッシュを全て削除
+  // ユーザーのTodo関連キャッシュを全て削除（最適化版）
   static async invalidateUserTodos(userId: string): Promise<boolean> {
-    const keys = [
-      CacheKeys.userTodos(userId),
-      CacheKeys.userStats(userId),
-    ]
-    return this.del(keys)
+    try {
+      const keys = [
+        CacheKeys.userTodos(userId),
+        CacheKeys.userStats(userId),
+      ]
+      
+      // パイプライン処理で高速削除
+      const pipeline = redis.pipeline()
+      keys.forEach(key => pipeline.del(key))
+      await pipeline.exec()
+      
+      console.log(`🚀 Cache invalidated for user ${userId}: ${keys.length} keys`)
+      return true
+    } catch (error) {
+      console.error('Cache invalidation error:', error)
+      return false
+    }
   }
 
   // セッション管理

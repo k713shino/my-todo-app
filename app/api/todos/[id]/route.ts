@@ -63,28 +63,44 @@ export async function PUT(
       },
     })
 
-    // キャッシュ無効化
+    // 同期的にキャッシュ無効化（即座に反映）
     await CacheManager.invalidateUserTodos(session.user.id)
+    console.log('🗑️ Cache invalidated after todo update')
 
-    // リアルタイムイベント発行
-    await PubSubManager.publishTodoEvent({
-      type: 'updated',
-      todo,
-      userId: session.user.id,
-      timestamp: Date.now()
-    })
+    // 非同期でイベント発行（レスポンスをブロックしない）
+    const eventPromises = [
+      PubSubManager.publishTodoEvent({
+        type: 'updated',
+        todo,
+        userId: session.user.id,
+        timestamp: Date.now()
+      })
+    ]
 
     // 完了状態変更の場合は特別なアクティビティ記録
     if (completed !== undefined && completed !== existingTodo.completed) {
-      await PubSubManager.publishUserActivity({
-        userId: session.user.id,
-        action: completed ? 'todo_completed' : 'todo_uncompleted',
-        timestamp: Date.now(),
-        metadata: { todoId: todo.id, title: todo.title }
-      })
+      eventPromises.push(
+        PubSubManager.publishUserActivity({
+          userId: session.user.id,
+          action: completed ? 'todo_completed' : 'todo_uncompleted',
+          timestamp: Date.now(),
+          metadata: { todoId: todo.id, title: todo.title }
+        })
+      )
     }
 
-    return NextResponse.json(todo)
+    Promise.allSettled(eventPromises).catch(error => {
+      console.error('Background event publishing error (non-blocking):', error)
+    })
+
+    return NextResponse.json(todo, {
+      headers: {
+        'X-Cache-Invalidated': 'true',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    })
   } catch (error) {
     console.error('Todo更新エラー:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
@@ -134,26 +150,36 @@ export async function DELETE(
       where: { id },
     })
 
-    // キャッシュ無効化
+    // 同期的にキャッシュ無効化（即座に反映）
     await CacheManager.invalidateUserTodos(session.user.id)
+    console.log('🗑️ Cache invalidated after todo deletion')
 
-    // リアルタイムイベント発行
-    await PubSubManager.publishTodoEvent({
-      type: 'deleted',
-      todo: { id, userId: session.user.id },
-      userId: session.user.id,
-      timestamp: Date.now()
+    // 非同期でイベント発行（レスポンスをブロックしない）
+    Promise.allSettled([
+      PubSubManager.publishTodoEvent({
+        type: 'deleted',
+        todo: { id, userId: session.user.id },
+        userId: session.user.id,
+        timestamp: Date.now()
+      }),
+      PubSubManager.publishUserActivity({
+        userId: session.user.id,
+        action: 'todo_deleted',
+        timestamp: Date.now(),
+        metadata: { todoId: id, title: existingTodo.title }
+      })
+    ]).catch(error => {
+      console.error('Background event publishing error (non-blocking):', error)
     })
 
-    // アクティビティ記録
-    await PubSubManager.publishUserActivity({
-      userId: session.user.id,
-      action: 'todo_deleted',
-      timestamp: Date.now(),
-      metadata: { todoId: id, title: existingTodo.title }
+    return NextResponse.json({ message: 'Todo deleted successfully' }, {
+      headers: {
+        'X-Cache-Invalidated': 'true',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     })
-
-    return NextResponse.json({ message: 'Todo deleted successfully' })
   } catch (error) {
     console.error('Todo削除エラー:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
