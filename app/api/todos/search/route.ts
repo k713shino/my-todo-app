@@ -128,6 +128,7 @@ export async function GET(request: NextRequest) {
         createdAt: new Date(todo.createdAt),
         updatedAt: new Date(todo.updatedAt),
         dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
+        category: todo.category ?? undefined,
       }))
 
       // 結果をキャッシュ（10分間）

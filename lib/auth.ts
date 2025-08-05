@@ -123,11 +123,11 @@ export const authOptions: AuthOptions = {
             image: user.image,
             hasPassword: true,
           }
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('🚨 認証エラー:', error)
           console.error('エラー詳細:', {
-            message: error.message,
-            stack: error.stack
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
           })
           return null
         }
@@ -207,9 +207,9 @@ export const authOptions: AuthOptions = {
           }
         }
         return true
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('🚨 signIn callback エラー:', {
-          error: error.message,
+          error: error instanceof Error ? error.message : String(error),
           provider: account?.provider,
           email: user?.email
         })

@@ -5,6 +5,8 @@ import Image from 'next/image'
 import SignOutButton from '@/app/components/SignOutButton'
 import ThemeToggle from '@/app/components/ThemeToggle'
 import Link from 'next/link'
+// Lambda接続テスト用のClient Componentをインポート
+import LambdaConnectionTest from '../components/LambdaConnectionTest'
 
 export default async function Dashboard() {
   const session = await getAuthSession()
@@ -56,7 +58,27 @@ export default async function Dashboard() {
 
       {/* メインコンテンツ */}
       <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
-        <TodoList />
+        <div className="max-w-7xl mx-auto">
+          {/* Lambda接続テスト（管理者用） */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mb-6">
+              <LambdaConnectionTest 
+                className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700"
+                onSuccess={(data) => {
+                  console.log('✅ Lambda接続成功:', data);
+                  // 必要に応じて成功時の処理を追加
+                }}
+                onError={(error) => {
+                  console.error('❌ Lambda接続エラー:', error);
+                  // 必要に応じてエラー時の処理を追加
+                }}
+              />
+            </div>
+          )}
+
+          {/* 既存のTodoリスト */}
+          <TodoList />
+        </div>
       </main>
     </div>
   )

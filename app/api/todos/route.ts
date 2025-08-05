@@ -1,199 +1,84 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { prisma } from '@/lib/prisma'
-import { CacheManager, RateLimiter } from '@/lib/cache'
-import { PubSubManager } from '@/lib/pubsub'
-import { Priority } from '@prisma/client'
+import { NextRequest, NextResponse } from 'next/server';
+import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
+import type { 
+  VercelAPIResponse, 
+  Todo, 
+  CreateTodoRequest 
+} from '@/types/lambda-api';
 
-/**
- * GET: Todo一覧の取得API
- *
- * 機能:
- * - 認証済みユーザーのTodo一覧を取得
- * - キャッシュによる高速なレスポンス
- * - レート制限による不正アクセス防止
- * - 完了状態・優先度によるフィルタリング
- *
- * キャッシュ戦略:
- * - フィルターがない場合のみキャッシュを使用
- * - キャッシュミス時はDBから取得して保存
- * - cache=falseクエリでキャッシュ無効化可能
- */
-export async function GET(request: NextRequest) {
+// 全てのTodoを取得
+export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIResponse<Todo[]>>> {
   try {
-    const session = await getAuthSession()
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+
+    let todos: Todo[];
     
-    if (!isAuthenticated(session)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (userId) {
+      // 特定ユーザーのTodoを取得
+      todos = await lambdaAPI.getUserTodos(userId);
+    } else {
+      // 全てのTodoを取得
+      todos = await lambdaAPI.getTodos();
     }
 
-    // レート制限チェック（1時間に1000回まで）
-    const rateLimitResult = await RateLimiter.checkRateLimit(
-      `todos:${session.user.id}`, 
-      3600, 
-      1000
-    )
-    
-    if (!rateLimitResult.allowed) {
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { 
-          status: 429,
-          headers: {
-            'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-            'X-RateLimit-Reset': rateLimitResult.resetTime.toString()
-          }
-        }
-      )
-    }
+    const response: VercelAPIResponse<Todo[]> = {
+      success: true,
+      message: `${todos.length}件のTodoを取得しました`,
+      lambdaResponse: todos,
+      timestamp: new Date().toISOString(),
+    };
 
-    const { searchParams } = new URL(request.url)
-    const completed = searchParams.get('completed')
-    const priority = searchParams.get('priority') as Priority | null
-    const useCache = searchParams.get('cache') !== 'false'
+    return NextResponse.json(response);
 
-    // キャッシュから取得を試行（フィルターがない場合のみ）
-    let todos = null
-    if (useCache && !completed && !priority) {
-      todos = await CacheManager.getTodos(session.user.id)
-      console.log('📦 Cache hit:', !!todos)
-    }
-
-    // キャッシュミスまたはフィルター条件がある場合はDBから取得
-    if (!todos) {
-      console.log('🔍 Fetching from database...')
-      todos = await prisma.todo.findMany({
-        where: {
-          userId: session.user.id,
-          ...(completed !== null && { completed: completed === 'true' }),
-          ...(priority && { priority }),
-        },
-        orderBy: [
-          { completed: 'asc' },
-          { priority: 'desc' },
-          { dueDate: 'asc' },
-          { createdAt: 'desc' },
-        ],
-      })
-
-      // フィルター条件がない場合はキャッシュに保存
-      if (useCache && !completed && !priority) {
-        await CacheManager.setTodos(session.user.id, todos)
-        console.log('💾 Data cached')
-      }
-    }
-
-    // ユーザーアクティビティ更新（非同期）
-    CacheManager.updateUserActivity(session.user.id).catch(error => {
-      console.error('User activity update error (non-blocking):', error)
-    })
-
-    return NextResponse.json(todos, {
-      headers: {
-        'X-Cache': todos ? 'HIT' : 'MISS',
-        'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    })
   } catch (error) {
-    console.error('Todo取得エラー:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    console.error('❌ Todo取得エラー:', error);
+    
+    const errorResponse: VercelAPIResponse = {
+      success: false,
+      error: formatLambdaAPIError(error),
+      timestamp: new Date().toISOString(),
+    };
+    
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }
 
-/**
- * POST: 新規Todo作成API
- *
- * 機能:
- * - 認証済みユーザーのTodoを作成
- * - 厳格なレート制限（1時間に100件まで）
- * - タイトルのバリデーション
- * - リアルタイム更新のイベント発行
- *
- * データ整合性:
- * - キャッシュの自動無効化
- * - PubSubによるリアルタイム通知
- * - ユーザーアクティビティの記録
- */
-export async function POST(request: NextRequest) {
+// 新しいTodoを作成
+export async function POST(request: NextRequest): Promise<NextResponse<VercelAPIResponse<Todo>>> {
   try {
-    const session = await getAuthSession()
+    const body: CreateTodoRequest = await request.json();
     
-    if (!isAuthenticated(session)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // バリデーション
+    if (!body.title || !body.userId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Title and userId are required',
+        timestamp: new Date().toISOString(),
+      }, { status: 400 });
     }
 
-    // レート制限チェック（作成は厳しめ）
-    const rateLimitResult = await RateLimiter.checkRateLimit(
-      `create_todos:${session.user.id}`, 
-      3600, 
-      100
-    )
-    
-    if (!rateLimitResult.allowed) {
-      return NextResponse.json(
-        { error: 'Creation rate limit exceeded' },
-        { status: 429 }
-      )
-    }
+    const newTodo = await lambdaAPI.createTodo(body);
 
-    const body = await request.json()
-    const { title, description, dueDate, priority, category, tags } = body
+    const response: VercelAPIResponse<Todo> = {
+      success: true,
+      message: 'Todoを作成しました',
+      lambdaResponse: newTodo,
+      timestamp: new Date().toISOString(),
+    };
 
-    if (!title?.trim()) {
-      return NextResponse.json({ error: 'タイトルは必須です' }, { status: 400 })
-    }
+    return NextResponse.json(response, { status: 201 });
 
-    // Todo作成
-    const todo = await prisma.todo.create({
-      data: {
-        title: title.trim(),
-        description: description?.trim() || null,
-        priority: priority || 'MEDIUM',
-        dueDate: dueDate ? new Date(dueDate) : null,
-        category: category?.trim() || null,
-        tags: Array.isArray(tags)
-          ? tags.map((tag) => tag.trim()).filter(Boolean)
-          : [],
-        userId: session.user.id,
-      },
-    })
-
-    // 同期的にキャッシュ無効化（即座に反映）
-    await CacheManager.invalidateUserTodos(session.user.id)
-    console.log('🗑️ Cache invalidated after todo creation')
-
-    // 非同期でイベント発行（レスポンスをブロックしない）
-    Promise.allSettled([
-      PubSubManager.publishTodoEvent({
-        type: 'created',
-        todo,
-        userId: session.user.id,
-        timestamp: Date.now()
-      }),
-      PubSubManager.publishUserActivity({
-        userId: session.user.id,
-        action: 'todo_created',
-        timestamp: Date.now(),
-        metadata: { todoId: todo.id, title: todo.title }
-      })
-    ]).catch(error => {
-      console.error('Background task error (non-blocking):', error)
-    })
-
-    return NextResponse.json(todo, { 
-      status: 201,
-      headers: {
-        'X-Cache-Invalidated': 'true',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    })
   } catch (error) {
-    console.error('Todo作成エラー:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    console.error('❌ Todo作成エラー:', error);
+    
+    const errorResponse: VercelAPIResponse = {
+      success: false,
+      error: formatLambdaAPIError(error),
+      timestamp: new Date().toISOString(),
+    };
+    
+    return NextResponse.json(errorResponse, { status: 500 });
   }
 }
+

@@ -1,46 +1,68 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // experimental設定（統合版）
-  experimental: {
-    // Turbopack設定
-    turbo: {
-      rules: {
-        // 必要に応じてTurbopack固有の設定を追加
-      }
-    },
-    // Prismaの設定
-    serverExternalPackages: ['@prisma/client'],
-  },
-  
-  // 本番ビルド時のエラー対策
-  eslint: {
-    ignoreDuringBuilds: true, // ESLintエラーを無視
-  },
+  // TypeScript設定
   typescript: {
-    ignoreBuildErrors: true, // TypeScriptエラーを無視（必要に応じて）
+    // 本番ビルド時でも型エラーを厳密にチェック
+    ignoreBuildErrors: false,
   },
   
+  // ESLint設定
+  eslint: {
+    // 本番ビルド時のESLintエラーも厳密にチェック
+    ignoreDuringBuilds: false,
+  },
+
   // 環境変数の設定
-  //env: {
-    // ビルド時のダミーDATA BASE_URL
-  //  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://dummy:dummy@localhost:5432/dummy?connect_timeout=1',
-  //},
-  
-  // 画像設定
+  env: {
+    LAMBDA_API_URL: process.env.LAMBDA_API_URL,
+  },
+
+  // 外部APIへのアクセス許可
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization',
+          },
+        ],
+      },
+    ];
+  },
+
+  // API Routes設定
+  async rewrites() {
+    return [
+      // Lambda APIへのプロキシ（開発時用）
+      {
+        source: '/api/lambda-proxy/:path*',
+        destination: `${process.env.LAMBDA_API_URL || 'https://wmo3ty4ngk.execute-api.ap-northeast-1.amazonaws.com/prod'}/:path*`,
+      },
+    ];
+  },
+
+  // 画像最適化設定
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'avatars.githubusercontent.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com',
-        port: '',
-        pathname: '/**',
-      },
+    domains: [
+      'wmo3ty4ngk.execute-api.ap-northeast-1.amazonaws.com',
     ],
   },
-}
+
+  // 実験的機能
+  experimental: {
+    // App Routerを使用する場合
+    appDir: true,
+  },
+};
+
+module.exports = nextConfig;

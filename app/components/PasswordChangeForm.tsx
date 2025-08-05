@@ -104,12 +104,12 @@ export default function PasswordChangeForm() {
       } else {
         toast.error(data.error || 'パスワード変更に失敗しました')
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('パスワード変更エラー:', error)
       console.error('エラー詳細:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       })
       toast.error('エラーが発生しました')
     } finally {
