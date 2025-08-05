@@ -1,35 +1,13 @@
 {
-  "buildCommand": "npm run vercel-build",
-  "outputDirectory": ".next",
-  "installCommand": "npm ci --include=dev",
-  "framework": "nextjs",
   "functions": {
     "app/api/**/*.ts": {
-      "maxDuration": 10
+      "maxDuration": 30
     }
   },
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1",
-      "NODE_ENV": "production",
       "SKIP_ENV_VALIDATION": "1"
     }
-  },
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "s-maxage=60, stale-while-revalidate=300"
-        }
-      ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/auth/(.*)",
-      "destination": "/api/auth/$1"
-    }
-  ]
+  }
 }
