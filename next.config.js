@@ -60,8 +60,7 @@ const nextConfig = {
 
   // 実験的機能
   experimental: {
-    // App Routerを使用する場合
-    appDir: true,
+    // App Routerは標準サポートになったため削除
   },
 };
 

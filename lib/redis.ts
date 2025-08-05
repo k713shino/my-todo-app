@@ -331,7 +331,7 @@ class RedisClient {
       disconnectPromises.push(
         this.instance.quit().then(() => {
           this.instance = null
-        }).catch((_err) => {
+        }).catch((_err: unknown) => {
           this.instance = null
         })
       )
@@ -341,7 +341,7 @@ class RedisClient {
       disconnectPromises.push(
         this.pubClient.quit().then(() => {
           this.pubClient = null
-        }).catch((_err) => {
+        }).catch((_err: unknown) => {
           this.pubClient = null
         })
       )
@@ -351,7 +351,7 @@ class RedisClient {
       disconnectPromises.push(
         this.subClient.quit().then(() => {
           this.subClient = null
-        }).catch((_err) => {
+        }).catch((_err: unknown) => {
           this.subClient = null
         })
       )
