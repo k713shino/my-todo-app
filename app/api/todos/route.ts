@@ -30,16 +30,32 @@ export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIR
       let todos: Todo[];
       
       if (Array.isArray(lambdaTodos)) {
-        // Lambda APIから取得したデータをTodo型に変換
-        todos = lambdaTodos.map(todo => ({
-          id: todo.id.toString(),
-          title: todo.title,
-          description: todo.description || undefined,
-          completed: todo.completed || false,
-          userId: session.user.id, // セッションからユーザーIDを設定
-          createdAt: todo.createdAt || new Date().toISOString(),
-          updatedAt: todo.updatedAt || new Date().toISOString()
-        }));
+        // Lambda APIから取得したデータをTodo型に変換（日付フィールドを安全に処理）
+        todos = lambdaTodos.map(todo => {
+          // 日付フィールドの安全な変換関数
+          const safeToISOString = (dateValue: any): string => {
+            if (!dateValue) return new Date().toISOString();
+            try {
+              const date = new Date(dateValue);
+              if (isNaN(date.getTime())) {
+                return new Date().toISOString();
+              }
+              return date.toISOString();
+            } catch {
+              return new Date().toISOString();
+            }
+          };
+
+          return {
+            id: todo.id?.toString() || `lambda-${Date.now()}`,
+            title: todo.title || 'Untitled',
+            description: todo.description || undefined,
+            completed: Boolean(todo.completed),
+            userId: session.user.id,
+            createdAt: safeToISOString(todo.createdAt),
+            updatedAt: safeToISOString(todo.updatedAt)
+          };
+        });
       } else {
         todos = [];
       }
@@ -132,6 +148,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
       // Lambda APIのレスポンスからTodoオブジェクトを抽出
       let newTodo: Todo;
       
+      // 日付フィールドの安全な変換関数
+      const safeToISOString = (dateValue: any): string => {
+        if (!dateValue) return new Date().toISOString();
+        try {
+          const date = new Date(dateValue);
+          if (isNaN(date.getTime())) {
+            return new Date().toISOString();
+          }
+          return date.toISOString();
+        } catch {
+          return new Date().toISOString();
+        }
+      };
+
       if (lambdaResponse.todo) {
         // Lambda APIが { message: "...", todo: {...} } 形式で返す場合
         newTodo = {
@@ -140,8 +170,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
           description: lambdaResponse.todo.description || undefined,
           completed: lambdaResponse.todo.completed || false,
           userId: session.user.id,
-          createdAt: lambdaResponse.todo.createdAt || new Date().toISOString(),
-          updatedAt: lambdaResponse.todo.updatedAt || new Date().toISOString()
+          createdAt: safeToISOString(lambdaResponse.todo.createdAt),
+          updatedAt: safeToISOString(lambdaResponse.todo.updatedAt)
         };
       } else {
         // Lambda APIが直接Todoオブジェクトを返す場合
@@ -151,8 +181,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
           description: lambdaResponse.description || body.description,
           completed: lambdaResponse.completed || false,
           userId: session.user.id,
-          createdAt: lambdaResponse.createdAt || new Date().toISOString(),
-          updatedAt: lambdaResponse.updatedAt || new Date().toISOString()
+          createdAt: safeToISOString(lambdaResponse.createdAt),
+          updatedAt: safeToISOString(lambdaResponse.updatedAt)
         };
       }
 
