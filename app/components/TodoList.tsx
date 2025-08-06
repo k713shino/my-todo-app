@@ -133,8 +133,8 @@ export default function TodoList() {
         ))
         toast.success('📝 新しいTodoを作成しました！')
         
-        // 最新データを再読み込み（キャッシュ無効化対応）
-        setTimeout(() => fetchTodos(true), 100)
+        // Lambda APIの同期に時間がかかる場合があるため、再読み込みを遅延
+        setTimeout(() => fetchTodos(true), 2000)
       } else {
         // エラー時は楽観的更新を取り消し
         setTodos(prev => prev.filter(todo => todo.id !== tempId))
@@ -183,8 +183,8 @@ export default function TodoList() {
         ))
         toast.success('✅ Todoを更新しました！')
         
-        // 最新データを再読み込み（キャッシュ無効化対応）
-        setTimeout(() => fetchTodos(true), 100)
+        // Lambda APIの同期に時間がかかる場合があるため、再読み込みを遅延
+        setTimeout(() => fetchTodos(true), 2000)
       } else {
         // エラー時は元の状態に戻す
         setTodos(originalTodos)
@@ -218,8 +218,8 @@ export default function TodoList() {
       if (response.ok) {
         toast.success('🗑️ Todoを削除しました！')
         
-        // 最新データを再読み込み（キャッシュ無効化対応）
-        setTimeout(() => fetchTodos(true), 100)
+        // Lambda APIの同期に時間がかかる場合があるため、再読み込みを遅延
+        setTimeout(() => fetchTodos(true), 2000)
       } else {
         // エラー時は元の状態に戻す
         setTodos(originalTodos)

@@ -119,6 +119,9 @@ export async function POST(request: NextRequest) {
 
       const lambdaResponse: any = await lambdaAPI.createTodo(todoData);
       
+      // デバッグ: Lambda APIのレスポンスをログ出力
+      console.log('📝 Lambda API レスポンス:', JSON.stringify(lambdaResponse, null, 2));
+      
       // Lambda APIのレスポンスからTodoオブジェクトを抽出
       let newTodo: Todo;
       
@@ -136,28 +139,29 @@ export async function POST(request: NextRequest) {
         }
       };
 
-      if (lambdaResponse.todo) {
+      if (lambdaResponse?.todo) {
         // Lambda APIが { message: "...", todo: {...} } 形式で返す場合
+        const lambdaTodo = lambdaResponse.todo;
         newTodo = {
-          id: lambdaResponse.todo.id?.toString() || `lambda-${Date.now()}`,
-          title: lambdaResponse.todo.title,
-          description: lambdaResponse.todo.description || undefined,
-          completed: lambdaResponse.todo.completed || false,
+          id: lambdaTodo.id?.toString() || `lambda-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          title: lambdaTodo.title || body.title,
+          description: lambdaTodo.description || body.description || undefined,
+          completed: Boolean(lambdaTodo.completed || false),
           priority: (body.priority || Priority.MEDIUM) as Priority,
           category: body.category || undefined,
           tags: body.tags || [],
           dueDate: body.dueDate ? new Date(body.dueDate) : null,
           userId: session.user.id,
-          createdAt: new Date(safeToISOString(lambdaResponse.todo.createdAt)),
-          updatedAt: new Date(safeToISOString(lambdaResponse.todo.updatedAt))
+          createdAt: new Date(safeToISOString(lambdaTodo.createdAt)),
+          updatedAt: new Date(safeToISOString(lambdaTodo.updatedAt))
         };
       } else {
-        // Lambda APIが直接Todoオブジェクトを返す場合
+        // Lambda APIが直接Todoオブジェクトを返す場合（通常はこちら）
         newTodo = {
-          id: lambdaResponse.id?.toString() || `lambda-${Date.now()}`,
+          id: lambdaResponse.id?.toString() || `lambda-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           title: lambdaResponse.title || body.title,
-          description: lambdaResponse.description || body.description,
-          completed: lambdaResponse.completed || false,
+          description: lambdaResponse.description || body.description || undefined,
+          completed: Boolean(lambdaResponse.completed || false),
           priority: (body.priority || Priority.MEDIUM) as Priority,
           category: body.category || undefined,
           tags: body.tags || [],
