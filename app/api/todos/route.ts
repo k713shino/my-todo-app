@@ -1,24 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Priority } from '@prisma/client';
 import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils';
-import type { 
-  VercelAPIResponse, 
-  Todo
-} from '@/types/lambda-api';
+import type { Todo } from '@/types/todo';
+import type { VercelAPIResponse } from '@/types/lambda-api';
 
 export const dynamic = 'force-dynamic'
 
 // 全てのTodoを取得
-export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIResponse<Todo[]>>> {
+export async function GET(request: NextRequest) {
   try {
     const session = await getAuthSession()
     
     if (!isAuthenticated(session)) {
-      return NextResponse.json({
-        success: false,
-        error: 'Unauthorized',
-        timestamp: new Date().toISOString(),
-      }, { status: 401 });
+      return NextResponse.json([], { status: 200 });
     }
 
     try {
@@ -51,24 +46,21 @@ export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIR
             title: todo.title || 'Untitled',
             description: todo.description || undefined,
             completed: Boolean(todo.completed),
+            priority: Priority.MEDIUM, // Lambda APIにはpriorityがないため中優先度を設定
+            category: undefined,
+            tags: [],
+            dueDate: null, // Lambda APIにはdueDateがないためnull
             userId: session.user.id,
-            createdAt: safeToISOString(todo.createdAt),
-            updatedAt: safeToISOString(todo.updatedAt)
+            createdAt: new Date(safeToISOString(todo.createdAt)),
+            updatedAt: new Date(safeToISOString(todo.updatedAt))
           };
         });
       } else {
         todos = [];
       }
 
-      const response: VercelAPIResponse<Todo[]> = {
-        success: true,
-        message: `${todos.length}件のTodoを取得しました`,
-        lambdaResponse: todos,
-        timestamp: new Date().toISOString(),
-      };
-
       console.log('✅ Lambda APIからのTodo取得成功:', todos.length, '件');
-      return NextResponse.json(response);
+      return NextResponse.json(todos);
 
     } catch (lambdaError) {
       console.error('❌ Lambda API呼び出しエラー:', lambdaError);
@@ -80,57 +72,39 @@ export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIR
           title: 'Lambda API接続エラー',
           description: 'Lambda APIとの接続に問題があります。フォールバックデータを表示中。',
           completed: false,
+          priority: Priority.MEDIUM,
+          category: undefined,
+          tags: [],
+          dueDate: null,
           userId: session.user.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
       ];
 
-      const response: VercelAPIResponse<Todo[]> = {
-        success: true,
-        message: 'Lambda API接続エラー - フォールバックデータを表示',
-        lambdaResponse: mockTodos,
-        timestamp: new Date().toISOString(),
-      };
-
-      return NextResponse.json(response);
+      return NextResponse.json(mockTodos);
     }
 
   } catch (error) {
     console.error('❌ Todo取得エラー:', error);
-    
-    const errorResponse: VercelAPIResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString(),
-    };
-    
-    return NextResponse.json(errorResponse, { status: 500 });
+    return NextResponse.json([], { status: 200 });
   }
 }
 
 // 新しいTodoを作成
-export async function POST(request: NextRequest): Promise<NextResponse<VercelAPIResponse<Todo>>> {
+export async function POST(request: NextRequest) {
   try {
     const session = await getAuthSession()
     
     if (!isAuthenticated(session)) {
-      return NextResponse.json({
-        success: false,
-        error: 'Unauthorized',
-        timestamp: new Date().toISOString(),
-      }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body: any = await request.json();
     
     // バリデーション
     if (!body.title) {
-      return NextResponse.json({
-        success: false,
-        error: 'Title is required',
-        timestamp: new Date().toISOString(),
-      }, { status: 400 });
+      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
     try {
@@ -169,9 +143,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
           title: lambdaResponse.todo.title,
           description: lambdaResponse.todo.description || undefined,
           completed: lambdaResponse.todo.completed || false,
+          priority: (body.priority || Priority.MEDIUM) as Priority,
+          category: body.category || undefined,
+          tags: body.tags || [],
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
           userId: session.user.id,
-          createdAt: safeToISOString(lambdaResponse.todo.createdAt),
-          updatedAt: safeToISOString(lambdaResponse.todo.updatedAt)
+          createdAt: new Date(safeToISOString(lambdaResponse.todo.createdAt)),
+          updatedAt: new Date(safeToISOString(lambdaResponse.todo.updatedAt))
         };
       } else {
         // Lambda APIが直接Todoオブジェクトを返す場合
@@ -180,21 +158,18 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
           title: lambdaResponse.title || body.title,
           description: lambdaResponse.description || body.description,
           completed: lambdaResponse.completed || false,
+          priority: (body.priority || Priority.MEDIUM) as Priority,
+          category: body.category || undefined,
+          tags: body.tags || [],
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
           userId: session.user.id,
-          createdAt: safeToISOString(lambdaResponse.createdAt),
-          updatedAt: safeToISOString(lambdaResponse.updatedAt)
+          createdAt: new Date(safeToISOString(lambdaResponse.createdAt)),
+          updatedAt: new Date(safeToISOString(lambdaResponse.updatedAt))
         };
       }
 
-      const response: VercelAPIResponse<Todo> = {
-        success: true,
-        message: 'Todoを作成しました',
-        lambdaResponse: newTodo,
-        timestamp: new Date().toISOString(),
-      };
-
       console.log('✅ Lambda APIでのTodo作成成功:', newTodo.id);
-      return NextResponse.json(response, { status: 201 });
+      return NextResponse.json(newTodo, { status: 201 });
 
     } catch (lambdaError) {
       console.error('❌ Lambda API呼び出しエラー:', lambdaError);
@@ -205,31 +180,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
         title: body.title,
         description: body.description || 'Lambda API接続エラーのため、ローカルで作成されました',
         completed: false,
+        priority: (body.priority || Priority.MEDIUM) as Priority,
+        category: body.category || undefined,
+        tags: body.tags || [],
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
         userId: session.user.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: new Date(),
+        updatedAt: new Date()
       };
 
-      const response: VercelAPIResponse<Todo> = {
-        success: true,
-        message: 'Todo作成（Lambda API接続エラー - フォールバック）',
-        lambdaResponse: mockTodo,
-        timestamp: new Date().toISOString(),
-      };
-
-      return NextResponse.json(response, { status: 201 });
+      return NextResponse.json(mockTodo, { status: 201 });
     }
 
   } catch (error) {
     console.error('❌ Todo作成エラー:', error);
-    
-    const errorResponse: VercelAPIResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString(),
-    };
-    
-    return NextResponse.json(errorResponse, { status: 500 });
+    return NextResponse.json({ error: 'Todo作成に失敗しました' }, { status: 500 });
   }
 }
 
