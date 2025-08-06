@@ -14,10 +14,8 @@ interface TestResult {
   timestamp: string;
 }
 
-const LambdaConnectionTest: React.FC<LambdaConnectionTestProps> = ({
+const LambdaConnectionTest: React.FC<{ className?: string }> = ({
   className = '',
-  onSuccess,
-  onError,
 }) => {
   const [result, setResult] = useState<TestResult | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -34,8 +32,7 @@ const LambdaConnectionTest: React.FC<LambdaConnectionTestProps> = ({
     
     console.error(errorMessage, err);
     setError(errorMessage);
-    onError?.(err instanceof Error ? err : new Error(errorMessage));
-  }, [onError]);
+  }, []);
 
   const handleSuccess = useCallback((data: any, type: 'vercel' | 'direct') => {
     const testResult: TestResult = {
@@ -45,8 +42,7 @@ const LambdaConnectionTest: React.FC<LambdaConnectionTestProps> = ({
     };
     
     setResult(testResult);
-    onSuccess?.(data);
-  }, [onSuccess]);
+  }, []);
 
   const testLambdaConnection = async (): Promise<void> => {
     setLoading(true);

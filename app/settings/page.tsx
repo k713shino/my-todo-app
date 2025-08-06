@@ -96,12 +96,6 @@ export default async function SettingsPage() {
             </p>
             <LambdaConnectionTest 
               className="border-0 shadow-none bg-gray-50 dark:bg-gray-700"
-              onSuccess={(data) => {
-                console.log('✅ Lambda接続成功:', data);
-              }}
-              onError={(error) => {
-                console.error('❌ Lambda接続エラー:', error);
-              }}
             />
           </section>
 

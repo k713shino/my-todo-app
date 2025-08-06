@@ -1,14 +1,11 @@
 import type { AuthOptions, Session, User } from "next-auth"
-import { PrismaAdapter } from "@next-auth/prisma-adapter"  // 🔥 修正: 正しいパッケージ
 import GithubProvider from "next-auth/providers/github"
 import GoogleProvider from "next-auth/providers/google"
 import CredentialsProvider from "next-auth/providers/credentials"
-import bcrypt from "bcryptjs"
-import { prisma } from "./prisma"
 import type { JWT } from "next-auth/jwt"
 
 export const authOptions: AuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  // Lambda API経由でユーザー管理するため、adapterは使用しない
   secret: process.env.NEXTAUTH_SECRET,
   providers: [
     // GitHub OAuth
@@ -76,43 +73,37 @@ export const authOptions: AuthOptions = {
         }
         
         try {
-          console.log('🔍 データベースでユーザー検索中...')
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email },
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              password: true,
-              image: true
-            }
+          console.log('🔍 Lambda API経由でユーザー検索中...')
+          
+          // Lambda API経由でユーザー認証
+          const response = await fetch(`${process.env.LAMBDA_API_URL}/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: credentials.email,
+              password: credentials.password
+            })
           })
           
-          console.log('👤 ユーザー検索結果:', {
+          if (!response.ok) {
+            console.log('❌ Lambda API認証失敗:', response.status)
+            return null
+          }
+          
+          const data = await response.json()
+          const user = data.user
+          
+          console.log('👤 Lambda API認証結果:', {
+            success: data.success,
             found: !!user,
-            email: user?.email,
-            hasPassword: !!user?.password,
-            passwordHash: user?.password ? `${user.password.substring(0, 10)}...` : 'none'
+            email: user?.email
           })
           
-          if (!user) {
-            console.log('❌ 認証失敗: ユーザーが見つかりません')
-            // より詳細なエラー情報を返すためにthrowを使用
-            throw new Error('USER_NOT_FOUND')
-          }
-          
-          if (!user.password) {
-            console.log('❌ 認証失敗: パスワードが設定されていません（OAuth認証ユーザー）')
-            throw new Error('OAUTH_USER_NO_PASSWORD')
-          }
-          
-          console.log('🔐 パスワード検証中...')
-          const isValid = await bcrypt.compare(credentials.password, user.password)
-          console.log('🔐 パスワード検証結果:', isValid)
-          
-          if (!isValid) {
-            console.log('❌ 認証失敗: パスワードが一致しません')
-            throw new Error('INVALID_PASSWORD')
+          if (!data.success || !user) {
+            console.log('❌ 認証失敗:', data.error || 'ユーザーが見つかりません')
+            throw new Error(data.error || 'USER_NOT_FOUND')
           }
           
           console.log('✅ 認証成功!')
@@ -155,12 +146,15 @@ export const authOptions: AuthOptions = {
         if (account?.provider === 'credentials') {
           token.hasPassword = true
         } else {
+          // OAuth認証の場合、Lambda API経由でパスワード状態を確認
           try {
-            const dbUser = await prisma.user.findUnique({
-              where: { id: user.id },
-              select: { password: true }
-            })
-            token.hasPassword = !!dbUser?.password
+            const response = await fetch(`${process.env.LAMBDA_API_URL}/auth/user/${user.id}`)
+            if (response.ok) {
+              const userData = await response.json()
+              token.hasPassword = !!userData.user?.password
+            } else {
+              token.hasPassword = false
+            }
           } catch (_error) {
             token.hasPassword = false
           }
@@ -185,25 +179,41 @@ export const authOptions: AuthOptions = {
           accountId: account?.providerAccountId
         })
         
-        // OAuth認証時の基本ログ
+        // OAuth認証時のユーザー作成・更新をLambda API経由で実行
         if (account?.provider && account.provider !== 'credentials') {
           console.log(`✅ OAuth認証成功: ${user.email} (${account.provider})`)
           
-          // GitHub/Googleの設定チェック
-          if (account.provider === 'github') {
-            console.log('GitHub設定確認:', {
-              clientId: !!process.env.GITHUB_CLIENT_ID,
-              clientSecret: !!process.env.GITHUB_CLIENT_SECRET,
-              nextauthUrl: process.env.NEXTAUTH_URL
+          // Lambda API経由でOAuthユーザーを作成・更新
+          try {
+            const response = await fetch(`${process.env.LAMBDA_API_URL}/auth/oauth-user`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                user: {
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  image: user.image,
+                },
+                account: {
+                  provider: account.provider,
+                  providerAccountId: account.providerAccountId,
+                  access_token: account.access_token,
+                  refresh_token: account.refresh_token,
+                  expires_at: account.expires_at,
+                }
+              })
             })
-          }
-          
-          if (account.provider === 'google') {
-            console.log('Google設定確認:', {
-              clientId: !!process.env.GOOGLE_CLIENT_ID,
-              clientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-              nextauthUrl: process.env.NEXTAUTH_URL
-            })
+            
+            if (!response.ok) {
+              console.error('Lambda API OAuth用户作成失敗:', response.status)
+            } else {
+              console.log('Lambda API OAuth用户作成成功')
+            }
+          } catch (error) {
+            console.error('Lambda API OAuth用户作成エラー:', error)
           }
         }
         return true

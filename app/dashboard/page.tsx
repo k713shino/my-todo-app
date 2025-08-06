@@ -64,14 +64,6 @@ export default async function Dashboard() {
             <div className="mb-6">
               <LambdaConnectionTest 
                 className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700"
-                onSuccess={(data) => {
-                  console.log('✅ Lambda接続成功:', data);
-                  // 必要に応じて成功時の処理を追加
-                }}
-                onError={(error) => {
-                  console.error('❌ Lambda接続エラー:', error);
-                  // 必要に応じてエラー時の処理を追加
-                }}
               />
             </div>
           )}
