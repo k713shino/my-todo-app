@@ -63,6 +63,8 @@ export default function TodoList() {
    */
   const fetchTodos = async (bypassCache = false) => {
     try {
+      console.log('🔄 fetchTodos実行:', { bypassCache, 現在のTodos数: todos.length });
+      
       // キャッシュバスター用のタイムスタンプを追加
       const timestamp = Date.now()
       const url = bypassCache 
@@ -80,7 +82,10 @@ export default function TodoList() {
       
       if (response.ok) {
         const data: TodoResponse[] = await response.json()
-        setTodos(data.map((todo) => safeParseTodoDate(todo)))
+        console.log('📥 API取得データ:', data.length, '件', data);
+        const parsedTodos = data.map((todo) => safeParseTodoDate(todo));
+        console.log('📋 取得後Todos設定:', parsedTodos.length, '件');
+        setTodos(parsedTodos)
       }
     } catch (error) {
       console.error('Todo取得エラー:', error)
@@ -110,11 +115,20 @@ export default function TodoList() {
       dueDate: data.dueDate || null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      userId: 'current-user'
+      userId: 'current-user',
+      category: undefined,
+      tags: []
     }
     
+    console.log('🔵 楽観的UI更新 - 追加:', { tempId, title: data.title });
+    
     // UIを即座に更新
-    setTodos(prev => [optimisticTodo, ...prev])
+    setTodos(prev => {
+      console.log('📋 現在のTodos数:', prev.length);
+      const newTodos = [optimisticTodo, ...prev];
+      console.log('📋 更新後のTodos数:', newTodos.length);
+      return newTodos;
+    })
     
     try {
       const response = await fetch('/api/todos', {
@@ -125,16 +139,25 @@ export default function TodoList() {
 
       if (response.ok) {
         const newTodo: TodoResponse = await response.json()
+        console.log('✅ API成功レスポンス:', newTodo);
+        
         // 一時的なTodoを実際のTodoで置き換え
-        setTodos(prev => prev.map(todo => 
-          todo.id === tempId 
-            ? safeParseTodoDate({ ...newTodo })
-            : todo
-        ))
+        setTodos(prev => {
+          console.log('🔄 置き換え前:', prev.find(t => t.id === tempId));
+          console.log('🔄 置き換え後:', newTodo);
+          const updatedTodos = prev.map(todo => 
+            todo.id === tempId 
+              ? safeParseTodoDate({ ...newTodo })
+              : todo
+          );
+          console.log('📋 置き換え後のTodos数:', updatedTodos.length);
+          return updatedTodos;
+        })
         toast.success('📝 新しいTodoを作成しました！')
         
-        // Lambda APIの同期に時間がかかる場合があるため、再読み込みを遅延
-        setTimeout(() => fetchTodos(true), 2000)
+        // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
+        // 楽観的UI更新のみに依存
+        console.log('✨ 楽観的UI更新のみ - 自動再読み込みを無効化');
       } else {
         // エラー時は楽観的更新を取り消し
         setTodos(prev => prev.filter(todo => todo.id !== tempId))
@@ -183,8 +206,8 @@ export default function TodoList() {
         ))
         toast.success('✅ Todoを更新しました！')
         
-        // Lambda APIの同期に時間がかかる場合があるため、再読み込みを遅延
-        setTimeout(() => fetchTodos(true), 2000)
+        // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
+        console.log('✨ 更新完了 - 楽観的UI更新のみ');
       } else {
         // エラー時は元の状態に戻す
         setTodos(originalTodos)
@@ -218,8 +241,8 @@ export default function TodoList() {
       if (response.ok) {
         toast.success('🗑️ Todoを削除しました！')
         
-        // Lambda APIの同期に時間がかかる場合があるため、再読み込みを遅延
-        setTimeout(() => fetchTodos(true), 2000)
+        // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
+        console.log('✨ 削除完了 - 楽観的UI更新のみ');
       } else {
         // エラー時は元の状態に戻す
         setTodos(originalTodos)
