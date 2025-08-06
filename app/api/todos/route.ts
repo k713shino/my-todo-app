@@ -1,26 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
+import { getAuthSession, isAuthenticated } from '@/lib/session-utils';
 import type { 
   VercelAPIResponse, 
   Todo, 
   CreateTodoRequest 
 } from '@/types/lambda-api';
 
+export const dynamic = 'force-dynamic'
+
 // 全てのTodoを取得
 export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIResponse<Todo[]>>> {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    let todos: Todo[];
+    const session = await getAuthSession()
     
-    if (userId) {
-      // 特定ユーザーのTodoを取得
-      todos = await lambdaAPI.getUserTodos(userId);
-    } else {
-      // 全てのTodoを取得
-      todos = await lambdaAPI.getTodos();
+    if (!isAuthenticated(session)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized',
+        timestamp: new Date().toISOString(),
+      }, { status: 401 });
     }
+
+    // セッションからユーザーIDを取得してユーザー固有のTodoを取得
+    const todos: Todo[] = await lambdaAPI.getUserTodos(session.user.id);
 
     const response: VercelAPIResponse<Todo[]> = {
       success: true,
@@ -47,18 +50,34 @@ export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIR
 // 新しいTodoを作成
 export async function POST(request: NextRequest): Promise<NextResponse<VercelAPIResponse<Todo>>> {
   try {
+    const session = await getAuthSession()
+    
+    if (!isAuthenticated(session)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Unauthorized',
+        timestamp: new Date().toISOString(),
+      }, { status: 401 });
+    }
+
     const body: CreateTodoRequest = await request.json();
     
     // バリデーション
-    if (!body.title || !body.userId) {
+    if (!body.title) {
       return NextResponse.json({
         success: false,
-        error: 'Title and userId are required',
+        error: 'Title is required',
         timestamp: new Date().toISOString(),
       }, { status: 400 });
     }
 
-    const newTodo = await lambdaAPI.createTodo(body);
+    // セッションからuserIdを取得してbodyに追加
+    const todoData = {
+      ...body,
+      userId: session.user.id
+    };
+
+    const newTodo = await lambdaAPI.createTodo(todoData);
 
     const response: VercelAPIResponse<Todo> = {
       success: true,
