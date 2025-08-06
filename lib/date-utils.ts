@@ -136,3 +136,21 @@ export function safeParseTodoDate<T extends Record<string, any>>(todo: T): T & {
     dueDate: safeParseNullableDate(todo.dueDate),
   };
 }
+
+/**
+ * 安全にISO文字列に変換する
+ * 無効な日付の場合は現在時刻のISO文字列を返す
+ */
+export function safeToISOString(dateValue: any): string {
+  if (!dateValue) return new Date().toISOString();
+  
+  try {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      return new Date().toISOString();
+    }
+    return date.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}

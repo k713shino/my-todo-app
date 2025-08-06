@@ -174,6 +174,49 @@ export class LambdaAPI {
       method: 'PATCH',
     });
   }
+
+  /**
+   * 汎用GETリクエスト（VercelAPIResponse形式の戻り値用）
+   */
+  async get<T = any>(endpoint: string): Promise<LambdaAPIResponse<T>> {
+    try {
+      const response = await this.request<T>(endpoint, { method: 'GET' });
+      return {
+        success: true,
+        data: response,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * 汎用POSTリクエスト（VercelAPIResponse形式の戻り値用）
+   */
+  async post<T = any>(endpoint: string, data: any): Promise<LambdaAPIResponse<T>> {
+    try {
+      const response = await this.request<T>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return {
+        success: true,
+        data: response,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
 }
 
 // シングルトンインスタンス
