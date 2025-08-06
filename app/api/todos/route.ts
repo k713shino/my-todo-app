@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
+
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils';
+import { prisma } from '@/lib/prisma';
 import type { 
   VercelAPIResponse, 
-  Todo, 
-  CreateTodoRequest 
+  Todo
 } from '@/types/lambda-api';
 
 export const dynamic = 'force-dynamic'
@@ -22,24 +22,46 @@ export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIR
       }, { status: 401 });
     }
 
-    // セッションからユーザーIDを取得してユーザー固有のTodoを取得
-    const todos: Todo[] = await lambdaAPI.getUserTodos(session.user.id);
+    // Lambda APIではなく、ローカルPrismaデータベースから取得
 
-    const response: VercelAPIResponse<Todo[]> = {
-      success: true,
-      message: `${todos.length}件のTodoを取得しました`,
-      lambdaResponse: todos,
-      timestamp: new Date().toISOString(),
-    };
+    const dbTodos = await prisma.todo.findMany({
+        where: {
+          userId: session.user.id
+        },
+        orderBy: [
+          { completed: 'asc' },
+          { priority: 'desc' },
+          { updatedAt: 'desc' }
+        ]
+      });
 
-    return NextResponse.json(response);
+      // Prismaの結果を基本Todo型に変換（priorityやdueDateは除外）
+      const todos: Todo[] = dbTodos.map(todo => ({
+        id: todo.id,
+        title: todo.title,
+        description: todo.description ?? undefined,
+        completed: todo.completed,
+        userId: todo.userId,
+        createdAt: todo.createdAt.toISOString(),
+        updatedAt: todo.updatedAt.toISOString()
+      }));
+
+      const response: VercelAPIResponse<Todo[]> = {
+        success: true,
+        message: `${todos.length}件のTodoを取得しました`,
+        lambdaResponse: todos,
+        timestamp: new Date().toISOString(),
+      };
+
+      return NextResponse.json(response);
+
 
   } catch (error) {
     console.error('❌ Todo取得エラー:', error);
     
     const errorResponse: VercelAPIResponse = {
       success: false,
-      error: formatLambdaAPIError(error),
+      error: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString(),
     };
     
@@ -60,7 +82,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
       }, { status: 401 });
     }
 
-    const body: CreateTodoRequest = await request.json();
+    const body: any = await request.json();
     
     // バリデーション
     if (!body.title) {
@@ -71,29 +93,46 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
       }, { status: 400 });
     }
 
-    // セッションからuserIdを取得してbodyに追加
-    const todoData = {
-      ...body,
-      userId: session.user.id
-    };
+    // Lambda APIではなく、ローカルPrismaデータベースに保存
+    const newTodo = await prisma.todo.create({
+        data: {
+          title: body.title,
+          description: body.description || null,
+          priority: body.priority || 'MEDIUM',
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+          userId: session.user.id,
+          category: body.category || null,
+          completed: false
+        }
+      });
 
-    const newTodo = await lambdaAPI.createTodo(todoData);
+      // Prismaの結果を基本Todo型に変換
+      const todo: Todo = {
+        id: newTodo.id,
+        title: newTodo.title,
+        description: newTodo.description ?? undefined,
+        completed: newTodo.completed,
+        userId: newTodo.userId,
+        createdAt: newTodo.createdAt.toISOString(),
+        updatedAt: newTodo.updatedAt.toISOString()
+      };
 
-    const response: VercelAPIResponse<Todo> = {
-      success: true,
-      message: 'Todoを作成しました',
-      lambdaResponse: newTodo,
-      timestamp: new Date().toISOString(),
-    };
+      const response: VercelAPIResponse<Todo> = {
+        success: true,
+        message: 'Todoを作成しました',
+        lambdaResponse: todo,
+        timestamp: new Date().toISOString(),
+      };
 
-    return NextResponse.json(response, { status: 201 });
+      return NextResponse.json(response, { status: 201 });
+
 
   } catch (error) {
     console.error('❌ Todo作成エラー:', error);
     
     const errorResponse: VercelAPIResponse = {
       success: false,
-      error: formatLambdaAPIError(error),
+      error: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString(),
     };
     
