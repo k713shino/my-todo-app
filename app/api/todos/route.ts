@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
+import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils';
 import { prisma } from '@/lib/prisma';
 import type { 
@@ -22,9 +22,27 @@ export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIR
       }, { status: 401 });
     }
 
-    // Lambda APIではなく、ローカルPrismaデータベースから取得
+    // Lambda APIを使用してTodoを取得（全件取得してからフィルタリング）
+    try {
+      const allTodos = await lambdaAPI.getTodos();
+      
+      // ユーザー固有のTodoをフィルタリング
+      const userTodos = allTodos.filter(todo => todo.userId === session.user.id);
 
-    const dbTodos = await prisma.todo.findMany({
+      const response: VercelAPIResponse<Todo[]> = {
+        success: true,
+        message: `${userTodos.length}件のTodoを取得しました`,
+        lambdaResponse: userTodos,
+        timestamp: new Date().toISOString(),
+      };
+
+      return NextResponse.json(response);
+
+    } catch (lambdaError) {
+      console.error('Lambda API呼び出しエラー:', lambdaError);
+      
+      // Lambda APIが失敗した場合は、ローカルPrismaから取得
+      const dbTodos = await prisma.todo.findMany({
         where: {
           userId: session.user.id
         },
@@ -35,7 +53,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIR
         ]
       });
 
-      // Prismaの結果を基本Todo型に変換（priorityやdueDateは除外）
+      // Prismaの結果を基本Todo型に変換
       const todos: Todo[] = dbTodos.map(todo => ({
         id: todo.id,
         title: todo.title,
@@ -48,13 +66,13 @@ export async function GET(request: NextRequest): Promise<NextResponse<VercelAPIR
 
       const response: VercelAPIResponse<Todo[]> = {
         success: true,
-        message: `${todos.length}件のTodoを取得しました`,
+        message: `${todos.length}件のTodoを取得しました（ローカルDB）`,
         lambdaResponse: todos,
         timestamp: new Date().toISOString(),
       };
 
       return NextResponse.json(response);
-
+    }
 
   } catch (error) {
     console.error('❌ Todo取得エラー:', error);
@@ -93,8 +111,30 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
       }, { status: 400 });
     }
 
-    // Lambda APIではなく、ローカルPrismaデータベースに保存
-    const newTodo = await prisma.todo.create({
+    // Lambda APIを最初に試行
+    try {
+      const todoData = {
+        title: body.title,
+        description: body.description || undefined,
+        userId: session.user.id
+      };
+
+      const newTodo = await lambdaAPI.createTodo(todoData);
+
+      const response: VercelAPIResponse<Todo> = {
+        success: true,
+        message: 'Todoを作成しました',
+        lambdaResponse: newTodo,
+        timestamp: new Date().toISOString(),
+      };
+
+      return NextResponse.json(response, { status: 201 });
+
+    } catch (lambdaError) {
+      console.error('Lambda API呼び出しエラー:', lambdaError);
+      
+      // Lambda APIが失敗した場合は、ローカルPrismaに保存
+      const newTodo = await prisma.todo.create({
         data: {
           title: body.title,
           description: body.description || null,
@@ -119,13 +159,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<VercelAPI
 
       const response: VercelAPIResponse<Todo> = {
         success: true,
-        message: 'Todoを作成しました',
+        message: 'Todoを作成しました（ローカルDB）',
         lambdaResponse: todo,
         timestamp: new Date().toISOString(),
       };
 
       return NextResponse.json(response, { status: 201 });
-
+    }
 
   } catch (error) {
     console.error('❌ Todo作成エラー:', error);
