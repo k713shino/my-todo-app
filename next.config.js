@@ -62,6 +62,18 @@ const nextConfig = {
   experimental: {
     // App Routerは標準サポートになったため削除
   },
+
+  // CSS最適化設定
+  compiler: {
+    // Remove console.log in production
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+
+  // 本番環境でのCSS最適化
+  productionBrowserSourceMaps: false,
+
+  // 静的最適化の設定
+  staticPageGenerationTimeout: 180,
 };
 
 module.exports = nextConfig;

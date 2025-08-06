@@ -3,6 +3,8 @@ import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { prisma } from '@/lib/prisma'
 import { RateLimiter } from '@/lib/cache'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getAuthSession()

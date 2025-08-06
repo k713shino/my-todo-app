@@ -6,6 +6,8 @@ import { Todo, TodoFilters } from '@/types/todo'
 import { getDateRangeFromPreset } from '@/lib/date-utils'
 import { Priority } from '@prisma/client'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getAuthSession()
