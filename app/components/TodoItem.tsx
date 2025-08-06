@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { format, isAfter } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Todo } from '@/types/todo'
+import { safeParseDate } from '@/lib/date-utils'
 
 /**
  * Todoアイテムコンポーネントのプロパティ定義
@@ -81,7 +82,7 @@ export default function TodoItem({
    * - 現在時刻が期限を超えている
    */
   const isOverdue = todo.dueDate && !todo.completed &&
-    isAfter(new Date(), new Date(todo.dueDate))
+    isAfter(new Date(), todo.dueDate)
 
   /**
    * 完了状態切り替えハンドラー
@@ -181,14 +182,14 @@ export default function TodoItem({
               ? 'text-gray-400 dark:text-gray-500' 
               : 'text-gray-600 dark:text-gray-300'
           }`}>
-            📅 {format(new Date(todo.dueDate), 'yyyy年M月d日 HH:mm', { locale: ja })}
+            📅 {format(todo.dueDate, 'yyyy年M月d日 HH:mm', { locale: ja })}
             {isOverdue && !todo.completed && ' (期限切れ)'}
           </span>
         )}
 
         {/* 作成日 */}
         <span className="text-xs text-gray-400 dark:text-gray-500">
-          作成: {format(new Date(todo.createdAt), 'M月d日 HH:mm', { locale: ja })}
+          作成: {format(todo.createdAt, 'M月d日 HH:mm', { locale: ja })}
         </span>
       </div>
 

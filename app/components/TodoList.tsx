@@ -9,6 +9,7 @@ import TodoFiltersComponent from './TodoFilters'
 import TodoStatsDisplay from './TodoStatsDisplay'
 // import RealtimeUpdates from './RealtimeUpdates'
 import { Toaster, toast } from 'react-hot-toast'
+import { safeParseTodoDate } from '@/lib/date-utils'
 
 
 /**
@@ -79,12 +80,7 @@ export default function TodoList() {
       
       if (response.ok) {
         const data: TodoResponse[] = await response.json()
-        setTodos(data.map((todo) => ({
-          ...todo,
-          createdAt: new Date(todo.createdAt),
-          updatedAt: new Date(todo.updatedAt),
-          dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
-        })))
+        setTodos(data.map((todo) => safeParseTodoDate(todo)))
       }
     } catch (error) {
       console.error('Todo取得エラー:', error)
@@ -132,12 +128,7 @@ export default function TodoList() {
         // 一時的なTodoを実際のTodoで置き換え
         setTodos(prev => prev.map(todo => 
           todo.id === tempId 
-            ? {
-                ...newTodo,
-                createdAt: new Date(newTodo.createdAt),
-                updatedAt: new Date(newTodo.updatedAt),
-                dueDate: newTodo.dueDate ? new Date(newTodo.dueDate) : null,
-              }
+            ? safeParseTodoDate({ ...newTodo })
             : todo
         ))
         toast.success('📝 新しいTodoを作成しました！')
@@ -187,12 +178,7 @@ export default function TodoList() {
         // 実際のレスポンスでUIを更新
         setTodos(prev => prev.map(todo => 
           todo.id === id 
-            ? {
-                ...updatedTodo,
-                createdAt: new Date(updatedTodo.createdAt),
-                updatedAt: new Date(updatedTodo.updatedAt),
-                dueDate: updatedTodo.dueDate ? new Date(updatedTodo.dueDate) : null,
-              }
+            ? safeParseTodoDate({ ...updatedTodo })
             : todo
         ))
         toast.success('✅ Todoを更新しました！')
@@ -321,12 +307,7 @@ export default function TodoList() {
       const response = await fetch(`/api/todos/search?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
-        setTodos(data.results.map((todo: any) => ({
-          ...todo,
-          createdAt: new Date(todo.createdAt),
-          updatedAt: new Date(todo.updatedAt),
-          dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
-        })))
+        setTodos(data.results.map((todo: any) => safeParseTodoDate(todo)))
       }
     } catch (error) {
       console.error('検索エラー:', error)
@@ -371,7 +352,7 @@ export default function TodoList() {
     completed: todos.filter(t => t.completed).length,
     active: todos.filter(t => !t.completed).length,
     overdue: todos.filter(t => 
-      t.dueDate && !t.completed && new Date() > new Date(t.dueDate)
+      t.dueDate && !t.completed && new Date() > t.dueDate
     ).length,
     byPriority: {
       urgent: todos.filter(t => t.priority === 'URGENT').length,

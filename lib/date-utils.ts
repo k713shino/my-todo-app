@@ -79,3 +79,60 @@ export const dateRangeLabels: Record<DateRangePreset, string> = {
   overdue: '期限切れ',
   no_due_date: '期限なし'
 }
+
+/**
+ * 安全な日付変換ユーティリティ
+ * Lambda APIなどから返される不完全な日付データを安全に処理する
+ */
+
+/**
+ * 安全に日付文字列をDateオブジェクトに変換する
+ * 無効な日付の場合は現在時刻を返す
+ */
+export function safeParseDate(dateValue: any): Date {
+  if (!dateValue) return new Date();
+  
+  try {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      return new Date();
+    }
+    return date;
+  } catch {
+    return new Date();
+  }
+}
+
+/**
+ * 安全に日付文字列をDateオブジェクトに変換する（null許可版）
+ * 無効な日付の場合はnullを返す
+ */
+export function safeParseNullableDate(dateValue: any): Date | null {
+  if (!dateValue) return null;
+  
+  try {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    return date;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Todo型のレスポンスデータを安全に変換する
+ */
+export function safeParseTodoDate<T extends Record<string, any>>(todo: T): T & {
+  createdAt: Date;
+  updatedAt: Date;
+  dueDate: Date | null;
+} {
+  return {
+    ...todo,
+    createdAt: safeParseDate(todo.createdAt),
+    updatedAt: safeParseDate(todo.updatedAt),
+    dueDate: safeParseNullableDate(todo.dueDate),
+  };
+}
