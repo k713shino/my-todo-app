@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
 
     console.log('🔄 Lambda API経由でTodo取得を試行');
     
-    // Lambda API経由でTodoを取得
-    const lambdaResponse = await lambdaAPI.get('/todos');
+    // Lambda API経由でユーザー固有のTodoを取得
+    const lambdaResponse = await lambdaAPI.get(`/todos/user/${session.user.id}`);
     console.log('📥 Lambda API レスポンス:', lambdaResponse);
     
     if (lambdaResponse.success && lambdaResponse.data) {
