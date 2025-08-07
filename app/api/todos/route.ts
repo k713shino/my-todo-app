@@ -84,15 +84,39 @@ export async function POST(request: NextRequest) {
     console.log('📥 Lambda API作成レスポンス:', lambdaResponse);
     
     if (lambdaResponse.success && lambdaResponse.data) {
+      // 古いLambda関数の形式（message + todo）と新しい形式（直接Todo）の両方に対応
+      let todoData = lambdaResponse.data;
+      
+      // 古い形式の場合（message + todo形式）
+      if (lambdaResponse.data.message && lambdaResponse.data.todo) {
+        console.log('📋 古いLambda形式を検出:', lambdaResponse.data);
+        todoData = lambdaResponse.data.todo;
+        
+        // 不足フィールドを補完（古い形式用）
+        todoData = {
+          id: todoData.id || `temp-${Date.now()}`, // IDがない場合は一時ID
+          title: todoData.title,
+          description: todoData.description || null,
+          completed: todoData.completed || false,
+          priority: todoData.priority || 'MEDIUM',
+          dueDate: todoData.dueDate || null,
+          createdAt: new Date().toISOString(), // 現在時刻で補完
+          updatedAt: new Date().toISOString(), // 現在時刻で補完
+          userId: todoData.userId,
+          category: todoData.category || null,
+          tags: todoData.tags || []
+        };
+      }
+      
       // レスポンスデータの安全な日付変換とPrisma型との互換性確保
       const newTodo = {
-        ...lambdaResponse.data,
-        createdAt: safeToISOString(lambdaResponse.data.createdAt),
-        updatedAt: safeToISOString(lambdaResponse.data.updatedAt),
-        dueDate: lambdaResponse.data.dueDate ? safeToISOString(lambdaResponse.data.dueDate) : null,
-        priority: lambdaResponse.data.priority || 'MEDIUM',
-        category: lambdaResponse.data.category || null,
-        tags: lambdaResponse.data.tags || []
+        ...todoData,
+        createdAt: safeToISOString(todoData.createdAt),
+        updatedAt: safeToISOString(todoData.updatedAt),
+        dueDate: todoData.dueDate ? safeToISOString(todoData.dueDate) : null,
+        priority: todoData.priority || 'MEDIUM',
+        category: todoData.category || null,
+        tags: todoData.tags || []
       };
       
       console.log('✅ Lambda API でのTodo作成成功:', newTodo.id);
