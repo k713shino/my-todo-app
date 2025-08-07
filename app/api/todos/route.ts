@@ -80,7 +80,9 @@ export async function POST(request: NextRequest) {
       description: body.description || undefined,
       userId: session.user.id,
       priority: body.priority || 'MEDIUM',
-      dueDate: body.dueDate || undefined
+      dueDate: body.dueDate || undefined,
+      category: body.category || undefined,
+      tags: body.tags || undefined
     };
     
     console.log('📤 Lambda API送信データ:', todoData);
