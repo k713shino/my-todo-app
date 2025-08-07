@@ -16,20 +16,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 200 });
     }
 
-    console.log('🔄 Lambda API経由で全Todo取得を試行');
+    console.log('🔄 Lambda API経由でユーザー固有のTodo取得を試行');
+    console.log('🔍 現在のユーザーID:', session.user.id);
     
-    // Lambda API経由で全Todoを取得
-    const lambdaResponse = await lambdaAPI.get('/todos');
+    // Lambda API経由でユーザー固有のTodoを取得
+    const lambdaResponse = await lambdaAPI.get(`/todos/user/${session.user.id}`);
     console.log('📥 Lambda API レスポンス:', lambdaResponse);
     
     if (lambdaResponse.success && lambdaResponse.data) {
       // レスポンスデータの安全な日付変換
       const todos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
       
-      // フロントエンド側でユーザー固有のフィルタリングを行う
-      // Google認証のユーザーIDと実際のDBのユーザーIDの対応を確認
-      console.log('🔍 現在のユーザーID:', session.user.id);
-      console.log('📊 全Todo件数:', todos.length);
+      console.log('📊 ユーザー固有のTodo件数:', todos.length);
       
       const safeTodos = todos.map((todo: any) => ({
         ...todo,
@@ -43,7 +41,7 @@ export async function GET(request: NextRequest) {
         tags: todo.tags || []
       }));
       
-      console.log('✅ Lambda API から全Todo取得成功:', safeTodos.length, '件');
+      console.log('✅ Lambda API からユーザー固有のTodo取得成功:', safeTodos.length, '件');
       return NextResponse.json(safeTodos);
     } else {
       console.log('⚠️ Lambda API からのデータが空またはエラー');
