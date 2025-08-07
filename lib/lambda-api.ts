@@ -47,11 +47,24 @@ export class LambdaAPI {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      console.log(`🚀 Lambda API呼び出し: ${url}`, finalOptions);
+      console.log(`🚀 Lambda API呼び出し: ${url}`);
+      console.log('📤 リクエスト詳細:', {
+        method: finalOptions.method || 'GET',
+        headers: finalOptions.headers,
+        body: finalOptions.body ? JSON.parse(finalOptions.body as string) : null,
+        timeout: timeout
+      });
       
       const response = await fetch(url, {
         ...finalOptions,
         signal: controller.signal,
+      });
+      
+      console.log('📥 HTTPレスポンス:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        url: response.url
       });
 
       clearTimeout(timeoutId);

@@ -10,9 +10,17 @@ export const dynamic = 'force-dynamic'
 // 全てのTodoを取得
 export async function GET(request: NextRequest) {
   try {
+    console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始');
+    
     const session = await getAuthSession()
+    console.log('👤 セッション情報:', {
+      hasSession: !!session,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email
+    });
     
     if (!isAuthenticated(session)) {
+      console.log('❌ 認証されていません - 空配列を返します');
       return NextResponse.json([], { status: 200 });
     }
 
@@ -23,15 +31,28 @@ export async function GET(request: NextRequest) {
     const userSpecificEndpoint = `/todos/user/${session.user.id}`;
     console.log('🌐 Lambda API エンドポイント:', userSpecificEndpoint);
     
+    console.log('📡 Lambda API 呼び出し開始...');
     const lambdaResponse = await lambdaAPI.get(userSpecificEndpoint);
-    console.log('📡 Lambda API レスポンス:', {
+    console.log('📡 Lambda API レスポンス受信:', {
       success: lambdaResponse.success,
-      dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0
+      hasData: !!lambdaResponse.data,
+      dataType: typeof lambdaResponse.data,
+      dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0,
+      error: lambdaResponse.error,
+      timestamp: lambdaResponse.timestamp
     });
     
     if (lambdaResponse.success && lambdaResponse.data) {
       const userTodos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
       console.log('📊 ユーザー固有Todo件数:', userTodos.length);
+      
+      if (userTodos.length > 0) {
+        console.log('📝 取得したTodo一覧:', userTodos.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          userId: t.userId
+        })));
+      }
       
       // Lambdaから返されたデータを安全に処理
       const safeTodos = userTodos.map((todo: any) => ({
@@ -50,14 +71,20 @@ export async function GET(request: NextRequest) {
       
     } else {
       // Lambda側でエラーが発生した場合の詳細ログ
-      console.log('⚠️ Lambda API エラー:', lambdaResponse.error || 'データなし');
+      console.log('⚠️ Lambda API 失敗:', {
+        success: lambdaResponse.success,
+        error: lambdaResponse.error,
+        data: lambdaResponse.data,
+        timestamp: lambdaResponse.timestamp
+      });
       
       // エラーの場合も空配列を返して UI の破綻を防ぐ
       return NextResponse.json([], { status: 200 });
     }
 
   } catch (error) {
-    console.error('❌ ユーザー固有Todo取得エラー:', error);
+    console.error('❌ ユーザー固有Todo取得で例外発生:', error);
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
     
     // ネットワークエラーやその他の例外でも空配列を返す
     return NextResponse.json([], { status: 200 });
