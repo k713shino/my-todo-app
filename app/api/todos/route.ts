@@ -16,20 +16,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 200 });
     }
 
-    console.log('🔄 Lambda API経由でユーザー固有のTodo取得を試行');
+    console.log('🔄 Lambda API経由で全Todo取得を試行（一時的対応）');
     console.log('🔍 現在のユーザーID:', session.user.id);
     
-    // Lambda API経由でユーザー固有のTodoを取得
-    const lambdaResponse = await lambdaAPI.get(`/todos/user/${session.user.id}`);
+    // Lambda API経由で全Todoを取得
+    const lambdaResponse = await lambdaAPI.get('/todos');
     console.log('📥 Lambda API レスポンス:', lambdaResponse);
     
     if (lambdaResponse.success && lambdaResponse.data) {
       // レスポンスデータの安全な日付変換
-      const todos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
+      const allTodos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
+      console.log('📊 全Todo件数:', allTodos.length);
       
-      console.log('📊 ユーザー固有のTodo件数:', todos.length);
+      // フロントエンド側でユーザー固有のフィルタリング（Google認証IDベース）
+      const userTodos = allTodos.filter((todo: any) => {
+        // 複数のマッピングパターンに対応
+        const todoUserId = todo.userId;
+        const currentGoogleId = session.user.id;
+        
+        // 直接比較
+        if (todoUserId === currentGoogleId) return true;
+        
+        // 既知のマッピング
+        if (currentGoogleId === '110701307742242924558' && todoUserId === 'cmdpi4dye0000lc04xn7yujpn') return true;
+        if (currentGoogleId === '112433279481859708110' && todoUserId === 'cmdsbbogh0000l604u08lqcp4') return true;
+        
+        return false;
+      });
       
-      const safeTodos = todos.map((todo: any) => ({
+      console.log('👤 ユーザー固有Todo件数:', userTodos.length);
+      console.log('🔍 フィルタリング結果:', userTodos.map((t: any) => ({ id: t.id, title: t.title, userId: t.userId })));
+      
+      const safeTodos = userTodos.map((todo: any) => ({
         ...todo,
         createdAt: safeToISOString(todo.createdAt),
         updatedAt: safeToISOString(todo.updatedAt),
@@ -41,7 +59,7 @@ export async function GET(request: NextRequest) {
         tags: todo.tags || []
       }));
       
-      console.log('✅ Lambda API からユーザー固有のTodo取得成功:', safeTodos.length, '件');
+      console.log('✅ ユーザー固有Todo取得成功:', safeTodos.length, '件');
       return NextResponse.json(safeTodos);
     } else {
       console.log('⚠️ Lambda API からのデータが空またはエラー');
