@@ -16,43 +16,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 200 });
     }
 
-    console.log('🔄 Lambda API経由で全Todo取得を試行（一時的対応）');
-    console.log('🔍 現在のユーザーID:', session.user.id);
+    console.log('🔍 改善されたユーザー固有Todo取得開始');
+    console.log('👤 現在のGoogleユーザーID:', session.user.id);
     
-    // Lambda API経由で全Todoを取得
-    const lambdaResponse = await lambdaAPI.get('/todos');
-    console.log('📥 Lambda API レスポンス:', lambdaResponse);
+    // 改善されたLambda API: ユーザー固有エンドポイントを使用
+    const userSpecificEndpoint = `/todos/user/${session.user.id}`;
+    console.log('🌐 Lambda API エンドポイント:', userSpecificEndpoint);
+    
+    const lambdaResponse = await lambdaAPI.get(userSpecificEndpoint);
+    console.log('📡 Lambda API レスポンス:', {
+      success: lambdaResponse.success,
+      dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0
+    });
     
     if (lambdaResponse.success && lambdaResponse.data) {
-      // レスポンスデータの安全な日付変換
-      const allTodos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
-      console.log('📊 全Todo件数:', allTodos.length);
+      const userTodos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
+      console.log('📊 ユーザー固有Todo件数:', userTodos.length);
       
-      // フロントエンド側でユーザー固有のフィルタリング（Google認証IDベース）
-      const userTodos = allTodos.filter((todo: any) => {
-        // 複数のマッピングパターンに対応
-        const todoUserId = todo.userId;
-        const currentGoogleId = session.user.id;
-        
-        // 直接比較
-        if (todoUserId === currentGoogleId) return true;
-        
-        // 既知のマッピング
-        if (currentGoogleId === '110701307742242924558' && todoUserId === 'cmdpi4dye0000lc04xn7yujpn') return true;
-        if (currentGoogleId === '112433279481859708110' && todoUserId === 'cmdsbbogh0000l604u08lqcp4') return true;
-        
-        return false;
-      });
-      
-      console.log('👤 ユーザー固有Todo件数:', userTodos.length);
-      console.log('🔍 フィルタリング結果:', userTodos.map((t: any) => ({ id: t.id, title: t.title, userId: t.userId })));
-      
+      // Lambdaから返されたデータを安全に処理
       const safeTodos = userTodos.map((todo: any) => ({
         ...todo,
         createdAt: safeToISOString(todo.createdAt),
         updatedAt: safeToISOString(todo.updatedAt),
         dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
-        // Prisma型との互換性のため必要なフィールドを追加
         priority: todo.priority || 'MEDIUM',
         userId: todo.userId,
         category: todo.category || null,
@@ -61,13 +47,19 @@ export async function GET(request: NextRequest) {
       
       console.log('✅ ユーザー固有Todo取得成功:', safeTodos.length, '件');
       return NextResponse.json(safeTodos);
+      
     } else {
-      console.log('⚠️ Lambda API からのデータが空またはエラー');
+      // Lambda側でエラーが発生した場合の詳細ログ
+      console.log('⚠️ Lambda API エラー:', lambdaResponse.error || 'データなし');
+      
+      // エラーの場合も空配列を返して UI の破綻を防ぐ
       return NextResponse.json([], { status: 200 });
     }
 
   } catch (error) {
-    console.error('❌ Lambda API接続エラー:', error);
+    console.error('❌ ユーザー固有Todo取得エラー:', error);
+    
+    // ネットワークエラーやその他の例外でも空配列を返す
     return NextResponse.json([], { status: 200 });
   }
 }
@@ -88,13 +80,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    console.log('🔄 Lambda API経由でTodo作成を試行');
+    console.log('🔄 改善されたLambda API経由でTodo作成');
+    console.log('👤 現在のユーザー:', {
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.name
+    });
     
-    // Lambda API用のリクエストデータを準備
+    // 改善されたLambda API用のリクエストデータ（userEmailも含む）
     const todoData = {
       title: body.title,
       description: body.description || undefined,
       userId: session.user.id,
+      userEmail: session.user.email || undefined, // 新規ユーザー作成用
+      userName: session.user.name || undefined,   // 将来的な拡張用
       priority: body.priority || 'MEDIUM',
       dueDate: body.dueDate || undefined,
       category: body.category || undefined,
@@ -105,32 +104,15 @@ export async function POST(request: NextRequest) {
     
     // Lambda API経由でTodoを作成
     const lambdaResponse = await lambdaAPI.post('/todos', todoData);
-    console.log('📥 Lambda API作成レスポンス:', lambdaResponse);
+    console.log('📡 Lambda API作成レスポンス:', {
+      success: lambdaResponse.success,
+      hasData: !!lambdaResponse.data,
+      error: lambdaResponse.error
+    });
     
     if (lambdaResponse.success && lambdaResponse.data) {
-      // 古いLambda関数の形式（message + todo）と新しい形式（直接Todo）の両方に対応
-      let todoData = lambdaResponse.data;
-      
-      // 古い形式の場合（message + todo形式）
-      if (lambdaResponse.data.message && lambdaResponse.data.todo) {
-        console.log('📋 古いLambda形式を検出:', lambdaResponse.data);
-        todoData = lambdaResponse.data.todo;
-        
-        // 不足フィールドを補完（古い形式用）
-        todoData = {
-          id: todoData.id || `temp-${Date.now()}`, // IDがない場合は一時ID
-          title: todoData.title,
-          description: todoData.description || null,
-          completed: todoData.completed || false,
-          priority: todoData.priority || 'MEDIUM',
-          dueDate: todoData.dueDate || null,
-          createdAt: new Date().toISOString(), // 現在時刻で補完
-          updatedAt: new Date().toISOString(), // 現在時刻で補完
-          userId: todoData.userId,
-          category: todoData.category || null,
-          tags: todoData.tags || []
-        };
-      }
+      // Lambdaからの新しい形式のレスポンスを処理
+      const todoData = lambdaResponse.data;
       
       // レスポンスデータの安全な日付変換とPrisma型との互換性確保
       const newTodo = {
@@ -143,16 +125,21 @@ export async function POST(request: NextRequest) {
         tags: todoData.tags || []
       };
       
-      console.log('✅ Lambda API でのTodo作成成功:', newTodo.id);
+      console.log('✅ 改善されたLambda APIでのTodo作成成功:', newTodo.id);
       return NextResponse.json(newTodo, { status: 201 });
+      
     } else {
-      console.error('❌ Lambda API作成失敗:', lambdaResponse.error);
-      return NextResponse.json({ error: lambdaResponse.error || 'Todo作成に失敗しました' }, { status: 500 });
+      console.error('❌ Lambda APIでのTodo作成失敗:', lambdaResponse.error);
+      return NextResponse.json({ 
+        error: lambdaResponse.error || 'Todo作成に失敗しました' 
+      }, { status: 500 });
     }
 
   } catch (error) {
-    console.error('❌ Lambda API接続エラー:', error);
-    return NextResponse.json({ error: 'Todo作成に失敗しました' }, { status: 500 });
+    console.error('❌ Todo作成処理エラー:', error);
+    return NextResponse.json({ 
+      error: 'Todo作成に失敗しました' 
+    }, { status: 500 });
   }
 }
 
