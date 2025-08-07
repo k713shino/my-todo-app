@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 // 全てのTodoを取得
 export async function GET(request: NextRequest) {
   try {
-    console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始');
+    console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - v2');
     
     const session = await getAuthSession()
     console.log('👤 セッション情報:', {
