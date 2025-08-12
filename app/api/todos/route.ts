@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 // 全てのTodoを取得
 export async function GET(request: NextRequest) {
   try {
-    console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - デバッグ版 v4');
+    console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - 緊急回避策 v5');
     
     const session = await getAuthSession()
     console.log('👤 セッション情報:', {
@@ -24,122 +24,84 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 200 });
     }
 
-    console.log('🔍 デバッグ: Lambda API接続テスト開始');
+    console.log('🔄 緊急回避策: /todos エンドポイント + フロントエンドフィルタリング使用');
+    console.log('📝 理由: API Gatewayの/todos/user/{userId}ルーティング問題のため');
     console.log('👤 現在のGoogleユーザーID:', session.user.id);
     
-    // まず基本的なヘルスチェックを試行
-    try {
-      console.log('🏥 Lambda ヘルスチェック開始...');
-      const healthResponse = await lambdaAPI.get('/');
-      console.log('🏥 Lambda ヘルスチェック結果:', {
-        success: healthResponse.success,
-        error: healthResponse.error,
-        hasData: !!healthResponse.data
+    // 緊急回避策: /todos エンドポイントを使用してフロントエンドでフィルタリング
+    const fallbackResponse = await lambdaAPI.get('/todos');
+    console.log('📡 Lambda API レスポンス:', {
+      success: fallbackResponse.success,
+      hasData: !!fallbackResponse.data,
+      dataType: typeof fallbackResponse.data,
+      dataLength: fallbackResponse.data ? fallbackResponse.data.length : 0,
+      error: fallbackResponse.error,
+      timestamp: fallbackResponse.timestamp
+    });
+    
+    if (fallbackResponse.success && fallbackResponse.data) {
+      const allTodos = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
+      console.log('📊 全Todo件数:', allTodos.length);
+      
+      // フロントエンド側でユーザー固有のフィルタリング（改善されたマッピング対応）
+      const userTodos = allTodos.filter((todo: any) => {
+        const todoUserId = todo.userId;
+        const currentGoogleId = session.user.id;
+        
+        // 直接比較（新規ユーザーの場合、Lambda側で正しくマッピングされている）
+        if (todoUserId === currentGoogleId) return true;
+        
+        // 既知のマッピング（既存ユーザー用 - Lambda側でaccountsテーブル経由で処理される想定）
+        if (currentGoogleId === '110701307742242924558' && todoUserId === 'cmdpi4dye0000lc04xn7yujpn') return true;
+        if (currentGoogleId === '112433279481859708110' && todoUserId === 'cmdsbbogh0000l604u08lqcp4') return true;
+        
+        return false;
       });
       
-      if (!healthResponse.success) {
-        console.log('⚠️ Lambda ヘルスチェック失敗 - 一時的回避策に切り替え');
-        return NextResponse.json([], { status: 200 });
+      console.log('📊 フィルタリング後Todo件数:', userTodos.length);
+      
+      if (userTodos.length > 0) {
+        console.log('📝 フィルタリング結果サンプル:', userTodos.slice(0, 3).map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          userId: t.userId,
+          completed: t.completed
+        })));
       }
-    } catch (healthError) {
-      console.error('❌ Lambda ヘルスチェックで例外:', healthError);
-      return NextResponse.json([], { status: 200 });
-    }
-    
-    // ユーザー固有エンドポイントを試行
-    const userSpecificEndpoint = `/todos/user/${session.user.id}`;
-    console.log('📞 ユーザー固有エンドポイント呼び出し:', userSpecificEndpoint);
-    
-    try {
-      const lambdaResponse = await lambdaAPI.get(userSpecificEndpoint);
-      console.log('📡 Lambda API レスポンス:', {
-        endpoint: userSpecificEndpoint,
-        success: lambdaResponse.success,
-        hasData: !!lambdaResponse.data,
-        dataType: typeof lambdaResponse.data,
-        dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0,
-        error: lambdaResponse.error,
-        timestamp: lambdaResponse.timestamp
+      
+      // Lambdaから返されたデータを安全に処理
+      const safeTodos = userTodos.map((todo: any) => ({
+        ...todo,
+        createdAt: safeToISOString(todo.createdAt),
+        updatedAt: safeToISOString(todo.updatedAt),
+        dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
+        priority: todo.priority || 'MEDIUM',
+        userId: todo.userId,
+        category: todo.category || null,
+        tags: todo.tags || []
+      }));
+      
+      console.log('✅ フォールバック Todo取得成功:', safeTodos.length, '件');
+      return NextResponse.json(safeTodos);
+      
+    } else {
+      // Lambda側でエラーが発生した場合の詳細ログ
+      console.log('⚠️ Lambda API 失敗:', {
+        success: fallbackResponse.success,
+        error: fallbackResponse.error,
+        data: fallbackResponse.data,
+        timestamp: fallbackResponse.timestamp
       });
       
-      if (lambdaResponse.success && lambdaResponse.data) {
-        const userTodos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
-        console.log('📊 ユーザー固有Todo件数:', userTodos.length);
-        
-        const safeTodos = userTodos.map((todo: any) => ({
-          ...todo,
-          createdAt: safeToISOString(todo.createdAt),
-          updatedAt: safeToISOString(todo.updatedAt),
-          dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
-          priority: todo.priority || 'MEDIUM',
-          userId: todo.userId,
-          category: todo.category || null,
-          tags: todo.tags || []
-        }));
-        
-        console.log('✅ ユーザー固有Todo取得成功:', safeTodos.length, '件');
-        return NextResponse.json(safeTodos);
-        
-      } else {
-        // ユーザー固有エンドポイントが失敗した場合、一時的回避策にフォールバック
-        console.log('⚠️ ユーザー固有エンドポイント失敗 - 一時的回避策にフォールバック');
-        console.log('🔄 /todos エンドポイント + フロントエンドフィルタリング使用');
-        
-        const fallbackResponse = await lambdaAPI.get('/todos');
-        console.log('📡 フォールバック Lambda API レスポンス:', {
-          success: fallbackResponse.success,
-          hasData: !!fallbackResponse.data,
-          error: fallbackResponse.error
-        });
-        
-        if (fallbackResponse.success && fallbackResponse.data) {
-          const allTodos = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
-          console.log('📊 全Todo件数:', allTodos.length);
-          
-          // フロントエンド側でユーザー固有のフィルタリング
-          const userTodos = allTodos.filter((todo: any) => {
-            const todoUserId = todo.userId;
-            const currentGoogleId = session.user.id;
-            
-            if (todoUserId === currentGoogleId) return true;
-            
-            // 既知のマッピング
-            if (currentGoogleId === '110701307742242924558' && todoUserId === 'cmdpi4dye0000lc04xn7yujpn') return true;
-            if (currentGoogleId === '112433279481859708110' && todoUserId === 'cmdsbbogh0000l604u08lqcp4') return true;
-            
-            return false;
-          });
-          
-          console.log('📊 フィルタリング後Todo件数:', userTodos.length);
-          
-          const safeTodos = userTodos.map((todo: any) => ({
-            ...todo,
-            createdAt: safeToISOString(todo.createdAt),
-            updatedAt: safeToISOString(todo.updatedAt),
-            dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
-            priority: todo.priority || 'MEDIUM',
-            userId: todo.userId,
-            category: todo.category || null,
-            tags: todo.tags || []
-          }));
-          
-          console.log('✅ フォールバック Todo取得成功:', safeTodos.length, '件');
-          return NextResponse.json(safeTodos);
-        }
-        
-        console.log('❌ すべてのフォールバック失敗 - 空配列を返す');
-        return NextResponse.json([], { status: 200 });
-      }
-      
-    } catch (apiError) {
-      console.error('❌ Lambda API呼び出しで例外:', apiError);
-      console.log('🔄 最終フォールバック: 空配列を返す');
+      // エラーの場合も空配列を返して UI の破綻を防ぐ
       return NextResponse.json([], { status: 200 });
     }
 
   } catch (error) {
-    console.error('❌ API全体で例外発生:', error);
+    console.error('❌ Todo取得で例外発生:', error);
     console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+    
+    // ネットワークエラーやその他の例外でも空配列を返す
     return NextResponse.json([], { status: 200 });
   }
 }
