@@ -285,3 +285,141 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Todoを更新
+export async function PUT(request: NextRequest) {
+  try {
+    console.log('🚀 フロントエンドAPI PUT /api/todos 呼び出し開始');
+    
+    const session = await getAuthSession()
+    if (!isAuthenticated(session)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // URLからTodoIDを取得
+    const url = new URL(request.url);
+    const pathSegments = url.pathname.split('/');
+    const todoId = pathSegments[pathSegments.length - 1];
+
+    console.log('PUT request details:', { todoId, pathSegments });
+
+    if (!todoId) {
+      return NextResponse.json({ error: 'Todo ID is required' }, { status: 400 });
+    }
+
+    let body: any;
+    try {
+      body = await request.json();
+      console.log('📥 PUT リクエストボディ:', body);
+    } catch (parseError) {
+      console.error('❌ JSON解析エラー:', parseError);
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
+
+    try {
+      console.log('📞 Lambda PUT /todos/{id} 呼び出し開始...');
+      const lambdaResponse = await lambdaAPI.put(`/todos/${todoId}`, body);
+      console.log('📡 Lambda API 更新レスポンス:', {
+        success: lambdaResponse.success,
+        hasData: !!lambdaResponse.data,
+        error: lambdaResponse.error
+      });
+      
+      if (lambdaResponse.success && lambdaResponse.data) {
+        const responseData = lambdaResponse.data;
+        
+        const updatedTodo = {
+          ...responseData,
+          createdAt: safeToISOString(responseData.createdAt),
+          updatedAt: safeToISOString(responseData.updatedAt),
+          dueDate: responseData.dueDate ? safeToISOString(responseData.dueDate) : null,
+          priority: responseData.priority || 'MEDIUM',
+          category: responseData.category || null,
+          tags: responseData.tags || []
+        };
+        
+        console.log('✅ Todo更新成功:', updatedTodo.id);
+        return NextResponse.json(updatedTodo, { status: 200 });
+        
+      } else {
+        console.error('❌ Lambda API でのTodo更新失敗:', lambdaResponse.error);
+        return NextResponse.json({ 
+          error: 'Failed to update todo',
+          details: lambdaResponse.error
+        }, { status: 500 });
+      }
+      
+    } catch (apiError) {
+      console.error('❌ Lambda API呼び出しで例外:', apiError);
+      return NextResponse.json({ 
+        error: 'Failed to update todo',
+        details: apiError instanceof Error ? apiError.message : 'Unknown error'
+      }, { status: 500 });
+    }
+
+  } catch (error) {
+    console.error('❌ Todo更新処理で例外発生:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error during todo update',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+}
+
+// Todoを削除
+export async function DELETE(request: NextRequest) {
+  try {
+    console.log('🚀 フロントエンドAPI DELETE /api/todos 呼び出し開始');
+    
+    const session = await getAuthSession()
+    if (!isAuthenticated(session)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // URLからTodoIDを取得
+    const url = new URL(request.url);
+    const pathSegments = url.pathname.split('/');
+    const todoId = pathSegments[pathSegments.length - 1];
+
+    console.log('DELETE request details:', { todoId, pathSegments });
+
+    if (!todoId) {
+      return NextResponse.json({ error: 'Todo ID is required' }, { status: 400 });
+    }
+
+    try {
+      console.log('📞 Lambda DELETE /todos/{id} 呼び出し開始...');
+      const lambdaResponse = await lambdaAPI.delete(`/todos/${todoId}`);
+      console.log('📡 Lambda API 削除レスポンス:', {
+        success: lambdaResponse.success,
+        hasData: !!lambdaResponse.data,
+        error: lambdaResponse.error
+      });
+      
+      if (lambdaResponse.success) {
+        console.log('✅ Todo削除成功:', todoId);
+        return NextResponse.json({ message: 'Todo deleted successfully' }, { status: 200 });
+        
+      } else {
+        console.error('❌ Lambda API でのTodo削除失敗:', lambdaResponse.error);
+        return NextResponse.json({ 
+          error: 'Failed to delete todo',
+          details: lambdaResponse.error
+        }, { status: 500 });
+      }
+      
+    } catch (apiError) {
+      console.error('❌ Lambda API呼び出しで例外:', apiError);
+      return NextResponse.json({ 
+        error: 'Failed to delete todo',
+        details: apiError instanceof Error ? apiError.message : 'Unknown error'
+      }, { status: 500 });
+    }
+
+  } catch (error) {
+    console.error('❌ Todo削除処理で例外発生:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error during todo deletion',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+}
