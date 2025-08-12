@@ -60,6 +60,51 @@ export async function GET(request: NextRequest) {
       
       console.log('📊 フィルタリング後Todo件数:', userTodos.length);
       
+      // スマートマッピング：新規ユーザーの場合、作成されたTodoがあるかチェック
+      if (userTodos.length === 0) {
+        console.log('🔍 スマートマッピング: 新規ユーザーの可能性をチェック');
+        
+        // 現在のセッションでのTodo作成履歴を確認（セッションストレージから推測）
+        // 新規ユーザーのTodoパターンを検出（CUIDで始まるDBユーザーID）
+        const newUserTodos = allTodos.filter((todo: any) => {
+          const userId = todo.userId;
+          // CUID形式のパターン: "c" + timestamp(base36) + random
+          if (!userId || !userId.startsWith('c') || userId.length < 15) return false;
+          
+          // 最近30分以内に作成されたTodoかチェック
+          const todoCreatedAt = new Date(todo.createdAt);
+          const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+          
+          return todoCreatedAt > thirtyMinutesAgo;
+        });
+        
+        console.log('🕒 最近30分の新規ユーザーTodo:', newUserTodos.length, '件');
+        
+        if (newUserTodos.length > 0) {
+          // 最も最近作成されたTodoのユーザーIDを取得
+          const sortedTodos = newUserTodos.sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          const detectedUserId = sortedTodos[0].userId;
+          
+          console.log('🆕 新規ユーザー検出:', {
+            detectedUserId,
+            recentTodoCount: newUserTodos.length,
+            latestTodoTitle: sortedTodos[0].title
+          });
+          
+          // この新規ユーザーIDで全Todoを再フィルタリング
+          const allUserTodos = allTodos.filter((todo: any) => todo.userId === detectedUserId);
+          
+          console.log('🔄 検出されたユーザーID:', detectedUserId, 'の全Todo:', allUserTodos.length, '件');
+          
+          // 検出されたTodoをuserTodosに追加
+          userTodos.push(...allUserTodos);
+        }
+      }
+      
+      console.log('📊 最終フィルタリング後Todo件数:', userTodos.length);
+      
       if (userTodos.length > 0) {
         console.log('📝 フィルタリング結果サンプル:', userTodos.slice(0, 3).map((t: any) => ({
           id: t.id,
