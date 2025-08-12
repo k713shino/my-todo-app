@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 // 全てのTodoを取得
 export async function GET(request: NextRequest) {
   try {
-    console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - v2');
+    console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - 理想形 v3');
     
     const session = await getAuthSession()
     console.log('👤 セッション情報:', {
@@ -24,12 +24,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 200 });
     }
 
-    console.log('🔄 一時的回避策: /todos エンドポイント + フロントエンドフィルタリング使用');
+    console.log('✨ 理想形: /todos/user/{userId} エンドポイント直接使用');
     console.log('👤 現在のGoogleユーザーID:', session.user.id);
     
-    // 一時的回避策: /todos エンドポイントを使用してフロントエンドでフィルタリング
-    const lambdaResponse = await lambdaAPI.get('/todos');
+    // 理想形: /todos/user/{userId} エンドポイントを直接使用
+    const userSpecificEndpoint = `/todos/user/${session.user.id}`;
+    const lambdaResponse = await lambdaAPI.get(userSpecificEndpoint);
+    
     console.log('📡 Lambda API レスポンス:', {
+      endpoint: userSpecificEndpoint,
       success: lambdaResponse.success,
       hasData: !!lambdaResponse.data,
       dataType: typeof lambdaResponse.data,
@@ -39,31 +42,15 @@ export async function GET(request: NextRequest) {
     });
     
     if (lambdaResponse.success && lambdaResponse.data) {
-      const allTodos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
-      console.log('📊 全Todo件数:', allTodos.length);
-      
-      // フロントエンド側でユーザー固有のフィルタリング（改善されたマッピング対応）
-      const userTodos = allTodos.filter((todo: any) => {
-        const todoUserId = todo.userId;
-        const currentGoogleId = session.user.id;
-        
-        // 直接比較（新規ユーザーの場合、Lambda側で正しくマッピングされている）
-        if (todoUserId === currentGoogleId) return true;
-        
-        // 既知のマッピング（既存ユーザー用）
-        if (currentGoogleId === '110701307742242924558' && todoUserId === 'cmdpi4dye0000lc04xn7yujpn') return true;
-        if (currentGoogleId === '112433279481859708110' && todoUserId === 'cmdsbbogh0000l604u08lqcp4') return true;
-        
-        return false;
-      });
-      
+      const userTodos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
       console.log('📊 ユーザー固有Todo件数:', userTodos.length);
       
       if (userTodos.length > 0) {
-        console.log('📝 フィルタリング結果:', userTodos.map((t: any) => ({
+        console.log('📝 取得Todo詳細:', userTodos.map((t: any) => ({
           id: t.id,
           title: t.title,
-          userId: t.userId
+          userId: t.userId,
+          completed: t.completed
         })));
       }
       
@@ -79,12 +66,13 @@ export async function GET(request: NextRequest) {
         tags: todo.tags || []
       }));
       
-      console.log('✅ ユーザー固有Todo取得成功:', safeTodos.length, '件');
+      console.log('✅ ユーザー固有Todo取得成功 (理想形):', safeTodos.length, '件');
       return NextResponse.json(safeTodos);
       
     } else {
       // Lambda側でエラーが発生した場合の詳細ログ
       console.log('⚠️ Lambda API 失敗:', {
+        endpoint: userSpecificEndpoint,
         success: lambdaResponse.success,
         error: lambdaResponse.error,
         data: lambdaResponse.data,
