@@ -147,33 +147,49 @@ export async function GET(request: NextRequest) {
 // 新しいTodoを作成
 export async function POST(request: NextRequest) {
   try {
+    console.log('🚀 フロントエンドAPI POST /api/todos 呼び出し開始 - デバッグ版 v4');
+    
     const session = await getAuthSession()
+    console.log('👤 セッション情報:', {
+      hasSession: !!session,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email
+    });
     
     if (!isAuthenticated(session)) {
+      console.log('❌ 認証されていません');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body: any = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+      console.log('📥 リクエストボディ:', body);
+    } catch (parseError) {
+      console.error('❌ JSON解析エラー:', parseError);
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
     
     // バリデーション
     if (!body.title) {
+      console.log('❌ タイトルが不足');
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    console.log('🔄 改善されたLambda API経由でTodo作成');
+    console.log('🆕 Lambda API経由でTodo作成開始');
     console.log('👤 現在のユーザー:', {
       id: session.user.id,
       email: session.user.email,
       name: session.user.name
     });
     
-    // 改善されたLambda API用のリクエストデータ（userEmailも含む）
+    // Lambda API用のリクエストデータ
     const todoData = {
       title: body.title,
       description: body.description || undefined,
       userId: session.user.id,
-      userEmail: session.user.email || undefined, // 新規ユーザー作成用
-      userName: session.user.name || undefined,   // 将来的な拡張用
+      userEmail: session.user.email || undefined,
+      userName: session.user.name || undefined,
       priority: body.priority || 'MEDIUM',
       dueDate: body.dueDate || undefined,
       category: body.category || undefined,
@@ -182,43 +198,82 @@ export async function POST(request: NextRequest) {
     
     console.log('📤 Lambda API送信データ:', todoData);
     
-    // Lambda API経由でTodoを作成
-    const lambdaResponse = await lambdaAPI.post('/todos', todoData);
-    console.log('📡 Lambda API作成レスポンス:', {
-      success: lambdaResponse.success,
-      hasData: !!lambdaResponse.data,
-      error: lambdaResponse.error
-    });
-    
-    if (lambdaResponse.success && lambdaResponse.data) {
-      // Lambdaからの新しい形式のレスポンスを処理
-      const todoData = lambdaResponse.data;
+    // まずLambdaヘルスチェック
+    try {
+      console.log('🏥 Lambda ヘルスチェック (POST前)...');
+      const healthResponse = await lambdaAPI.get('/');
+      console.log('🏥 Lambda ヘルスチェック結果:', {
+        success: healthResponse.success,
+        error: healthResponse.error
+      });
       
-      // レスポンスデータの安全な日付変換とPrisma型との互換性確保
-      const newTodo = {
-        ...todoData,
-        createdAt: safeToISOString(todoData.createdAt),
-        updatedAt: safeToISOString(todoData.updatedAt),
-        dueDate: todoData.dueDate ? safeToISOString(todoData.dueDate) : null,
-        priority: todoData.priority || 'MEDIUM',
-        category: todoData.category || null,
-        tags: todoData.tags || []
-      };
-      
-      console.log('✅ 改善されたLambda APIでのTodo作成成功:', newTodo.id);
-      return NextResponse.json(newTodo, { status: 201 });
-      
-    } else {
-      console.error('❌ Lambda APIでのTodo作成失敗:', lambdaResponse.error);
+      if (!healthResponse.success) {
+        console.log('⚠️ Lambda接続不良 - エラーを返す');
+        return NextResponse.json({ 
+          error: 'Lambda service unavailable', 
+          details: healthResponse.error 
+        }, { status: 503 });
+      }
+    } catch (healthError) {
+      console.error('❌ Lambda ヘルスチェックで例外:', healthError);
       return NextResponse.json({ 
-        error: lambdaResponse.error || 'Todo作成に失敗しました' 
+        error: 'Lambda service unavailable',
+        details: healthError instanceof Error ? healthError.message : 'Unknown error'
+      }, { status: 503 });
+    }
+    
+    // Lambda API経由でTodoを作成
+    try {
+      console.log('📞 Lambda POST /todos 呼び出し開始...');
+      const lambdaResponse = await lambdaAPI.post('/todos', todoData);
+      console.log('📡 Lambda API 作成レスポンス:', {
+        success: lambdaResponse.success,
+        hasData: !!lambdaResponse.data,
+        error: lambdaResponse.error,
+        timestamp: lambdaResponse.timestamp
+      });
+      
+      if (lambdaResponse.success && lambdaResponse.data) {
+        // Lambdaからの新しい形式のレスポンスを処理
+        const responseData = lambdaResponse.data;
+        console.log('✅ Lambda からのレスポンスデータ:', responseData);
+        
+        // レスポンスデータの安全な日付変換とPrisma型との互換性確保
+        const newTodo = {
+          ...responseData,
+          createdAt: safeToISOString(responseData.createdAt),
+          updatedAt: safeToISOString(responseData.updatedAt),
+          dueDate: responseData.dueDate ? safeToISOString(responseData.dueDate) : null,
+          priority: responseData.priority || 'MEDIUM',
+          category: responseData.category || null,
+          tags: responseData.tags || []
+        };
+        
+        console.log('✅ Todo作成成功:', newTodo.id);
+        return NextResponse.json(newTodo, { status: 201 });
+        
+      } else {
+        console.error('❌ Lambda API でのTodo作成失敗:', lambdaResponse.error);
+        return NextResponse.json({ 
+          error: 'Failed to create todo',
+          details: lambdaResponse.error
+        }, { status: 500 });
+      }
+      
+    } catch (apiError) {
+      console.error('❌ Lambda API呼び出しで例外:', apiError);
+      return NextResponse.json({ 
+        error: 'Failed to create todo',
+        details: apiError instanceof Error ? apiError.message : 'Unknown error'
       }, { status: 500 });
     }
 
   } catch (error) {
-    console.error('❌ Todo作成処理エラー:', error);
+    console.error('❌ Todo作成処理で例外発生:', error);
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json({ 
-      error: 'Todo作成に失敗しました' 
+      error: 'Internal server error during todo creation',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }
