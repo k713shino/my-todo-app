@@ -95,20 +95,39 @@ const createDummyPrismaClient = () => {
 const createPrismaClient = () => {
   const databaseUrl = getDatabaseUrl()
   
+  // Lambda環境の検出
+  const isLambdaEnvironment = !!(
+    process.env.AWS_LAMBDA_FUNCTION_NAME || 
+    process.env.VERCEL || 
+    process.env.NETLIFY ||
+    process.env.LAMBDA_TASK_ROOT
+  )
+  
   try {
     const client = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
       datasources: {
         db: {
           url: databaseUrl,
         },
       },
-      errorFormat: 'minimal',
+      errorFormat: 'minimal' as const,
     })
 
-    // ビルド時以外でのみ接続テストを実行
-    if (!isBuildTime()) {
-      // 接続テストは非同期で実行（ビルドをブロックしない）
+    // Lambda環境用の接続最適化
+    if (isLambdaEnvironment && !isBuildTime()) {
+      console.log('🔗 Initializing Prisma for Lambda environment')
+      
+      // コネクションプール設定のログ
+      const maxConnections = process.env.DATABASE_MAX_CONNECTIONS || '1'
+      const connectionTimeout = process.env.PRISMA_CONNECTION_TIMEOUT || '5000'
+      console.log(`📊 Lambda DB Config: max=${maxConnections}, timeout=${connectionTimeout}ms`)
+      
+      // 接続テストは非同期で実行（Lambdaコールドスタート最適化）
+      client.$connect().catch((error) => {
+        console.warn('⚠️ Prisma Lambda connection warning (non-blocking):', error.message)
+      })
+    } else if (!isBuildTime()) {
+      // 通常環境での接続テスト
       client.$connect().catch((error) => {
         console.warn('Prisma connection warning (non-blocking):', error.message)
       })

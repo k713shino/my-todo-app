@@ -32,7 +32,12 @@ export async function optimizeForLambda(): Promise<void> {
   // コールドスタート時の処理
   if (!isWarmedUp) {
     await warmupLambda()
+    // データベース接続の最適化
+    await optimizeDatabaseConnection()
   }
+  
+  // メモリ最適化
+  optimizeLambdaMemory()
   
   // アクティビティタイムスタンプを更新
   lastActivity = Date.now()
@@ -74,11 +79,44 @@ export async function optimizeDatabaseConnection(): Promise<void> {
     // Lambda環境でのコネクション数最適化
     const maxConnections = process.env.DATABASE_MAX_CONNECTIONS ? 
       parseInt(process.env.DATABASE_MAX_CONNECTIONS) : 1
+    const connectionTimeout = process.env.PRISMA_CONNECTION_TIMEOUT ? 
+      parseInt(process.env.PRISMA_CONNECTION_TIMEOUT) : 5000
     
-    console.log(`🔗 Optimizing for Lambda with max ${maxConnections} connections`)
+    console.log(`🔗 Optimizing for Lambda: max=${maxConnections} connections, timeout=${connectionTimeout}ms`)
+    
+    // Prisma接続の事前ウォームアップ
+    if (process.env.LAMBDA_WARMUP_ENABLED === 'true') {
+      console.log('🔥 Lambda warmup enabled - pre-connecting to database')
+      await prisma.$connect()
+    }
     
   } catch (error) {
     console.warn('⚠️ Database connection optimization failed:', error)
+  }
+}
+
+// Lambda実行時のメモリ最適化
+export function optimizeLambdaMemory(): void {
+  if (!isLambdaEnvironment()) {
+    return
+  }
+
+  try {
+    // ガベージコレクション強制実行（メモリ効率化）
+    if (global.gc) {
+      global.gc()
+      console.log('🗑️ Lambda memory optimization: garbage collection executed')
+    }
+    
+    // メモリ使用量のログ
+    const memUsage = process.memoryUsage()
+    console.log('📊 Lambda memory usage:', {
+      rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+      heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+      heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+    })
+  } catch (error) {
+    console.warn('⚠️ Lambda memory optimization failed:', error)
   }
 }
 

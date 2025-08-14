@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { prisma } from '@/lib/prisma'
 import { RateLimiter } from '@/lib/cache'
+import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  await optimizeForLambda()
+  
+  return measureLambdaPerformance('GET /api/auth/export-data', async () => {
   try {
     console.log('🚀 Export API started')
     
@@ -195,4 +199,5 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+  })
 }

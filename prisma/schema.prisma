@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "linux-musl", "debian-openssl-3.0.x"]
   output        = "../node_modules/.prisma/client"
   engineType    = "binary"
 }
@@ -8,6 +8,9 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Lambda/Serverless最適化設定
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  relationMode = "foreignKeys"
 }
 
 model User {
