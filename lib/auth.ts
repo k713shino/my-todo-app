@@ -43,7 +43,7 @@ export const authOptions: AuthOptions = {
         },
         profile(profile) {
           return {
-            id: profile.sub,
+            id: profile.sub, // 一時的にOAuth IDを使用、signIn callbackで実際のDB IDに変更
             name: profile.name,
             email: profile.email,
             image: profile.picture,
@@ -223,7 +223,35 @@ export const authOptions: AuthOptions = {
           
           // データベース操作の安全な実行
           try {
-            // 本番環境ではデータベース接続チェックをスキップ
+            // Lambda環境の場合は、dbAdapterを使用してユーザー管理を行う
+            if (process.env.USE_LAMBDA_DB === 'true') {
+              console.log('🔧 Lambda環境でのOAuth統合処理')
+              
+              const dbAdapter = await import('@/lib/db-adapter')
+              
+              // 既存ユーザーをメールアドレスで検索
+              const existingUserResult = await dbAdapter.default.getUserByEmail(user.email!)
+              
+              if (existingUserResult.success && existingUserResult.data) {
+                const existingUser = existingUserResult.data
+                console.log(`🔗 Lambda: 既存ユーザーを発見、OAuth統合中... ${existingUser.id}`)
+                console.log(`🔄 Lambda: OAuth ID "${user.id}" を DB ID "${existingUser.id}" にマッピング`)
+                
+                // JWTトークンで使用するためにユーザーIDをDB IDに変更
+                const originalOAuthId = user.id
+                user.id = existingUser.id
+                account.userId = existingUser.id
+                console.log(`✅ Lambda: ユーザーIDマッピング完了: ${originalOAuthId} → ${existingUser.id}`)
+                
+                return true
+              } else {
+                console.log('👤 Lambda: 新規ユーザー作成はLambda経由では制限されています')
+                console.log('⚠️ OAuth認証は続行しますが、データベース統合は手動で必要です')
+                return true
+              }
+            }
+            
+            // 直接Prisma接続が利用可能な場合の処理
             if (process.env.NODE_ENV !== 'production') {
               const { testDatabaseConnection } = await import('@/lib/prisma')
               const isDbAvailable = await testDatabaseConnection()
@@ -244,6 +272,7 @@ export const authOptions: AuthOptions = {
             
             if (existingUser) {
               console.log('🔗 既存ユーザーを発見、OAuth統合中...', existingUser.id)
+              console.log(`🔄 OAuth ID "${user.id}" を DB ID "${existingUser.id}" にマッピング`)
               
               // 既存のアカウントにOAuth情報を追加
               const existingAccount = await prisma.account.findFirst({
@@ -271,6 +300,8 @@ export const authOptions: AuthOptions = {
                   }
                 })
                 console.log('✅ OAuth連携を既存アカウントに追加')
+              } else {
+                console.log('✅ OAuth連携は既に存在します')
               }
               
               // ユーザー情報を更新（名前や画像が更新されている場合）
@@ -282,16 +313,22 @@ export const authOptions: AuthOptions = {
                 }
               })
               
-              // JWTトークンで使用するためにユーザーIDを更新
+              // 🔑 CRITICAL: JWTトークンで使用するためにユーザーIDをDB IDに変更
+              const originalOAuthId = user.id
               user.id = existingUser.id
+              console.log(`✅ ユーザーIDマッピング完了: ${originalOAuthId} → ${existingUser.id}`)
+              
+              // セッションでも使用するため、確実にDBのIDを設定
+              account.userId = existingUser.id
               
             } else {
               console.log('👤 新規ユーザー作成中...')
+              console.log(`🔄 OAuth ID "${user.id}" で新規ユーザーを作成`)
               
-              // 新規ユーザーとアカウントを作成
+              // 新規ユーザーとアカウントを作成（IDは自動生成されるcuidを使用）
               const newUser = await prisma.user.create({
                 data: {
-                  id: user.id,
+                  // IDは指定せず、Prismaの自動生成cuidを使用
                   email: user.email!,
                   name: user.name,
                   image: user.image,
@@ -312,8 +349,11 @@ export const authOptions: AuthOptions = {
                 }
               })
               
+              // 🔑 CRITICAL: OAuth IDをPrismaで生成されたDB IDに変更
+              const originalOAuthId = user.id
               user.id = newUser.id
-              console.log('✅ 新規OAuthユーザー作成完了')
+              account.userId = newUser.id
+              console.log(`✅ 新規ユーザー作成完了: ${originalOAuthId} → ${newUser.id}`)
             }
             
           } catch (error) {

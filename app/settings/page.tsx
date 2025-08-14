@@ -7,6 +7,7 @@ import AccountEditor from '@/app/components/AccountEditor'
 import AuthMethodDisplay from '@/app/components/AuthMethodDisplay'
 import DataExportForm from '@/app/components/DataExportForm'
 import AccountDeletionForm from '@/app/components/AccountDeletionForm'
+import AccountLinkingSection from '@/app/components/AccountLinkingSection'
 
 export default async function SettingsPage() {
   const session = await getAuthSession()
@@ -70,6 +71,14 @@ export default async function SettingsPage() {
               </div>
               <ThemeToggle />
             </div>
+          </section>
+
+          {/* アカウント連携 */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              🔗 アカウント連携
+            </h2>
+            <AccountLinkingSection />
           </section>
 
           {/* データ管理 */}
