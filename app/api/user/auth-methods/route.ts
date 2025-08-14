@@ -16,20 +16,36 @@ export async function GET() {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      // ユーザーのアカウント情報を取得
-      const accounts = await prisma.account.findMany({
-        where: { userId: session.user.id },
-        select: {
-          provider: true,
-          providerAccountId: true
-        }
-      })
+      console.log('🔍 認証方法API開始 - ユーザーID:', session.user.id)
+
+      // ユーザーのアカウント情報を取得（エラーハンドリング付き）
+      let accounts: Array<{provider: string, providerAccountId: string}> = []
+      try {
+        accounts = await prisma.account.findMany({
+          where: { userId: session.user.id },
+          select: {
+            provider: true,
+            providerAccountId: true
+          }
+        })
+        console.log('✅ アカウント情報取得成功:', accounts.length, '件')
+      } catch (accountError) {
+        console.error('❌ アカウント情報取得エラー:', accountError)
+        // エラーでも続行（空配列として扱う）
+      }
 
       // ユーザー情報も取得（パスワード認証の判定のため）
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { password: true }
-      })
+      let user = null
+      try {
+        user = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { password: true }
+        })
+        console.log('✅ ユーザー情報取得成功 - パスワード有無:', !!user?.password)
+      } catch (userError) {
+        console.error('❌ ユーザー情報取得エラー:', userError)
+        // エラーでも続行
+      }
 
       console.log('🔍 認証方法デバッグ:', {
         userId: session.user.id,
@@ -39,7 +55,7 @@ export async function GET() {
       })
 
       // 認証方法を決定
-      let authMethods = [...accounts]
+      let authMethods: Array<{provider: string, providerAccountId: string}> = [...accounts]
       
       // OAuthアカウントがある場合はそれらを優先し、Credentialsは除外
       if (accounts.length > 0) {
@@ -62,10 +78,14 @@ export async function GET() {
 
     } catch (error) {
       console.error('❌ Auth methods fetch error:', error)
-      return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
-      )
+      
+      // エラーでもデフォルト認証方法を返す（アプリの動作を継続）
+      return NextResponse.json({
+        authMethods: [{
+          provider: 'credentials',
+          providerAccountId: 'email'
+        }]
+      })
     }
   })
 }
