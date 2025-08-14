@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { prisma } from '@/lib/prisma'
 import { RateLimiter } from '@/lib/cache'
 import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization'
+import dbAdapter from '@/lib/db-adapter'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,55 +47,14 @@ export async function GET(request: NextRequest) {
 
     console.log('🔍 エクスポートAPI開始 - ユーザーID:', session.user.id, 'フォーマット:', format)
 
-    // データベース接続を段階的にテスト
-    console.log('🔍 Database connection diagnostics...')
-    console.log('📊 Environment check:', {
-      nodeEnv: process.env.NODE_ENV,
-      vercel: process.env.VERCEL,
-      databaseUrlExists: !!process.env.DATABASE_URL,
-      databaseUrlLength: process.env.DATABASE_URL?.length || 0,
-      isLambda: !!(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL)
-    })
-
-    // まずPrismaクライアントの状態確認
-    try {
-      console.log('⏳ Step 1: Testing basic Prisma connection...')
+    // データベース接続テスト（Lambda経由）
+    console.log('🔍 Testing database connection via adapter...')
+    const connectionTest = await dbAdapter.testConnection()
+    
+    if (!connectionTest.success) {
+      console.error('❌ Database connection failed:', connectionTest.details)
       
-      // タイムアウト付きクエリで接続テスト
-      const connectionTest = await Promise.race([
-        prisma.$queryRaw`SELECT 1 as test`,
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
-        )
-      ])
-      
-      console.log('✅ Basic connection successful:', connectionTest)
-      
-    } catch (connectionError) {
-      console.error('❌ Database connection failed:', connectionError)
-      console.error('❌ Detailed error information:', {
-        name: connectionError instanceof Error ? connectionError.name : 'Unknown',
-        message: connectionError instanceof Error ? connectionError.message : String(connectionError),
-        code: (connectionError as any)?.code,
-        errno: (connectionError as any)?.errno,
-        syscall: (connectionError as any)?.syscall,
-        hostname: (connectionError as any)?.hostname,
-        stack: connectionError instanceof Error ? connectionError.stack?.split('\n').slice(0, 5).join('\n') : undefined
-      })
-      
-      // より具体的なエラーメッセージ
-      let errorMessage = 'データベース接続エラーが発生しました'
-      if (connectionError instanceof Error) {
-        if (connectionError.message.includes('timeout')) {
-          errorMessage = 'データベース接続がタイムアウトしました。サーバーが過負荷の可能性があります。'
-        } else if (connectionError.message.includes('ECONNREFUSED')) {
-          errorMessage = 'データベースサーバーが応答しません。メンテナンス中の可能性があります。'
-        } else if (connectionError.message.includes('authentication')) {
-          errorMessage = 'データベース認証エラーです。設定を確認してください。'
-        }
-      }
-      
-      // フォールバック: 基本的なユーザー情報のみエクスポート
+      // フォールバック: セッション情報のみエクスポート
       if (session?.user) {
         console.log('🔄 Providing fallback export with session data only')
         const fallbackData = {
@@ -119,7 +78,7 @@ export async function GET(request: NextRequest) {
           },
           systemInfo: {
             connectionError: true,
-            errorMessage: errorMessage,
+            errorMessage: 'Lambda経由でのデータベース接続に失敗しました',
             timestamp: new Date().toISOString()
           }
         }
@@ -127,7 +86,7 @@ export async function GET(request: NextRequest) {
         if (format === 'csv') {
           const csvContent = [
             'Type,Message,Timestamp',
-            `Error,"${errorMessage}","${new Date().toISOString()}"`,
+            `Error,"Lambda DB connection failed","${new Date().toISOString()}"`,
             `User,"${session.user.email}","${new Date().toISOString()}"`
           ].join('\n')
 
@@ -148,85 +107,33 @@ export async function GET(request: NextRequest) {
       }
 
       return NextResponse.json({ 
-        error: errorMessage,
+        error: 'Lambda経由でのデータベース接続に失敗しました',
         maintenanceMode: true,
-        timestamp: new Date().toISOString(),
-        details: process.env.NODE_ENV === 'development' ? connectionError instanceof Error ? connectionError.message : String(connectionError) : 'Connection failed'
+        timestamp: new Date().toISOString()
       }, { status: 503 })
     }
+    
+    console.log('✅ Database connection successful via adapter')
 
-    // ユーザーデータを取得（エラーハンドリング付き）
-    let userData
-    try {
-      console.log('⏳ Database query started for user:', session.user.id)
-      userData = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        include: {
-          todos: {
-            orderBy: { createdAt: 'desc' }
-          }
-        }
-      })
-      console.log('✅ ユーザーデータ取得成功 - Todo数:', userData?.todos?.length || 0)
-      console.log('📊 User data structure:', {
-        hasUser: !!userData,
-        userId: userData?.id,
-        todoCount: userData?.todos?.length || 0,
-        userEmail: userData?.email
-      })
-    } catch (dbError) {
-      console.error('❌ データベース取得エラー:', dbError)
-      console.error('❌ Error details:', {
-        message: dbError instanceof Error ? dbError.message : String(dbError),
-        stack: dbError instanceof Error ? dbError.stack : undefined,
-        userId: session.user.id
-      })
+    // ユーザーデータを取得（Lambda経由）
+    console.log('⏳ Fetching user data via Lambda...')
+    const exportResult = await dbAdapter.exportUserData(session.user.id, format as 'json' | 'csv')
+    
+    if (!exportResult.success) {
+      console.error('❌ データエクスポートエラー:', exportResult.error)
       return NextResponse.json({ 
-        error: 'データベース接続エラーが発生しました',
-        details: dbError instanceof Error ? dbError.message : 'Unknown error'
+        error: 'データエクスポートに失敗しました',
+        details: exportResult.error
       }, { status: 500 })
     }
 
-    if (!userData) {
-      console.warn('⚠️ ユーザーが見つかりません:', session.user.id)
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    const exportData = exportResult.data
+    if (!exportData) {
+      console.warn('⚠️ エクスポートデータが見つかりません:', session.user.id)
+      return NextResponse.json({ error: 'Export data not found' }, { status: 404 })
     }
 
-    // エクスポート用データ構造
-    const exportData = {
-      exportInfo: {
-        exportedAt: new Date().toISOString(),
-        format: format,
-        version: '1.0'
-      },
-      user: {
-        id: userData.id,
-        name: userData.name,
-        email: userData.email,
-        createdAt: userData.createdAt,
-        updatedAt: userData.updatedAt
-      },
-      todos: userData.todos.map(todo => ({
-        id: todo.id,
-        title: todo.title,
-        description: todo.description,
-        completed: todo.completed,
-        priority: todo.priority,
-        dueDate: todo.dueDate,
-        createdAt: todo.createdAt,
-        updatedAt: todo.updatedAt
-      })),
-      statistics: {
-        totalTodos: userData.todos.length,
-        completedTodos: userData.todos.filter(t => t.completed).length,
-        todosByPriority: {
-          URGENT: userData.todos.filter(t => t.priority === 'URGENT').length,
-          HIGH: userData.todos.filter(t => t.priority === 'HIGH').length,
-          MEDIUM: userData.todos.filter(t => t.priority === 'MEDIUM').length,
-          LOW: userData.todos.filter(t => t.priority === 'LOW').length
-        }
-      }
-    }
+    console.log('✅ Lambda経由でのデータ取得成功 - Todo数:', exportData.todos?.length || 0)
 
     // 形式に応じてレスポンス生成
     if (format === 'csv') {
@@ -235,7 +142,7 @@ export async function GET(request: NextRequest) {
         'ID', 'Title', 'Description', 'Completed', 'Priority', 'Due Date', 'Created At', 'Updated At'
       ]
       
-      const csvRows = userData.todos.map(todo => {
+      const csvRows = (exportData.todos || []).map((todo: any) => {
         const escapeCsv = (str: string | null) => {
           if (!str) return ''
           return `"${str.replace(/"/g, '""')}"`
@@ -253,7 +160,7 @@ export async function GET(request: NextRequest) {
         ]
       })
 
-      const csvContent = [csvHeaders.join(','), ...csvRows.map(row => row.join(','))].join('\n')
+      const csvContent = [csvHeaders.join(','), ...csvRows.map((row: string[]) => row.join(','))].join('\n')
 
       return new NextResponse(csvContent, {
         headers: {
