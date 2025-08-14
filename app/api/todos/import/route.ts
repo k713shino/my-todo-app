@@ -63,11 +63,11 @@ export async function POST(request: NextRequest) {
             const values = line.split(',').map(v => v.trim().replace(/"/g, ''))
             const todo: ImportTodo = {
               title: values[1] || 'Imported Todo',
-              description: values[2] || null,
+              description: values[2] || undefined,
               completed: values[3] === '完了',
               priority: (values[4] as Priority) || 'MEDIUM',
               dueDate: values[5] ? new Date(values[5]) : null,
-              category: values[6] || null,
+              category: values[6] || undefined,
               tags: values[7] ? values[7].split(';').filter(tag => tag.trim()) : []
             }
             return todo
