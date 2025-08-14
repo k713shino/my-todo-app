@@ -179,41 +179,97 @@ export const authOptions: AuthOptions = {
           accountId: account?.providerAccountId
         })
         
-        // OAuth認証時のユーザー作成・更新をLambda API経由で実行
+        // OAuth認証時のユーザー統合処理
         if (account?.provider && account.provider !== 'credentials') {
           console.log(`✅ OAuth認証成功: ${user.email} (${account.provider})`)
           
-          // Lambda API経由でOAuthユーザーを作成・更新
+          // Prisma経由で同一メールアドレスのユーザーを検索
           try {
-            const response = await fetch(`${process.env.LAMBDA_API_URL}/auth/oauth-user`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                user: {
-                  id: user.id,
-                  email: user.email,
-                  name: user.name,
-                  image: user.image,
-                },
-                account: {
-                  provider: account.provider,
-                  providerAccountId: account.providerAccountId,
-                  access_token: account.access_token,
-                  refresh_token: account.refresh_token,
-                  expires_at: account.expires_at,
-                }
-              })
+            const { prisma } = await import('@/lib/prisma')
+            
+            // 同一メールアドレスの既存ユーザーを検索
+            const existingUser = await prisma.user.findUnique({
+              where: { email: user.email! },
+              include: { accounts: true }
             })
             
-            if (!response.ok) {
-              console.error('Lambda API OAuth用户作成失敗:', response.status)
+            if (existingUser) {
+              console.log('🔗 既存ユーザーを発見、OAuth統合中...', existingUser.id)
+              
+              // 既存のアカウントにOAuth情報を追加
+              const existingAccount = await prisma.account.findFirst({
+                where: {
+                  userId: existingUser.id,
+                  provider: account.provider,
+                  providerAccountId: account.providerAccountId
+                }
+              })
+              
+              if (!existingAccount) {
+                await prisma.account.create({
+                  data: {
+                    userId: existingUser.id,
+                    type: account.type,
+                    provider: account.provider,
+                    providerAccountId: account.providerAccountId,
+                    access_token: account.access_token,
+                    refresh_token: account.refresh_token,
+                    expires_at: account.expires_at,
+                    token_type: account.token_type,
+                    scope: account.scope,
+                    id_token: account.id_token,
+                    session_state: account.session_state,
+                  }
+                })
+                console.log('✅ OAuth連携を既存アカウントに追加')
+              }
+              
+              // ユーザー情報を更新（名前や画像が更新されている場合）
+              await prisma.user.update({
+                where: { id: existingUser.id },
+                data: {
+                  name: user.name || existingUser.name,
+                  image: user.image || existingUser.image,
+                }
+              })
+              
+              // JWTトークンで使用するためにユーザーIDを更新
+              user.id = existingUser.id
+              
             } else {
-              console.log('Lambda API OAuth用户作成成功')
+              console.log('👤 新規ユーザー作成中...')
+              
+              // 新規ユーザーとアカウントを作成
+              const newUser = await prisma.user.create({
+                data: {
+                  id: user.id,
+                  email: user.email!,
+                  name: user.name,
+                  image: user.image,
+                  accounts: {
+                    create: {
+                      type: account.type,
+                      provider: account.provider,
+                      providerAccountId: account.providerAccountId,
+                      access_token: account.access_token,
+                      refresh_token: account.refresh_token,
+                      expires_at: account.expires_at,
+                      token_type: account.token_type,
+                      scope: account.scope,
+                      id_token: account.id_token,
+                      session_state: account.session_state,
+                    }
+                  }
+                }
+              })
+              
+              user.id = newUser.id
+              console.log('✅ 新規OAuthユーザー作成完了')
             }
+            
           } catch (error) {
-            console.error('Lambda API OAuth用户作成エラー:', error)
+            console.error('❌ OAuth統合エラー:', error)
+            return false
           }
         }
         return true

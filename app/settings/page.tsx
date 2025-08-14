@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import Image from 'next/image'
 import Link from 'next/link'
 import ThemeToggle from '@/app/components/ThemeToggle'
 import SignOutButton from '@/app/components/SignOutButton'
-import LambdaConnectionTest from '../components/LambdaConnectionTest'
+import AccountEditor from '@/app/components/AccountEditor'
+import AuthMethodDisplay from '@/app/components/AuthMethodDisplay'
+import DataManager from '@/app/components/DataManager'
+import AccountDeletion from '@/app/components/AccountDeletion'
 
 export default async function SettingsPage() {
   const session = await getAuthSession()
@@ -48,25 +50,9 @@ export default async function SettingsPage() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               👤 アカウント情報
             </h2>
-            <div className="flex items-center space-x-4">
-              {session.user?.image && (
-                <Image
-                  src={session.user.image}
-                  alt="プロフィール"
-                  width={64}
-                  height={64}
-                  className="rounded-full"
-                  unoptimized
-                />
-              )}
-              <div>
-                <p className="text-lg font-medium text-gray-900 dark:text-white">
-                  {session.user?.name}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {session.user?.email}
-                </p>
-              </div>
+            <AccountEditor />
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+              <AuthMethodDisplay />
             </div>
           </section>
 
@@ -86,49 +72,20 @@ export default async function SettingsPage() {
             </div>
           </section>
 
-          {/* Lambda接続テスト（開発者向け） */}
-          <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-              🔧 システム診断
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              アプリのバックエンドAPI接続状態をテストします
-            </p>
-            <LambdaConnectionTest 
-              className="border-0 shadow-none bg-gray-50 dark:bg-gray-700"
-            />
-          </section>
-
           {/* データ管理 */}
           <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               📊 データ管理
             </h2>
-            <div className="space-y-4">
-              <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                <h3 className="font-medium text-gray-900 dark:text-white mb-2">
-                  データエクスポート
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                  あなたのTodoデータをJSON形式でダウンロードできます
-                </p>
-                <button className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors text-sm">
-                  📥 データをエクスポート
-                </button>
-              </div>
-              
-              <div className="border border-red-200 dark:border-red-600 rounded-lg p-4">
-                <h3 className="font-medium text-red-900 dark:text-red-400 mb-2">
-                  ⚠️ データ削除
-                </h3>
-                <p className="text-sm text-red-600 dark:text-red-400 mb-3">
-                  すべてのTodoデータを削除します（この操作は取り消せません）
-                </p>
-                <button className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm">
-                  🗑️ すべてのデータを削除
-                </button>
-              </div>
-            </div>
+            <DataManager />
+          </section>
+
+          {/* アカウント削除 */}
+          <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              🗑️ アカウント管理
+            </h2>
+            <AccountDeletion />
           </section>
 
         </div>
