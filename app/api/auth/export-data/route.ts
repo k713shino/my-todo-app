@@ -47,26 +47,112 @@ export async function GET(request: NextRequest) {
 
     console.log('🔍 エクスポートAPI開始 - ユーザーID:', session.user.id, 'フォーマット:', format)
 
-    // Prismaクライアント接続確認
+    // データベース接続を段階的にテスト
+    console.log('🔍 Database connection diagnostics...')
+    console.log('📊 Environment check:', {
+      nodeEnv: process.env.NODE_ENV,
+      vercel: process.env.VERCEL,
+      databaseUrlExists: !!process.env.DATABASE_URL,
+      databaseUrlLength: process.env.DATABASE_URL?.length || 0,
+      isLambda: !!(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL)
+    })
+
+    // まずPrismaクライアントの状態確認
     try {
-      console.log('⏳ Testing Prisma connection...')
-      await prisma.$queryRaw`SELECT 1`
-      console.log('✅ Prisma connection successful')
+      console.log('⏳ Step 1: Testing basic Prisma connection...')
+      
+      // タイムアウト付きクエリで接続テスト
+      const connectionTest = await Promise.race([
+        prisma.$queryRaw`SELECT 1 as test`,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
+        )
+      ])
+      
+      console.log('✅ Basic connection successful:', connectionTest)
+      
     } catch (connectionError) {
-      console.error('❌ Prisma connection failed:', connectionError)
-      console.error('❌ Connection error details:', {
+      console.error('❌ Database connection failed:', connectionError)
+      console.error('❌ Detailed error information:', {
+        name: connectionError instanceof Error ? connectionError.name : 'Unknown',
         message: connectionError instanceof Error ? connectionError.message : String(connectionError),
-        stack: connectionError instanceof Error ? connectionError.stack : undefined,
-        databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
-        environment: process.env.NODE_ENV
+        code: (connectionError as any)?.code,
+        errno: (connectionError as any)?.errno,
+        syscall: (connectionError as any)?.syscall,
+        hostname: (connectionError as any)?.hostname,
+        stack: connectionError instanceof Error ? connectionError.stack?.split('\n').slice(0, 5).join('\n') : undefined
       })
       
-      // 接続エラー時はメンテナンスメッセージを返す
+      // より具体的なエラーメッセージ
+      let errorMessage = 'データベース接続エラーが発生しました'
+      if (connectionError instanceof Error) {
+        if (connectionError.message.includes('timeout')) {
+          errorMessage = 'データベース接続がタイムアウトしました。サーバーが過負荷の可能性があります。'
+        } else if (connectionError.message.includes('ECONNREFUSED')) {
+          errorMessage = 'データベースサーバーが応答しません。メンテナンス中の可能性があります。'
+        } else if (connectionError.message.includes('authentication')) {
+          errorMessage = 'データベース認証エラーです。設定を確認してください。'
+        }
+      }
+      
+      // フォールバック: 基本的なユーザー情報のみエクスポート
+      if (session?.user) {
+        console.log('🔄 Providing fallback export with session data only')
+        const fallbackData = {
+          exportInfo: {
+            exportedAt: new Date().toISOString(),
+            format: format,
+            version: '1.0-fallback',
+            note: 'データベース接続エラーのため、セッション情報のみ含まれます'
+          },
+          user: {
+            id: session.user.id,
+            name: session.user.name || 'Unknown',
+            email: session.user.email || 'Unknown',
+            exportedAt: new Date().toISOString()
+          },
+          todos: [],
+          statistics: {
+            totalTodos: 0,
+            completedTodos: 0,
+            note: 'データベース接続エラーのため、Todo情報は含まれません'
+          },
+          systemInfo: {
+            connectionError: true,
+            errorMessage: errorMessage,
+            timestamp: new Date().toISOString()
+          }
+        }
+
+        if (format === 'csv') {
+          const csvContent = [
+            'Type,Message,Timestamp',
+            `Error,"${errorMessage}","${new Date().toISOString()}"`,
+            `User,"${session.user.email}","${new Date().toISOString()}"`
+          ].join('\n')
+
+          return new NextResponse(csvContent, {
+            headers: {
+              'Content-Type': 'text/csv',
+              'Content-Disposition': `attachment; filename="error-report-${new Date().toISOString().split('T')[0]}.csv"`
+            }
+          })
+        } else {
+          return new NextResponse(JSON.stringify(fallbackData, null, 2), {
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Disposition': `attachment; filename="error-report-${new Date().toISOString().split('T')[0]}.json"`
+            }
+          })
+        }
+      }
+
       return NextResponse.json({ 
-        error: 'データベースメンテナンス中です。しばらく後に再試行してください。',
+        error: errorMessage,
         maintenanceMode: true,
-        details: 'Database connection unavailable'
-      }, { status: 503 }) // Service Unavailable
+        timestamp: new Date().toISOString(),
+        details: process.env.NODE_ENV === 'development' ? connectionError instanceof Error ? connectionError.message : String(connectionError) : 'Connection failed'
+      }, { status: 503 })
     }
 
     // ユーザーデータを取得（エラーハンドリング付き）

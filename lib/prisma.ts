@@ -113,6 +113,29 @@ const createPrismaClient = () => {
       errorFormat: 'minimal' as const,
     })
 
+    // Vercel/Lambda環境でのコネクション管理を改善
+    if (isLambdaEnvironment) {
+      console.log('🔗 Setting up Lambda-optimized Prisma client')
+
+      // 接続エラー時の自動リトライ設定
+      const originalConnect = client.$connect.bind(client)
+      client.$connect = async () => {
+        let retries = 3
+        while (retries > 0) {
+          try {
+            await originalConnect()
+            console.log('✅ Prisma connected successfully')
+            return
+          } catch (error) {
+            retries--
+            console.warn(`⚠️ Connection attempt failed, ${retries} retries left:`, error)
+            if (retries === 0) throw error
+            await new Promise(resolve => setTimeout(resolve, 1000)) // 1秒待機
+          }
+        }
+      }
+    }
+
     // Lambda環境用の接続最適化
     if (isLambdaEnvironment && !isBuildTime()) {
       console.log('🔗 Initializing Prisma for Lambda environment')
