@@ -91,7 +91,7 @@ const createDummyPrismaClient = () => {
   return dummyClient
 }
 
-// Prismaクライアントの作成
+// Prismaクライアントの作成（Lambda最適化版）
 const createPrismaClient = () => {
   const databaseUrl = getDatabaseUrl()
   

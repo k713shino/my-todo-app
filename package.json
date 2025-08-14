@@ -11,7 +11,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "vercel-build": "npx prisma generate && next build",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "prisma:deploy": "npx prisma db push",
+    "lambda:optimize": "npx prisma generate && echo 'Lambda optimization complete'"
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",

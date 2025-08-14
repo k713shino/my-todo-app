@@ -4,15 +4,20 @@ import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils';
 import type { Todo } from '@/types/todo';
 import { safeToISOString } from '@/lib/date-utils';
+import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization';
 
 export const dynamic = 'force-dynamic'
 
 // 全てのTodoを取得
 export async function GET(request: NextRequest) {
-  try {
-    console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - 緊急回避策 v5');
-    
-    const session = await getAuthSession()
+  // Lambda最適化の適用
+  await optimizeForLambda();
+  
+  return measureLambdaPerformance('GET /api/todos', async () => {
+    try {
+      console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - 緊急回避策 v5');
+      
+      const session = await getAuthSession()
     console.log('👤 セッション情報:', {
       hasSession: !!session,
       userId: session?.user?.id,
@@ -142,13 +147,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 200 });
     }
 
-  } catch (error) {
-    console.error('❌ Todo取得で例外発生:', error);
-    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
-    
-    // ネットワークエラーやその他の例外でも空配列を返す
-    return NextResponse.json([], { status: 200 });
-  }
+    } catch (error) {
+      console.error('❌ Todo取得で例外発生:', error);
+      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+      
+      // ネットワークエラーやその他の例外でも空配列を返す
+      return NextResponse.json([], { status: 200 });
+    }
+  });
 }
 
 // 新しいTodoを作成
