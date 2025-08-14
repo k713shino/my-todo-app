@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { prisma } from '@/lib/prisma'
+import { lambdaDB } from '@/lib/lambda-db'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    console.log('🔍 Debug API accessed')
+    console.log('🔍 Lambda-based Debug API started')
     
     // 認証チェックを一時的に緩和（デバッグ用）
     let session = null
@@ -22,14 +22,6 @@ export async function GET() {
       console.error('❌ Auth error:', authError)
       // 認証エラーでも診断を続行（デバッグモード）
     }
-    
-    // 開発用：認証をスキップしてデバッグ実行
-    if (!session || !isAuthenticated(session)) {
-      console.warn('⚠️ Running in debug mode without proper authentication')
-      // return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    console.log('🔍 Database diagnostic started')
 
     interface TestResult {
       name: string
@@ -52,6 +44,8 @@ export async function GET() {
         vercel: process.env.VERCEL,
         region: process.env.VERCEL_REGION,
         isLambda: !!(process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL),
+        useLambdaDB: process.env.USE_LAMBDA_DB,
+        lambdaApiUrl: process.env.LAMBDA_API_URL || process.env.NEXT_PUBLIC_LAMBDA_API_URL,
       },
       database: {
         urlExists: !!process.env.DATABASE_URL,
@@ -67,28 +61,24 @@ export async function GET() {
       tests: [] as TestResult[]
     }
 
-    // テスト1: 基本的な接続テスト
+    // テスト1: Lambda API ヘルスチェック
     try {
-      console.log('🧪 Test 1: Basic connection')
+      console.log('🧪 Test 1: Lambda API health check')
       const start = Date.now()
-      const result = await Promise.race([
-        prisma.$queryRaw`SELECT 1 as test, NOW() as server_time`,
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout after 15 seconds')), 15000)
-        )
-      ])
+      const result = await lambdaDB.healthCheck()
       const duration = Date.now() - start
       
       diagnostics.tests.push({
-        name: 'Basic Connection',
-        status: 'SUCCESS',
+        name: 'Lambda API Health Check',
+        status: result.success ? 'SUCCESS' : 'FAILED',
         duration: `${duration}ms`,
-        result: result
+        result: result.data,
+        error: result.error
       })
-      console.log('✅ Test 1 passed:', result)
+      console.log('✅ Test 1 result:', result)
     } catch (error) {
       const errorInfo: TestResult = {
-        name: 'Basic Connection',
+        name: 'Lambda API Health Check',
         status: 'FAILED',
         error: error instanceof Error ? error.message : String(error),
         code: (error as any)?.code,
@@ -99,150 +89,128 @@ export async function GET() {
       console.error('❌ Test 1 failed:', error)
     }
 
-    // テスト2: ユーザーテーブル確認
+    // テスト2: Lambda データベース接続テスト
     try {
-      console.log('🧪 Test 2: User table access')
+      console.log('🧪 Test 2: Lambda database connection')
       const start = Date.now()
-      const userCount = await prisma.user.count()
+      const result = await lambdaDB.testConnection()
       const duration = Date.now() - start
       
       diagnostics.tests.push({
-        name: 'User Table Access',
-        status: 'SUCCESS',
+        name: 'Lambda Database Connection',
+        status: result.success ? 'SUCCESS' : 'FAILED',
         duration: `${duration}ms`,
-        userCount: userCount
+        result: result.data,
+        error: result.error
       })
-      console.log('✅ Test 2 passed, user count:', userCount)
+      console.log('✅ Test 2 result:', result)
     } catch (error) {
       diagnostics.tests.push({
-        name: 'User Table Access',
+        name: 'Lambda Database Connection',
         status: 'FAILED',
         error: error instanceof Error ? error.message : String(error)
       } as TestResult)
       console.error('❌ Test 2 failed:', error)
     }
 
-    // テスト3: 現在のユーザー情報取得
+    // テスト3: Lambda 診断情報取得
     try {
-      console.log('🧪 Test 3: Current user data')
+      console.log('🧪 Test 3: Lambda diagnostics')
       const start = Date.now()
-      
-      // セッションがない場合は最初のユーザーを取得
-      const userId = session?.user?.id || 'test-user'
-      const currentUser = await prisma.user.findFirst({
-        include: { _count: { select: { todos: true } } },
-        ...(session?.user?.id && { where: { id: session.user.id } })
-      })
+      const result = await lambdaDB.getDiagnostics()
       const duration = Date.now() - start
       
       diagnostics.tests.push({
-        name: 'Current User Data',
-        status: 'SUCCESS',
+        name: 'Lambda Diagnostics',
+        status: result.success ? 'SUCCESS' : 'FAILED',
         duration: `${duration}ms`,
-        userData: {
-          exists: !!currentUser,
-          id: currentUser?.id,
-          email: currentUser?.email,
-          todoCount: currentUser?._count?.todos || 0,
-          sessionUserId: session?.user?.id || 'No session'
-        }
+        result: result.data,
+        error: result.error
       })
-      console.log('✅ Test 3 passed:', currentUser?._count)
+      console.log('✅ Test 3 result:', result)
     } catch (error) {
       diagnostics.tests.push({
-        name: 'Current User Data',
+        name: 'Lambda Diagnostics',
         status: 'FAILED',
         error: error instanceof Error ? error.message : String(error)
       } as TestResult)
       console.error('❌ Test 3 failed:', error)
     }
 
-    // テスト4: データベース情報取得
-    try {
-      console.log('🧪 Test 4: Database info')
-      const start = Date.now()
-      
-      // データベースサイズとテーブル情報を取得
-      const dbInfo = await prisma.$queryRaw`
-        SELECT 
-          current_database() as database_name,
-          pg_size_pretty(pg_database_size(current_database())) as database_size,
-          count(*) as table_count
-        FROM information_schema.tables 
-        WHERE table_schema = 'public'
-      `
-      
-      const duration = Date.now() - start
-      
+    // テスト4: ユーザーデータ取得テスト（セッションがある場合）
+    if (session?.user?.id) {
+      try {
+        console.log('🧪 Test 4: User data via Lambda')
+        const start = Date.now()
+        const result = await lambdaDB.getUser(session.user.id)
+        const duration = Date.now() - start
+        
+        diagnostics.tests.push({
+          name: 'Lambda User Data',
+          status: result.success ? 'SUCCESS' : 'FAILED',
+          duration: `${duration}ms`,
+          userData: {
+            exists: !!result.data,
+            userId: session.user.id,
+            email: session.user.email
+          },
+          error: result.error
+        })
+        console.log('✅ Test 4 result:', result.success)
+      } catch (error) {
+        diagnostics.tests.push({
+          name: 'Lambda User Data',
+          status: 'FAILED',
+          error: error instanceof Error ? error.message : String(error)
+        } as TestResult)
+        console.error('❌ Test 4 failed:', error)
+      }
+    } else {
       diagnostics.tests.push({
-        name: 'Database Info',
-        status: 'SUCCESS',
-        duration: `${duration}ms`,
-        result: dbInfo
-      })
-      console.log('✅ Test 4 passed:', dbInfo)
-    } catch (error) {
-      diagnostics.tests.push({
-        name: 'Database Info',
+        name: 'Lambda User Data',
         status: 'FAILED',
-        error: error instanceof Error ? error.message : String(error)
-      } as TestResult)
-      console.error('❌ Test 4 failed:', error)
+        error: 'No valid session for user data test'
+      })
     }
 
     const successCount = diagnostics.tests.filter(t => t.status === 'SUCCESS').length
     const totalTests = diagnostics.tests.length
 
-    // AWS RDS用の推奨設定を生成
+    // Lambda API用の推奨設定を生成
     const recommendations = []
-    if (diagnostics.database.isAWSRDS) {
-      if (!diagnostics.database.hasSSL) {
-        recommendations.push('Add sslmode=require for AWS RDS security')
-      }
-      if (!diagnostics.database.hasTimeout) {
-        recommendations.push('Add connect_timeout=30 for Vercel/Lambda')
-      }
-      recommendations.push('Check AWS RDS instance status')
-      recommendations.push('Verify Security Group allows Vercel IPs')
-      recommendations.push('Ensure RDS is publicly accessible')
+    if (!process.env.LAMBDA_API_URL && !process.env.NEXT_PUBLIC_LAMBDA_API_URL) {
+      recommendations.push('Configure LAMBDA_API_URL environment variable')
     }
-
-    // 修正されたDATABASE_URL例を提供
-    const currentUrl = process.env.DATABASE_URL
-    let suggestedUrl = ''
-    if (currentUrl) {
-      try {
-        const url = new URL(currentUrl)
-        url.searchParams.set('sslmode', 'require')
-        url.searchParams.set('connect_timeout', '30')
-        url.searchParams.set('socket_timeout', '30')
-        suggestedUrl = url.toString()
-      } catch (e) {
-        suggestedUrl = 'Invalid URL format'
-      }
+    if (process.env.USE_LAMBDA_DB !== 'true') {
+      recommendations.push('Set USE_LAMBDA_DB=true to enable Lambda database access')
     }
+    recommendations.push('Verify Lambda API Gateway is accessible from Vercel')
+    recommendations.push('Check Lambda function logs in AWS CloudWatch')
+    recommendations.push('Ensure Lambda function has proper IAM permissions for RDS')
 
     return NextResponse.json({
       ...diagnostics,
       database: {
         ...diagnostics.database,
-        recommendations,
-        suggestedDatabaseUrl: suggestedUrl
+        recommendations
       },
       summary: {
         totalTests,
         successCount,
         failedCount: totalTests - successCount,
-        overallStatus: successCount === totalTests ? 'HEALTHY' : successCount > 0 ? 'DEGRADED' : 'FAILED'
+        overallStatus: successCount === totalTests ? 'HEALTHY' : successCount > 0 ? 'DEGRADED' : 'FAILED',
+        lambdaMode: true,
+        apiUrl: process.env.LAMBDA_API_URL || process.env.NEXT_PUBLIC_LAMBDA_API_URL || 'Not configured'
       }
     })
 
   } catch (error) {
-    console.error('🚨 Diagnostic error:', error)
+    console.error('🚨 Lambda diagnostic error:', error)
     return NextResponse.json({
-      error: 'Diagnostic failed',
+      error: 'Lambda diagnostic failed',
       details: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      lambdaMode: true
     }, { status: 500 })
   }
 }
