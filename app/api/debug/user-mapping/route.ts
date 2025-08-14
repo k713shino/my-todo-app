@@ -10,7 +10,7 @@ export async function GET() {
     // セッション情報を取得
     const session = await getAuthSession()
     
-    const debugInfo = {
+    const debugInfo: any = {
       timestamp: new Date().toISOString(),
       session: {
         exists: !!session,
@@ -42,7 +42,7 @@ export async function GET() {
         if (lambdaResponse.ok) {
           const todosData = await lambdaResponse.json()
           if (Array.isArray(todosData)) {
-            const uniqueUserIds = [...new Set(todosData.map((todo: any) => todo.userId))]
+            const uniqueUserIds = Array.from(new Set(todosData.map((todo: any) => todo.userId)))
             const todosByUser = uniqueUserIds.reduce((acc: any, userId: string) => {
               acc[userId] = todosData.filter((todo: any) => todo.userId === userId).length
               return acc
