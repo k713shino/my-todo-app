@@ -39,14 +39,16 @@ export default function AccountEditor({ className = '' }: AccountEditorProps) {
       }
 
       // セッションを更新
-      await update({
-        ...session,
-        user: {
-          ...session.user,
-          name: formData.name,
-          image: formData.image
-        }
-      })
+      if (session?.user) {
+        await update({
+          ...session,
+          user: {
+            ...session.user,
+            name: formData.name,
+            image: formData.image
+          }
+        })
+      }
 
       setIsEditing(false)
       toast.success('アカウント情報を更新しました')

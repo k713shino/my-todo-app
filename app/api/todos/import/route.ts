@@ -88,7 +88,8 @@ export async function POST(request: NextRequest) {
       let importedCount = 0
       const errors: string[] = []
 
-      for (const [index, todo] of todos.entries()) {
+      for (let index = 0; index < todos.length; index++) {
+        const todo = todos[index]
         try {
           if (!todo.title || todo.title.trim().length === 0) {
             errors.push(`Row ${index + 1}: Title is required`)
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
               priority,
               dueDate,
               category: todo.category?.trim() || null,
-              tags: todo.tags || [],
+              tags: Array.isArray(todo.tags) ? todo.tags : [],
               userId: session.user.id
             }
           })

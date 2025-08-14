@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
             todo.priority,
             todo.dueDate ? new Date(todo.dueDate).toLocaleDateString('ja-JP') : '',
             escapeCsv(todo.category),
-            todo.tags.join(';'),
+            Array.isArray(todo.tags) ? todo.tags.join(';') : '',
             new Date(todo.createdAt).toLocaleDateString('ja-JP'),
             new Date(todo.updatedAt).toLocaleDateString('ja-JP')
           ].join(',')
