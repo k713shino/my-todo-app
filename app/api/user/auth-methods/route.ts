@@ -39,18 +39,19 @@ export async function GET() {
       })
 
       // 認証方法を決定
-      const authMethods = [...accounts]
+      let authMethods = [...accounts]
       
-      // パスワードが設定されている場合はCredentials認証を追加
-      if (user?.password) {
-        const hasCredentialsAccount = accounts.some(acc => acc.provider === 'credentials')
-        if (!hasCredentialsAccount) {
-          authMethods.push({
-            provider: 'credentials',
-            providerAccountId: 'email'
-          })
-          console.log('📧 Credentials認証を追加')
-        }
+      // OAuthアカウントがある場合はそれらを優先し、Credentialsは除外
+      if (accounts.length > 0) {
+        authMethods = accounts.filter(acc => acc.provider !== 'credentials')
+        console.log('🔗 OAuth認証アカウントを使用:', authMethods)
+      } else if (user?.password) {
+        // OAuthアカウントがなく、パスワードがある場合のみCredentials
+        authMethods = [{
+          provider: 'credentials',
+          providerAccountId: 'email'
+        }]
+        console.log('📧 Credentials認証のみ')
       }
 
       console.log('✅ 最終認証方法:', authMethods)

@@ -3,29 +3,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { prisma } from '@/lib/prisma'
-import { CacheManager, RateLimiter } from '@/lib/cache'
+// import { CacheManager, RateLimiter } from '@/lib/cache'
+import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization'
 
 export async function DELETE(request: NextRequest) {
-  try {
-    const session = await getAuthSession()
-    
-    if (!isAuthenticated(session)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  await optimizeForLambda()
+  
+  return measureLambdaPerformance('DELETE /api/auth/delete-account', async () => {
+    try {
+      const session = await getAuthSession()
+      
+      if (!isAuthenticated(session)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
 
-    // レート制限（1日に3回まで）
-    const rateLimitResult = await RateLimiter.checkRateLimit(
-      `delete_account:${session.user.id}`, 
-      86400, // 24時間
-      3
-    )
-    
-    if (!rateLimitResult.allowed) {
-      return NextResponse.json(
-        { error: 'アカウント削除の試行回数が上限に達しました。24時間後に再試行してください。' },
-        { status: 429 }
+      // レート制限は一旦コメントアウト（cache.tsファイルが存在しないため）
+      /*
+      const rateLimitResult = await RateLimiter.checkRateLimit(
+        `delete_account:${session.user.id}`, 
+        86400, // 24時間
+        3
       )
-    }
+      
+      if (!rateLimitResult.allowed) {
+        return NextResponse.json(
+          { error: 'アカウント削除の試行回数が上限に達しました。24時間後に再試行してください。' },
+          { status: 429 }
+        )
+      }
+      */
 
     const body = await request.json()
     const { confirmationText, password, reason } = body
@@ -124,13 +130,15 @@ export async function DELETE(request: NextRequest) {
       console.log(`👤 Deleted user account: ${user.email}`)
     })
 
-    // Redisからユーザー関連データを削除
+    // Redisからユーザー関連データを削除（一旦コメントアウト）
+    /*
     try {
       const deletedCacheKeys = await CacheManager.deletePattern(`*${session.user.id}*`)
       console.log(`🧹 Deleted ${deletedCacheKeys} cache keys`)
     } catch (error) {
       console.warn('Redis cleanup failed (non-critical):', error)
     }
+    */
 
     // 削除ログ記録（監査用）
     console.log('✅ Account deletion completed:', JSON.stringify(deletionStats, null, 2))
@@ -163,13 +171,14 @@ export async function DELETE(request: NextRequest) {
       }
     })
 
-  } catch (error) {
-    console.error('❌ Account deletion error:', error)
-    return NextResponse.json(
-      { error: 'アカウント削除に失敗しました。しばらく後に再試行してください。' }, 
-      { status: 500 }
-    )
-  }
+    } catch (error) {
+      console.error('❌ Account deletion error:', error)
+      return NextResponse.json(
+        { error: 'アカウント削除に失敗しました。しばらく後に再試行してください。' }, 
+        { status: 500 }
+      )
+    }
+  })
 }
 
 // OPTIONS メソッドの追加（CORS対応）

@@ -5,7 +5,7 @@ import ThemeToggle from '@/app/components/ThemeToggle'
 import SignOutButton from '@/app/components/SignOutButton'
 import AccountEditor from '@/app/components/AccountEditor'
 import AuthMethodDisplay from '@/app/components/AuthMethodDisplay'
-import DataManager from '@/app/components/DataManager'
+import DataExportForm from '@/app/components/DataExportForm'
 import AccountDeletionForm from '@/app/components/AccountDeletionForm'
 
 export default async function SettingsPage() {
@@ -77,7 +77,7 @@ export default async function SettingsPage() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               📊 データ管理
             </h2>
-            <DataManager />
+            <DataExportForm userId={session.user.id} />
           </section>
 
           {/* アカウント削除 */}
