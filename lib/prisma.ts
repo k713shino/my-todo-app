@@ -185,21 +185,106 @@ if (process.env.NODE_ENV !== 'production' && !isBuildTime()) {
   globalThis.__prisma = prisma
 }
 
-// 接続テスト関数（ランタイムでのみ実行）
-export async function testDatabaseConnection(): Promise<boolean> {
+// 詳細な接続テスト関数
+export async function testDatabaseConnection(): Promise<{ success: boolean; details: any }> {
   // ビルド時やダミークライアント使用時はスキップ
   if (isBuildTime() || !process.env.DATABASE_URL || process.env.DATABASE_URL.includes('dummy')) {
     console.log('⏭️ Database connection test skipped (build time or dummy URL)')
-    return true
+    return { success: true, details: 'Skipped - build time or dummy URL' }
+  }
+
+  const testResults = {
+    basicConnection: false,
+    timing: 0,
+    error: null as any,
+    serverInfo: null as any,
+    environmentInfo: {
+      nodeEnv: process.env.NODE_ENV,
+      vercel: process.env.VERCEL,
+      databaseHost: process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL).hostname : 'unknown'
+    }
   }
 
   try {
-    await prisma.$queryRaw`SELECT 1`
-    console.log('✅ Database connection successful')
-    return true
+    const startTime = Date.now()
+    
+    // 基本的な接続テスト
+    const result = await Promise.race([
+      prisma.$queryRaw`SELECT 
+        1 as connection_test,
+        NOW() as server_time,
+        version() as postgres_version,
+        current_database() as database_name,
+        current_user as current_user`,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+      )
+    ])
+    
+    testResults.timing = Date.now() - startTime
+    testResults.basicConnection = true
+    testResults.serverInfo = result
+    
+    console.log('✅ Database connection successful:', {
+      timing: testResults.timing + 'ms',
+      serverInfo: result
+    })
+    
+    return { success: true, details: testResults }
   } catch (error) {
-    console.error('❌ Database connection failed:', error)
-    return false
+    testResults.error = {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as any)?.code,
+      errno: (error as any)?.errno,
+      syscall: (error as any)?.syscall,
+      address: (error as any)?.address,
+      port: (error as any)?.port
+    }
+    
+    console.error('❌ Database connection failed:', testResults.error)
+    return { success: false, details: testResults }
+  }
+}
+
+// AWS RDS 専用の診断関数
+export async function diagnoseAWSRDS(): Promise<any> {
+  if (!process.env.DATABASE_URL) {
+    return { error: 'DATABASE_URL not configured' }
+  }
+
+  try {
+    const url = new URL(process.env.DATABASE_URL)
+    const diagnosis = {
+      connection: {
+        host: url.hostname,
+        port: url.port || '5432',
+        database: url.pathname.slice(1),
+        username: url.username,
+        hasPassword: !!url.password,
+        sslMode: url.searchParams.get('sslmode') || 'Not specified'
+      },
+      parameters: Object.fromEntries(url.searchParams.entries()),
+      recommendations: [] as string[]
+    }
+
+    // AWS RDS 推奨設定のチェック
+    if (!url.searchParams.get('sslmode')) {
+      diagnosis.recommendations.push('Add sslmode=require for AWS RDS')
+    }
+    if (!url.searchParams.get('connect_timeout')) {
+      diagnosis.recommendations.push('Add connect_timeout for Lambda environments')
+    }
+    if (url.hostname.includes('rds.amazonaws.com') && !url.searchParams.get('sslmode')) {
+      diagnosis.recommendations.push('AWS RDS requires SSL connection')
+    }
+
+    return diagnosis
+  } catch (error) {
+    return { 
+      error: 'Failed to parse DATABASE_URL',
+      details: error instanceof Error ? error.message : String(error)
+    }
   }
 }
 
