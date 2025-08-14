@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
     console.log('✅ Database connection successful via adapter')
 
     // ユーザーデータを取得（Lambda経由）
-    console.log('⏳ Fetching user data via Lambda...')
+    console.log('⏳ Fetching user data via Lambda for user:', session.user.id)
     const exportResult = await dbAdapter.exportUserData(session.user.id, format as 'json' | 'csv')
     
     if (!exportResult.success) {
@@ -133,7 +133,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Export data not found' }, { status: 404 })
     }
 
-    console.log('✅ Lambda経由でのデータ取得成功 - Todo数:', exportData.todos?.length || 0)
+    // セッション情報でユーザーデータを上書き（より正確な情報を使用）
+    if (exportData.user && session.user) {
+      exportData.user = {
+        ...exportData.user,
+        id: session.user.id,
+        name: session.user.name || exportData.user.name,
+        email: session.user.email || exportData.user.email,
+        dataSource: 'Lambda API + Session'
+      }
+    }
+
+    console.log('✅ Lambda経由でのデータ取得成功 - Todo数:', exportData.todos?.length || 0, 'ユーザー:', session.user.email)
 
     // 形式に応じてレスポンス生成
     if (format === 'csv') {

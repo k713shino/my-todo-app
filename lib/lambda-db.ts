@@ -142,7 +142,20 @@ class LambdaDB {
     }
     
     const endpoint = `/todos${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-    return this.request(endpoint, { method: 'GET' })
+    const result = await this.request(endpoint, { method: 'GET' })
+    
+    // Lambda関数がユーザーフィルタリングをサポートしていない場合、クライアント側でフィルタリング
+    if (result.success && Array.isArray(result.data)) {
+      const filteredTodos = result.data.filter((todo: any) => todo.userId === userId)
+      console.log(`🔍 Filtered todos for user ${userId}: ${filteredTodos.length}/${result.data.length}`)
+      
+      return {
+        ...result,
+        data: filteredTodos
+      } as LambdaResponse<Todo[]>
+    }
+    
+    return result as LambdaResponse<Todo[]>
   }
 
   async getTodo(userId: string, todoId: string): Promise<LambdaResponse<Todo>> {
@@ -177,12 +190,12 @@ class LambdaDB {
     try {
       console.log(`🔄 Building export data for user ${userId} in ${format} format`)
       
-      // 1. Todosデータを取得
+      // 1. ユーザー専用のTodosデータを取得（フィルタリング済み）
       const todosResult = await this.getTodos(userId)
       if (!todosResult.success) {
         return { 
           success: false, 
-          error: `Failed to fetch todos: ${todosResult.error}` 
+          error: `Failed to fetch user todos: ${todosResult.error}` 
         }
       }
       
@@ -191,28 +204,47 @@ class LambdaDB {
       // 2. ユーザーの統計情報を計算
       const totalTodos = todos.length
       const completedTodos = todos.filter((todo: any) => todo.completed).length
+      const pendingTodos = totalTodos - completedTodos
       
-      // 3. エクスポート用のデータ構造を構築
+      // 3. カテゴリ・優先度別の統計
+      const categoryStats = todos.reduce((acc: any, todo: any) => {
+        const category = todo.category || 'uncategorized'
+        acc[category] = (acc[category] || 0) + 1
+        return acc
+      }, {})
+      
+      const priorityStats = todos.reduce((acc: any, todo: any) => {
+        acc[todo.priority] = (acc[todo.priority] || 0) + 1
+        return acc
+      }, {})
+      
+      // 4. エクスポート用のデータ構造を構築
       const exportData = {
         exportInfo: {
           exportedAt: new Date().toISOString(),
           format,
-          version: '1.0-lambda'
+          version: '1.0-lambda',
+          userId,
+          note: 'User-specific data export via Lambda'
         },
         user: {
           id: userId,
-          name: 'Lambda User', // Lambda経由では詳細ユーザー情報は取得困難
-          email: 'lambda.user@example.com'
+          name: `User ${userId.slice(-8)}`, // UserIDの末尾8文字を使用
+          email: `user.${userId.slice(-8)}@app.com`,
+          dataSource: 'Lambda API'
         },
         todos: todos,
         statistics: {
           totalTodos,
           completedTodos,
-          pendingTodos: totalTodos - completedTodos
+          pendingTodos,
+          completionRate: totalTodos > 0 ? Math.round((completedTodos / totalTodos) * 100) : 0,
+          categoryBreakdown: categoryStats,
+          priorityBreakdown: priorityStats
         }
       }
       
-      console.log(`✅ Export data built successfully: ${totalTodos} todos`)
+      console.log(`✅ Export data built successfully: ${totalTodos} todos for user ${userId}`)
       
       return {
         success: true,
