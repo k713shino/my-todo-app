@@ -32,7 +32,11 @@ export default function DataExportForm({ userId: _userId }: DataExportFormProps)
         toast.success(`データが${format.toUpperCase()}形式でエクスポートされました`)
       } else {
         const data = await response.json()
-        toast.error(data.error || 'エクスポートに失敗しました')
+        if (data.maintenanceMode) {
+          toast.error('🔧 ' + (data.error || 'データベースメンテナンス中です'))
+        } else {
+          toast.error(data.error || 'エクスポートに失敗しました')
+        }
       }
     } catch (error) {
       console.error('Export error:', error)

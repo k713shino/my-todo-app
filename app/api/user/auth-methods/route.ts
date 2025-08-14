@@ -18,6 +18,29 @@ export async function GET() {
 
       console.log('🔍 認証方法API開始 - ユーザーID:', session.user.id)
 
+      // Prismaクライアント接続確認
+      try {
+        console.log('⏳ Testing Prisma connection...')
+        await prisma.$queryRaw`SELECT 1`
+        console.log('✅ Prisma connection successful')
+      } catch (connectionError) {
+        console.error('❌ Prisma connection failed:', connectionError)
+        console.error('❌ Connection error details:', {
+          message: connectionError instanceof Error ? connectionError.message : String(connectionError),
+          databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+          environment: process.env.NODE_ENV
+        })
+        
+        // 接続エラー時はデフォルト認証方法を返す
+        return NextResponse.json({
+          authMethods: [{
+            provider: 'credentials',
+            providerAccountId: 'email'
+          }],
+          maintenanceMode: true
+        })
+      }
+
       // ユーザーのアカウント情報を取得（エラーハンドリング付き）
       let accounts: Array<{provider: string, providerAccountId: string}> = []
       try {

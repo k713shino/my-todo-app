@@ -44,6 +44,19 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Prismaクライアント接続確認
+    try {
+      console.log('⏳ Testing Prisma connection for account deletion...')
+      await prisma.$queryRaw`SELECT 1`
+      console.log('✅ Prisma connection successful')
+    } catch (connectionError) {
+      console.error('❌ Prisma connection failed:', connectionError)
+      return NextResponse.json({ 
+        error: 'データベースメンテナンス中のため、アカウント削除はできません。しばらく後に再試行してください。',
+        maintenanceMode: true
+      }, { status: 503 })
+    }
+
     // ユーザー情報取得
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },

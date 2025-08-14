@@ -50,10 +50,19 @@ export async function GET(request: NextRequest) {
       console.log('✅ Prisma connection successful')
     } catch (connectionError) {
       console.error('❌ Prisma connection failed:', connectionError)
+      console.error('❌ Connection error details:', {
+        message: connectionError instanceof Error ? connectionError.message : String(connectionError),
+        stack: connectionError instanceof Error ? connectionError.stack : undefined,
+        databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+        environment: process.env.NODE_ENV
+      })
+      
+      // 接続エラー時はメンテナンスメッセージを返す
       return NextResponse.json({ 
-        error: 'データベース接続に失敗しました',
-        details: connectionError instanceof Error ? connectionError.message : 'Connection error'
-      }, { status: 500 })
+        error: 'データベースメンテナンス中です。しばらく後に再試行してください。',
+        maintenanceMode: true,
+        details: 'Database connection unavailable'
+      }, { status: 503 }) // Service Unavailable
     }
 
     // ユーザーデータを取得（エラーハンドリング付き）
