@@ -6,7 +6,7 @@ import SignOutButton from '@/app/components/SignOutButton'
 import AccountEditor from '@/app/components/AccountEditor'
 import AuthMethodDisplay from '@/app/components/AuthMethodDisplay'
 import DataManager from '@/app/components/DataManager'
-import AccountDeletion from '@/app/components/AccountDeletion'
+import AccountDeletionForm from '@/app/components/AccountDeletionForm'
 
 export default async function SettingsPage() {
   const session = await getAuthSession()
@@ -85,7 +85,7 @@ export default async function SettingsPage() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               🗑️ アカウント管理
             </h2>
-            <AccountDeletion />
+            <AccountDeletionForm />
           </section>
 
         </div>

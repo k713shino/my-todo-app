@@ -25,29 +25,53 @@ export default function DataManager({ className = '' }: DataManagerProps) {
       }
 
       const data = await response.json()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `todos-${new Date().toISOString().split('T')[0]}.json`
-      a.style.display = 'none'
-      document.body.appendChild(a)
+      const jsonString = JSON.stringify(data, null, 2)
+      const filename = `todos-${new Date().toISOString().split('T')[0]}.json`
       
-      // ダウンロードの実行
-      try {
-        a.click()
-        console.log('JSONファイルダウンロード開始')
-      } catch (clickError) {
-        console.error('ダウンロードクリックエラー:', clickError)
-        // フォールバック: window.openを使用
-        window.open(url, '_blank')
+      // 複数の方法を試行
+      if (navigator.userAgent.includes('Chrome') || navigator.userAgent.includes('Edge')) {
+        // Chrome/Edge用: showSaveFilePickerを使用（対応している場合）
+        try {
+          if ('showSaveFilePicker' in window) {
+            const fileHandle = await (window as any).showSaveFilePicker({
+              suggestedName: filename,
+              types: [{
+                description: 'JSON files',
+                accept: { 'application/json': ['.json'] }
+              }]
+            })
+            const writable = await fileHandle.createWritable()
+            await writable.write(jsonString)
+            await writable.close()
+            toast.success('JSONデータをエクスポートしました')
+            return
+          }
+        } catch (fileApiError) {
+          console.log('File System API不対応、従来方法を使用')
+        }
       }
       
-      // クリーンアップを遅延実行
+      // 従来方法（フォールバック）
+      const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      
+      // ダウンロードリンクを作成
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.style.display = 'none'
+      
+      // DOMに追加してクリック
+      document.body.appendChild(a)
+      a.click()
+      
+      // 少し待ってからクリーンアップ
       setTimeout(() => {
-        document.body.removeChild(a)
+        if (document.body.contains(a)) {
+          document.body.removeChild(a)
+        }
         URL.revokeObjectURL(url)
-      }, 100)
+      }, 1000)
 
       toast.success('JSONデータをエクスポートしました')
     } catch (error) {
@@ -71,29 +95,53 @@ export default function DataManager({ className = '' }: DataManagerProps) {
       const csvData = await response.text()
       // BOM付きでCSVを作成（Excelでの文字化け防止）
       const bom = '\uFEFF'
-      const blob = new Blob([bom + csvData], { type: 'text/csv;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `todos-${new Date().toISOString().split('T')[0]}.csv`
-      a.style.display = 'none'
-      document.body.appendChild(a)
+      const csvWithBom = bom + csvData
+      const filename = `todos-${new Date().toISOString().split('T')[0]}.csv`
       
-      // ダウンロードの実行
-      try {
-        a.click()
-        console.log('CSVファイルダウンロード開始')
-      } catch (clickError) {
-        console.error('ダウンロードクリックエラー:', clickError)
-        // フォールバック: window.openを使用
-        window.open(url, '_blank')
+      // 複数の方法を試行
+      if (navigator.userAgent.includes('Chrome') || navigator.userAgent.includes('Edge')) {
+        // Chrome/Edge用: showSaveFilePickerを使用（対応している場合）
+        try {
+          if ('showSaveFilePicker' in window) {
+            const fileHandle = await (window as any).showSaveFilePicker({
+              suggestedName: filename,
+              types: [{
+                description: 'CSV files',
+                accept: { 'text/csv': ['.csv'] }
+              }]
+            })
+            const writable = await fileHandle.createWritable()
+            await writable.write(csvWithBom)
+            await writable.close()
+            toast.success('CSVデータをエクスポートしました')
+            return
+          }
+        } catch (fileApiError) {
+          console.log('File System API不対応、従来方法を使用')
+        }
       }
       
-      // クリーンアップを遅延実行
+      // 従来方法（フォールバック）
+      const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      
+      // ダウンロードリンクを作成
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.style.display = 'none'
+      
+      // DOMに追加してクリック
+      document.body.appendChild(a)
+      a.click()
+      
+      // 少し待ってからクリーンアップ
       setTimeout(() => {
-        document.body.removeChild(a)
+        if (document.body.contains(a)) {
+          document.body.removeChild(a)
+        }
         URL.revokeObjectURL(url)
-      }, 100)
+      }, 1000)
 
       toast.success('CSVデータをエクスポートしました')
     } catch (error) {
