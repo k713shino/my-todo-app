@@ -25,10 +25,27 @@ export async function GET() {
         }
       })
 
-      console.log('✅ Auth methods fetched successfully for user:', session.user.id)
+      // ユーザー情報も取得（パスワード認証の判定のため）
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { password: true }
+      })
+
+      // OAuthアカウントがない場合はCredentials認証として扱う
+      const authMethods = accounts.length > 0 ? accounts : []
+      
+      // パスワードが設定されている場合はCredentials認証を追加
+      if (user?.password && !accounts.some(acc => acc.provider === 'credentials')) {
+        authMethods.push({
+          provider: 'credentials',
+          providerAccountId: 'email'
+        })
+      }
+
+      console.log('✅ Auth methods fetched successfully for user:', session.user.id, authMethods)
 
       return NextResponse.json({
-        authMethods: accounts
+        authMethods
       })
 
     } catch (error) {

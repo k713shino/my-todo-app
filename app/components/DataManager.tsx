@@ -25,15 +25,29 @@ export default function DataManager({ className = '' }: DataManagerProps) {
       }
 
       const data = await response.json()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `todos-${new Date().toISOString().split('T')[0]}.json`
+      a.style.display = 'none'
       document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      
+      // ダウンロードの実行
+      try {
+        a.click()
+        console.log('JSONファイルダウンロード開始')
+      } catch (clickError) {
+        console.error('ダウンロードクリックエラー:', clickError)
+        // フォールバック: window.openを使用
+        window.open(url, '_blank')
+      }
+      
+      // クリーンアップを遅延実行
+      setTimeout(() => {
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      }, 100)
 
       toast.success('JSONデータをエクスポートしました')
     } catch (error) {
@@ -55,15 +69,31 @@ export default function DataManager({ className = '' }: DataManagerProps) {
       }
 
       const csvData = await response.text()
-      const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8' })
+      // BOM付きでCSVを作成（Excelでの文字化け防止）
+      const bom = '\uFEFF'
+      const blob = new Blob([bom + csvData], { type: 'text/csv;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `todos-${new Date().toISOString().split('T')[0]}.csv`
+      a.style.display = 'none'
       document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      
+      // ダウンロードの実行
+      try {
+        a.click()
+        console.log('CSVファイルダウンロード開始')
+      } catch (clickError) {
+        console.error('ダウンロードクリックエラー:', clickError)
+        // フォールバック: window.openを使用
+        window.open(url, '_blank')
+      }
+      
+      // クリーンアップを遅延実行
+      setTimeout(() => {
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      }, 100)
 
       toast.success('CSVデータをエクスポートしました')
     } catch (error) {

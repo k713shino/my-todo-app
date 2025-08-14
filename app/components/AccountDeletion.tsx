@@ -19,13 +19,15 @@ export default function AccountDeletion({ className = '' }: AccountDeletionProps
   const handleDeleteAccount = async () => {
     if (!session?.user) return
     
-    if (confirmationText !== 'DELETE') {
-      toast.error('確認テキストが正しくありません')
+    if (confirmationText.trim() !== 'DELETE') {
+      toast.error('確認テキストが正しくありません。「DELETE」と正確に入力してください。')
       return
     }
 
     setIsDeleting(true)
     try {
+      console.log('アカウント削除開始...')
+      
       const response = await fetch('/api/user/delete', {
         method: 'DELETE',
         headers: {
@@ -33,17 +35,26 @@ export default function AccountDeletion({ className = '' }: AccountDeletionProps
         },
       })
 
+      console.log('削除レスポンス:', response.status, response.statusText)
+
       if (!response.ok) {
-        throw new Error('アカウント削除に失敗しました')
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(errorData.error || 'アカウント削除に失敗しました')
       }
 
+      const result = await response.json()
+      console.log('削除成功:', result)
+      
       toast.success('アカウントを削除しました')
       
-      // サインアウトしてホームページにリダイレクト
-      await signOut({ callbackUrl: '/' })
+      // 少し待ってからサインアウト
+      setTimeout(async () => {
+        await signOut({ callbackUrl: '/' })
+      }, 1000)
+      
     } catch (error) {
       console.error('Account deletion error:', error)
-      toast.error('アカウント削除に失敗しました')
+      toast.error(error instanceof Error ? error.message : 'アカウント削除に失敗しました')
     } finally {
       setIsDeleting(false)
     }

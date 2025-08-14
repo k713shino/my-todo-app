@@ -17,38 +17,45 @@ export async function DELETE() {
       }
 
       const userId = session.user.id
+      console.log('削除対象ユーザーID:', userId)
 
       // トランザクションを使用してすべてのデータを削除
       await prisma.$transaction(async (tx) => {
-        // 1. Todoを削除
-        await tx.todo.deleteMany({
+        console.log('1. Todoを削除中...')
+        const deletedTodos = await tx.todo.deleteMany({
           where: { userId }
         })
+        console.log(`削除されたTodo: ${deletedTodos.count}件`)
 
-        // 2. 保存された検索を削除
-        await tx.savedSearch.deleteMany({
+        console.log('2. 保存された検索を削除中...')
+        const deletedSavedSearches = await tx.savedSearch.deleteMany({
           where: { userId }
         })
+        console.log(`削除された保存検索: ${deletedSavedSearches.count}件`)
 
-        // 3. 検索履歴を削除
-        await tx.searchHistory.deleteMany({
+        console.log('3. 検索履歴を削除中...')
+        const deletedSearchHistory = await tx.searchHistory.deleteMany({
           where: { userId }
         })
+        console.log(`削除された検索履歴: ${deletedSearchHistory.count}件`)
 
-        // 4. セッションを削除
-        await tx.session.deleteMany({
+        console.log('4. セッションを削除中...')
+        const deletedSessions = await tx.session.deleteMany({
           where: { userId }
         })
+        console.log(`削除されたセッション: ${deletedSessions.count}件`)
 
-        // 5. OAuth アカウントを削除
-        await tx.account.deleteMany({
+        console.log('5. OAuth アカウントを削除中...')
+        const deletedAccounts = await tx.account.deleteMany({
           where: { userId }
         })
+        console.log(`削除されたアカウント: ${deletedAccounts.count}件`)
 
-        // 6. ユーザーを削除
+        console.log('6. ユーザーを削除中...')
         await tx.user.delete({
           where: { id: userId }
         })
+        console.log('ユーザー削除完了')
       })
 
       console.log('✅ User account completely deleted:', userId)

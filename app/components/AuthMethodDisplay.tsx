@@ -25,7 +25,10 @@ export default function AuthMethodDisplay({ className = '' }: AuthMethodDisplayP
         const response = await fetch('/api/user/auth-methods')
         if (response.ok) {
           const data = await response.json()
+          console.log('認証方法データ:', data)
           setAuthMethods(data.authMethods || [])
+        } else {
+          console.error('認証方法取得エラー:', response.status, response.statusText)
         }
       } catch (error) {
         console.error('Failed to fetch auth methods:', error)

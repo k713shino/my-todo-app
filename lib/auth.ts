@@ -223,13 +223,15 @@ export const authOptions: AuthOptions = {
           
           // データベース操作の安全な実行
           try {
-            // Prismaクライアントの利用可能性チェック
-            const { testDatabaseConnection } = await import('@/lib/prisma')
-            const isDbAvailable = await testDatabaseConnection()
-            
-            if (!isDbAvailable) {
-              console.log('⚠️ データベース接続不可 - OAuth統合をスキップ')
-              return true // 認証は続行するがDB操作は行わない
+            // 本番環境ではデータベース接続チェックをスキップ
+            if (process.env.NODE_ENV !== 'production') {
+              const { testDatabaseConnection } = await import('@/lib/prisma')
+              const isDbAvailable = await testDatabaseConnection()
+              
+              if (!isDbAvailable) {
+                console.log('⚠️ データベース接続不可 - OAuth統合をスキップ')
+                return true
+              }
             }
             
             const { prisma } = await import('@/lib/prisma')
