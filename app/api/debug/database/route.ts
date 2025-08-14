@@ -15,6 +15,20 @@ export async function GET() {
 
     console.log('🔍 Database diagnostic started')
 
+    interface TestResult {
+      name: string
+      status: 'SUCCESS' | 'FAILED'
+      duration?: string
+      result?: any
+      error?: string
+      code?: string
+      errno?: string
+      syscall?: string
+      userCount?: number
+      userData?: any
+      metrics?: any
+    }
+
     const diagnostics = {
       timestamp: new Date().toISOString(),
       environment: {
@@ -30,7 +44,7 @@ export async function GET() {
         urlPort: process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL).port : 'Not set',
         urlParams: process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL).searchParams.toString() : 'Not set',
       },
-      tests: []
+      tests: [] as TestResult[]
     }
 
     // テスト1: 基本的な接続テスト
@@ -53,7 +67,7 @@ export async function GET() {
       })
       console.log('✅ Test 1 passed:', result)
     } catch (error) {
-      const errorInfo = {
+      const errorInfo: TestResult = {
         name: 'Basic Connection',
         status: 'FAILED',
         error: error instanceof Error ? error.message : String(error),
@@ -84,7 +98,7 @@ export async function GET() {
         name: 'User Table Access',
         status: 'FAILED',
         error: error instanceof Error ? error.message : String(error)
-      })
+      } as TestResult)
       console.error('❌ Test 2 failed:', error)
     }
 
@@ -115,25 +129,41 @@ export async function GET() {
         name: 'Current User Data',
         status: 'FAILED',
         error: error instanceof Error ? error.message : String(error)
-      })
+      } as TestResult)
       console.error('❌ Test 3 failed:', error)
     }
 
-    // テスト4: 接続プール状態
+    // テスト4: データベース情報取得
     try {
-      console.log('🧪 Test 4: Connection pool info')
-      const metrics = await prisma.$metrics.json()
+      console.log('🧪 Test 4: Database info')
+      const start = Date.now()
+      
+      // データベースサイズとテーブル情報を取得
+      const dbInfo = await prisma.$queryRaw`
+        SELECT 
+          current_database() as database_name,
+          pg_size_pretty(pg_database_size(current_database())) as database_size,
+          count(*) as table_count
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
+      `
+      
+      const duration = Date.now() - start
+      
       diagnostics.tests.push({
-        name: 'Connection Pool',
+        name: 'Database Info',
         status: 'SUCCESS',
-        metrics: metrics
+        duration: `${duration}ms`,
+        result: dbInfo
       })
+      console.log('✅ Test 4 passed:', dbInfo)
     } catch (error) {
       diagnostics.tests.push({
-        name: 'Connection Pool',
+        name: 'Database Info',
         status: 'FAILED',
         error: error instanceof Error ? error.message : String(error)
-      })
+      } as TestResult)
+      console.error('❌ Test 4 failed:', error)
     }
 
     const successCount = diagnostics.tests.filter(t => t.status === 'SUCCESS').length
