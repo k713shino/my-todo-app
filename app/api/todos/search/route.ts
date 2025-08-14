@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
           const dueDate = new Date(todo.dueDate);
           return dueDate >= todayStart && dueDate < todayEnd;
         });
-      } else if (filters.dateRange === 'week') {
+      } else if (filters.dateRange === 'this_week') {
         const weekEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
         
         filteredTodos = filteredTodos.filter((todo: any) => {
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
           const dueDate = new Date(todo.dueDate);
           return dueDate >= now && dueDate <= weekEnd;
         });
-      } else if (filters.dateRange === 'no-due-date') {
+      } else if (filters.dateRange === 'no_due_date') {
         filteredTodos = filteredTodos.filter((todo: any) => !todo.dueDate);
       }
       
