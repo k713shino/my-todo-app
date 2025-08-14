@@ -7,20 +7,25 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('🚀 Export API started')
+    
     const session = await getAuthSession()
+    console.log('✅ Session retrieved:', session?.user?.id ? 'Valid' : 'Invalid')
     
     if (!isAuthenticated(session)) {
+      console.log('❌ Authentication failed')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // レート制限（1時間に3回まで）- エラーハンドリング付き
+    // レート制限（1時間に3回まで）- 一時的に無効化してテスト
     try {
-      const { RateLimiter } = await import('@/lib/cache')
+      console.log('⏳ Rate limit check started')
       const rateLimitResult = await RateLimiter.checkRateLimit(
         `export_data:${session.user.id}`, 
         3600, 
         3
       )
+      console.log('✅ Rate limit check completed:', rateLimitResult)
       
       if (!rateLimitResult.allowed) {
         return NextResponse.json(
@@ -38,9 +43,23 @@ export async function GET(request: NextRequest) {
 
     console.log('🔍 エクスポートAPI開始 - ユーザーID:', session.user.id, 'フォーマット:', format)
 
+    // Prismaクライアント接続確認
+    try {
+      console.log('⏳ Testing Prisma connection...')
+      await prisma.$queryRaw`SELECT 1`
+      console.log('✅ Prisma connection successful')
+    } catch (connectionError) {
+      console.error('❌ Prisma connection failed:', connectionError)
+      return NextResponse.json({ 
+        error: 'データベース接続に失敗しました',
+        details: connectionError instanceof Error ? connectionError.message : 'Connection error'
+      }, { status: 500 })
+    }
+
     // ユーザーデータを取得（エラーハンドリング付き）
     let userData
     try {
+      console.log('⏳ Database query started for user:', session.user.id)
       userData = await prisma.user.findUnique({
         where: { id: session.user.id },
         include: {
@@ -50,10 +69,22 @@ export async function GET(request: NextRequest) {
         }
       })
       console.log('✅ ユーザーデータ取得成功 - Todo数:', userData?.todos?.length || 0)
+      console.log('📊 User data structure:', {
+        hasUser: !!userData,
+        userId: userData?.id,
+        todoCount: userData?.todos?.length || 0,
+        userEmail: userData?.email
+      })
     } catch (dbError) {
       console.error('❌ データベース取得エラー:', dbError)
+      console.error('❌ Error details:', {
+        message: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : undefined,
+        userId: session.user.id
+      })
       return NextResponse.json({ 
-        error: 'データベース接続エラーが発生しました' 
+        error: 'データベース接続エラーが発生しました',
+        details: dbError instanceof Error ? dbError.message : 'Unknown error'
       }, { status: 500 })
     }
 
