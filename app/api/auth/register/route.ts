@@ -6,10 +6,9 @@ import { createSecurityHeaders } from '@/lib/auth-utils'
 /**
  * 🚨 緊急対応: Lambda API経由でのユーザー登録
  */
-async function registerViaLambdaAPI(request: NextRequest): Promise<NextResponse> {
+async function registerViaLambdaAPI(requestData: any): Promise<NextResponse> {
   console.log('🔄 Lambda API経由登録開始')
   
-  const requestData = await request.json()
   const { name, email, password } = requestData
   
   // バリデーション
@@ -119,17 +118,6 @@ export async function POST(request: NextRequest) {
       bcryptAvailable: !!bcrypt
     })
     
-    // 🚨 緊急対応: RDS接続問題時はLambda API経由で登録
-    if (process.env.LAMBDA_API_URL) {
-      console.log('🔄 Lambda API経由での会員登録を試行')
-      try {
-        return await registerViaLambdaAPI(request)
-      } catch (lambdaError) {
-        console.error('❌ Lambda API登録失敗、Prisma直接接続にフォールバック:', lambdaError)
-        // Lambda失敗時はPrisma直接接続を試行
-      }
-    }
-    
     // リクエストボディの取得とログ出力
     let requestData
     try {
@@ -146,6 +134,17 @@ export async function POST(request: NextRequest) {
         { error: '不正なリクエスト形式です' },
         { status: 400 }
       )
+    }
+    
+    // 🚨 緊急対応: RDS接続問題時はLambda API経由で登録
+    if (process.env.LAMBDA_API_URL) {
+      console.log('🔄 Lambda API経由での会員登録を試行')
+      try {
+        return await registerViaLambdaAPI(requestData)
+      } catch (lambdaError) {
+        console.error('❌ Lambda API登録失敗、Prisma直接接続にフォールバック:', lambdaError)
+        // Lambda失敗時はPrisma直接接続を試行
+      }
     }
 
     const { name, email, password } = requestData
