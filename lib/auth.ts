@@ -13,7 +13,8 @@ export const authOptions: AuthOptions = {
       GithubProvider({
         clientId: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
-        allowDangerousEmailAccountLinking: true,
+        // 🛡️ セキュリティ修正: 危険な自動アカウント連携を無効化
+        allowDangerousEmailAccountLinking: false,
         authorization: {
           params: {
             scope: "read:user user:email"
@@ -35,7 +36,8 @@ export const authOptions: AuthOptions = {
       GoogleProvider({
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        allowDangerousEmailAccountLinking: true,
+        // 🛡️ セキュリティ修正: 危険な自動アカウント連携を無効化
+        allowDangerousEmailAccountLinking: false,
         authorization: {
           params: {
             scope: "openid email profile"
@@ -43,7 +45,7 @@ export const authOptions: AuthOptions = {
         },
         profile(profile) {
           return {
-            id: profile.sub, // 一時的にOAuth IDを使用、signIn callbackで実際のDB IDに変更
+            id: profile.sub,
             name: profile.name,
             email: profile.email,
             image: profile.picture,
@@ -219,11 +221,11 @@ export const authOptions: AuthOptions = {
         
         // OAuth認証時のユーザー統合処理
         if (account?.provider && account.provider !== 'credentials') {
-          console.log(`✅ OAuth認証成功: ${user.email} (${account.provider})`)
+          console.log(`OAuth認証成功: ${user.email} (${account.provider})`)
           
-          // データベース操作の安全な実行
+          // 🛡️ セキュリティ修正: データベース操作の厳格なエラーハンドリング
           try {
-            // Lambda環境の場合は、dbAdapterを使用してユーザー管理を行う
+            // 🛡️ セキュリティ修正: データベース接続を必須化
             if (process.env.USE_LAMBDA_DB === 'true') {
               console.log('🔧 Lambda環境でのOAuth統合処理')
               
@@ -232,12 +234,16 @@ export const authOptions: AuthOptions = {
               // 既存ユーザーをメールアドレスで検索
               const existingUserResult = await dbAdapter.default.getUserByEmail(user.email!)
               
-              if (existingUserResult.success && existingUserResult.data) {
+              if (!existingUserResult.success) {
+                console.error('❌ Lambda: ユーザー検索エラー:', existingUserResult.error)
+                throw new Error(`Database error: ${existingUserResult.error}`)
+              }
+              
+              if (existingUserResult.data) {
                 const existingUser = existingUserResult.data
                 console.log(`🔗 Lambda: 既存ユーザーを発見、OAuth統合中... ${existingUser.id}`)
-                console.log(`🔄 Lambda: OAuth ID "${user.id}" を DB ID "${existingUser.id}" にマッピング`)
                 
-                // JWTトークンで使用するためにユーザーIDをDB IDに変更
+                // 🛡️ セキュリティ修正: 安全なIDマッピング
                 const originalOAuthId = user.id
                 user.id = existingUser.id
                 account.userId = existingUser.id
@@ -245,45 +251,43 @@ export const authOptions: AuthOptions = {
                 
                 return true
               } else {
-                console.log('👤 Lambda: 新規ユーザー作成はLambda経由では制限されています')
-                console.log('⚠️ OAuth認証は続行しますが、データベース統合は手動で必要です')
-                return true
+                console.error('❌ Lambda: 新規ユーザー作成はLambda経由では制限されています')
+                throw new Error('新規ユーザー登録は別途行ってください')
               }
             }
             
-            // 直接Prisma接続が利用可能な場合の処理
-            if (process.env.NODE_ENV !== 'production') {
-              const { testDatabaseConnection } = await import('@/lib/prisma')
-              const isDbAvailable = await testDatabaseConnection()
-              
-              if (!isDbAvailable) {
-                console.log('⚠️ データベース接続不可 - OAuth統合をスキップ')
-                return true
-              }
+            // 🛡️ セキュリティ修正: データベース接続の確実な検証
+            const { testDatabaseConnection } = await import('@/lib/prisma')
+            const dbConnectionResult = await testDatabaseConnection()
+            
+            if (!dbConnectionResult.success) {
+              console.error('❌ データベース接続失敗:', dbConnectionResult.details)
+              throw new Error('データベース接続に失敗しました')
             }
             
             const { prisma } = await import('@/lib/prisma')
             
-            // 同一メールアドレスの既存ユーザーを検索
+            // 🛡️ セキュリティ修正: 厳格なユーザー検索と検証
             const existingUser = await prisma.user.findUnique({
               where: { email: user.email! },
-              include: { accounts: true }
+              include: { 
+                accounts: {
+                  where: {
+                    provider: account.provider,
+                    providerAccountId: account.providerAccountId
+                  }
+                }
+              }
             })
             
             if (existingUser) {
               console.log('🔗 既存ユーザーを発見、OAuth統合中...', existingUser.id)
-              console.log(`🔄 OAuth ID "${user.id}" を DB ID "${existingUser.id}" にマッピング`)
               
-              // 既存のアカウントにOAuth情報を追加
-              const existingAccount = await prisma.account.findFirst({
-                where: {
-                  userId: existingUser.id,
-                  provider: account.provider,
-                  providerAccountId: account.providerAccountId
-                }
-              })
-              
-              if (!existingAccount) {
+              // 既存のOAuth連携をチェック
+              if (existingUser.accounts.length > 0) {
+                console.log('✅ OAuth連携は既に存在します')
+              } else {
+                // 新しいOAuth連携を追加
                 await prisma.account.create({
                   data: {
                     userId: existingUser.id,
@@ -300,8 +304,6 @@ export const authOptions: AuthOptions = {
                   }
                 })
                 console.log('✅ OAuth連携を既存アカウントに追加')
-              } else {
-                console.log('✅ OAuth連携は既に存在します')
               }
               
               // ユーザー情報を更新（名前や画像が更新されている場合）
@@ -313,17 +315,15 @@ export const authOptions: AuthOptions = {
                 }
               })
               
-              // 🔑 CRITICAL: JWTトークンで使用するためにユーザーIDをDB IDに変更
+              // 🛡️ セキュリティ修正: 安全なIDマッピング
               const originalOAuthId = user.id
               user.id = existingUser.id
+              account.userId = existingUser.id
               console.log(`✅ ユーザーIDマッピング完了: ${originalOAuthId} → ${existingUser.id}`)
               
-              // セッションでも使用するため、確実にDBのIDを設定
-              account.userId = existingUser.id
-              
             } else {
+              // 🛡️ セキュリティ修正: 新規ユーザー作成の厳格化
               console.log('👤 新規ユーザー作成中...')
-              console.log(`🔄 OAuth ID "${user.id}" で新規ユーザーを作成`)
               
               // 新規ユーザーとアカウントを作成（IDは自動生成されるcuidを使用）
               const newUser = await prisma.user.create({
@@ -349,7 +349,7 @@ export const authOptions: AuthOptions = {
                 }
               })
               
-              // 🔑 CRITICAL: OAuth IDをPrismaで生成されたDB IDに変更
+              // 🛡️ セキュリティ修正: OAuth IDをPrismaで生成されたDB IDに変更
               const originalOAuthId = user.id
               user.id = newUser.id
               account.userId = newUser.id
@@ -357,9 +357,9 @@ export const authOptions: AuthOptions = {
             }
             
           } catch (error) {
-            console.error('❌ OAuth統合エラー (続行):', error)
-            // エラーがあっても認証は続行する
-            return true
+            console.error('❌ OAuth統合エラー:', error)
+            // 🛡️ セキュリティ修正: エラー時は認証を拒否
+            throw new Error(`OAuth統合に失敗しました: ${error instanceof Error ? error.message : String(error)}`)
           }
         }
         return true
@@ -369,8 +369,8 @@ export const authOptions: AuthOptions = {
           provider: account?.provider,
           email: user?.email
         })
-        // 致命的なエラーでも認証を続行してユーザーがアクセスできるように
-        return true
+        // 🛡️ セキュリティ修正: エラー時は認証を拒否
+        return false
       }
     }
   },

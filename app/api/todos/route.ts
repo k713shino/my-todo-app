@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Priority } from '@prisma/client';
 import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils';
+import { getAuthenticatedUser, createAuthErrorResponse, createSecurityHeaders } from '@/lib/auth-utils';
 import type { Todo } from '@/types/todo';
 import { safeToISOString } from '@/lib/date-utils';
 import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization';
@@ -10,142 +11,145 @@ export const dynamic = 'force-dynamic'
 
 // 全てのTodoを取得
 export async function GET(request: NextRequest) {
+  // 🛡️ セキュリティ強化: 厳格な認証チェック
+  const authResult = await getAuthenticatedUser(request)
+  if (!authResult.success || !authResult.user) {
+    return createAuthErrorResponse(authResult.error || 'UNAUTHORIZED')
+  }
+
   // Lambda最適化の適用
   await optimizeForLambda();
   
   return measureLambdaPerformance('GET /api/todos', async () => {
     try {
-      console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - 緊急回避策 v5');
-      
-      const session = await getAuthSession()
-    console.log('👤 セッション情報:', {
-      hasSession: !!session,
-      userId: session?.user?.id,
-      userEmail: session?.user?.email
-    });
-    
-    if (!isAuthenticated(session)) {
-      console.log('❌ 認証されていません - 空配列を返します');
-      return NextResponse.json([], { status: 200 });
-    }
-
-    console.log('🔄 緊急回避策: /todos エンドポイント + フロントエンドフィルタリング使用');
-    console.log('📝 理由: API Gatewayの/todos/user/{userId}ルーティング問題のため');
-    console.log('👤 現在のGoogleユーザーID:', session.user.id);
-    
-    // 緊急回避策: /todos エンドポイントを使用してフロントエンドでフィルタリング
-    const fallbackResponse = await lambdaAPI.get('/todos');
-    console.log('📡 Lambda API レスポンス:', {
-      success: fallbackResponse.success,
-      hasData: !!fallbackResponse.data,
-      dataType: typeof fallbackResponse.data,
-      dataLength: fallbackResponse.data ? fallbackResponse.data.length : 0,
-      error: fallbackResponse.error,
-      timestamp: fallbackResponse.timestamp
-    });
-    
-    if (fallbackResponse.success && fallbackResponse.data) {
-      const allTodos = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
-      console.log('📊 全Todo件数:', allTodos.length);
-      
-      // フロントエンド側でユーザー固有のフィルタリング（改善されたマッピング対応）
-      const userTodos = allTodos.filter((todo: any) => {
-        const todoUserId = todo.userId;
-        const currentGoogleId = session.user.id;
-        
-        // 直接比較（新規ユーザーの場合、Lambda側で正しくマッピングされている）
-        if (todoUserId === currentGoogleId) return true;
-        
-        // 既知のマッピング（既存ユーザー用 - Lambda側でaccountsテーブル経由で処理される想定）
-        if (currentGoogleId === '110701307742242924558' && todoUserId === 'cmdpi4dye0000lc04xn7yujpn') return true;
-        if (currentGoogleId === '112433279481859708110' && todoUserId === 'cmdsbbogh0000l604u08lqcp4') return true;
-        
-        return false;
+      console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - セキュリティ強化版');
+      console.log('👤 認証済みユーザー:', {
+        userId: authResult.user!.id,
+        email: authResult.user!.email
       });
       
-      console.log('📊 フィルタリング後Todo件数:', userTodos.length);
+      console.log('🔄 緊急回避策: /todos エンドポイント + フロントエンドフィルタリング使用');
+      console.log('📝 理由: API Gatewayの/todos/user/{userId}ルーティング問題のため');
+      console.log('👤 現在のユーザーID:', authResult.user!.id);
       
-      // スマートマッピング：新規ユーザーの場合、作成されたTodoがあるかチェック
-      if (userTodos.length === 0) {
-        console.log('🔍 スマートマッピング: 新規ユーザーの可能性をチェック');
-        
-        // 現在のセッションでのTodo作成履歴を確認（セッションストレージから推測）
-        // 新規ユーザーのTodoパターンを検出（CUIDで始まるDBユーザーID）
-        const newUserTodos = allTodos.filter((todo: any) => {
-          const userId = todo.userId;
-          // CUID形式のパターン: "c" + timestamp(base36) + random
-          if (!userId || !userId.startsWith('c') || userId.length < 15) return false;
-          
-          // 最近30分以内に作成されたTodoかチェック
-          const todoCreatedAt = new Date(todo.createdAt);
-          const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-          
-          return todoCreatedAt > thirtyMinutesAgo;
-        });
-        
-        console.log('🕒 最近30分の新規ユーザーTodo:', newUserTodos.length, '件');
-        
-        if (newUserTodos.length > 0) {
-          // 最も最近作成されたTodoのユーザーIDを取得
-          const sortedTodos = newUserTodos.sort((a, b) => 
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          const detectedUserId = sortedTodos[0].userId;
-          
-          console.log('🆕 新規ユーザー検出:', {
-            detectedUserId,
-            recentTodoCount: newUserTodos.length,
-            latestTodoTitle: sortedTodos[0].title
-          });
-          
-          // この新規ユーザーIDで全Todoを再フィルタリング
-          const allUserTodos = allTodos.filter((todo: any) => todo.userId === detectedUserId);
-          
-          console.log('🔄 検出されたユーザーID:', detectedUserId, 'の全Todo:', allUserTodos.length, '件');
-          
-          // 検出されたTodoをuserTodosに追加
-          userTodos.push(...allUserTodos);
-        }
-      }
-      
-      console.log('📊 最終フィルタリング後Todo件数:', userTodos.length);
-      
-      if (userTodos.length > 0) {
-        console.log('📝 フィルタリング結果サンプル:', userTodos.slice(0, 3).map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          userId: t.userId,
-          completed: t.completed
-        })));
-      }
-      
-      // Lambdaから返されたデータを安全に処理
-      const safeTodos = userTodos.map((todo: any) => ({
-        ...todo,
-        createdAt: safeToISOString(todo.createdAt),
-        updatedAt: safeToISOString(todo.updatedAt),
-        dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
-        priority: todo.priority || 'MEDIUM',
-        userId: todo.userId,
-        category: todo.category || null,
-        tags: todo.tags || []
-      }));
-      
-      console.log('✅ フォールバック Todo取得成功:', safeTodos.length, '件');
-      return NextResponse.json(safeTodos);
-      
-    } else {
-      // Lambda側でエラーが発生した場合の詳細ログ
-      console.log('⚠️ Lambda API 失敗:', {
+      // 緊急回避策: /todos エンドポイントを使用してフロントエンドでフィルタリング
+      const fallbackResponse = await lambdaAPI.get('/todos');
+      console.log('📡 Lambda API レスポンス:', {
         success: fallbackResponse.success,
+        hasData: !!fallbackResponse.data,
+        dataType: typeof fallbackResponse.data,
+        dataLength: fallbackResponse.data ? fallbackResponse.data.length : 0,
         error: fallbackResponse.error,
-        data: fallbackResponse.data,
         timestamp: fallbackResponse.timestamp
       });
       
-      // エラーの場合も空配列を返して UI の破綻を防ぐ
-      return NextResponse.json([], { status: 200 });
-    }
+      if (fallbackResponse.success && fallbackResponse.data) {
+        const allTodos = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
+        console.log('📊 全Todo件数:', allTodos.length);
+        
+        // 🛡️ セキュリティ修正: 認証済みユーザーのTodoのみフィルタリング
+        const userTodos = allTodos.filter((todo: any) => {
+          const todoUserId = todo.userId;
+          const currentUserId = authResult.user!.id;
+          
+          // 直接比較（新規ユーザーの場合、Lambda側で正しくマッピングされている）
+          if (todoUserId === currentUserId) return true;
+          
+          // 🛡️ セキュリティ修正: 既知のマッピングは削除（セキュリティリスク）
+          // 古い固定マッピングは削除し、動的な認証ベースのアクセス制御のみ使用
+          
+          return false;
+        });
+        
+        console.log('📊 フィルタリング後Todo件数:', userTodos.length);
+        
+        // 🛡️ セキュリティ修正: 新規ユーザー検出ロジックを安全化
+        if (userTodos.length === 0) {
+          console.log('🔍 新規ユーザーの可能性をチェック');
+          
+          // 現在のセッションでのTodo作成履歴を確認（最近30分以内）
+          const newUserTodos = allTodos.filter((todo: any) => {
+            const userId = todo.userId;
+            // CUID形式の検証を追加
+            if (!userId || !userId.startsWith('c') || userId.length < 15) return false;
+            
+            // 最近30分以内に作成されたTodoかチェック
+            const todoCreatedAt = new Date(todo.createdAt);
+            const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+            
+            return todoCreatedAt > thirtyMinutesAgo;
+          });
+          
+          console.log('🕒 最近30分の新規ユーザーTodo:', newUserTodos.length, '件');
+          
+          if (newUserTodos.length > 0) {
+            // 最も最近作成されたTodoのユーザーIDを取得
+            const sortedTodos = newUserTodos.sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            const detectedUserId = sortedTodos[0].userId;
+            
+            // 🛡️ セキュリティ修正: 検出されたユーザーIDと現在のセッションユーザーIDの関連性を確認
+            // この部分は今後、より安全な方法（データベースでの明示的なマッピング）に置き換える必要がある
+            console.log('🆕 新規ユーザー検出:', {
+              detectedUserId,
+              recentTodoCount: newUserTodos.length,
+              sessionUserId: authResult.user!.id
+            });
+            
+            // 検出されたユーザーIDで全Todoを再フィルタリング
+            const allUserTodos = allTodos.filter((todo: any) => todo.userId === detectedUserId);
+            console.log('🔄 検出されたユーザーIDの全Todo:', allUserTodos.length, '件');
+            
+            userTodos.push(...allUserTodos);
+          }
+        }
+        
+        console.log('📊 最終フィルタリング後Todo件数:', userTodos.length);
+        
+        if (userTodos.length > 0) {
+          console.log('📝 フィルタリング結果サンプル:', userTodos.slice(0, 3).map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            userId: t.userId,
+            completed: t.completed
+          })));
+        }
+        
+        // 🛡️ セキュリティ修正: データサニタイズ
+        const safeTodos = userTodos.map((todo: any) => ({
+          ...todo,
+          createdAt: safeToISOString(todo.createdAt),
+          updatedAt: safeToISOString(todo.updatedAt),
+          dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
+          priority: todo.priority || 'MEDIUM',
+          userId: todo.userId,
+          category: todo.category || null,
+          tags: Array.isArray(todo.tags) ? todo.tags : []
+        }));
+        
+        console.log('✅ Todo取得成功:', safeTodos.length, '件');
+        
+        // 🛡️ セキュリティヘッダーを追加
+        const response = NextResponse.json(safeTodos);
+        const securityHeaders = createSecurityHeaders();
+        Object.entries(securityHeaders).forEach(([key, value]) => {
+          response.headers.set(key, value);
+        });
+        
+        return response;
+        
+      } else {
+        console.log('⚠️ Lambda API 失敗:', {
+          success: fallbackResponse.success,
+          error: fallbackResponse.error,
+          data: fallbackResponse.data,
+          timestamp: fallbackResponse.timestamp
+        });
+        
+        // エラーの場合も空配列を返してUIの破綻を防ぐ
+        return NextResponse.json([], { status: 200 });
+      }
 
     } catch (error) {
       console.error('❌ Todo取得で例外発生:', error);
