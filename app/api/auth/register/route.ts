@@ -29,30 +29,65 @@ async function registerViaLambdaAPI(request: NextRequest): Promise<NextResponse>
   }
   
   // Lambda API経由でユーザー登録
+  const requestBody = {
+    name: name?.trim() || null,
+    email: email.toLowerCase().trim(),
+    password: password
+  }
+  
+  console.log('📤 Lambda API登録リクエスト:', {
+    url: `${process.env.LAMBDA_API_URL}/auth/register`,
+    method: 'POST',
+    body: { ...requestBody, password: '[REDACTED]' }
+  })
+  
   const response = await fetch(`${process.env.LAMBDA_API_URL}/auth/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      name: name?.trim() || null,
-      email: email.toLowerCase().trim(),
-      password: password
-    })
+    body: JSON.stringify(requestBody)
+  })
+  
+  console.log('📥 Lambda APIレスポンス基本情報:', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok
   })
   
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    console.error('❌ Lambda API登録エラー:', response.status, errorData)
+    let errorData: any = {}
+    let responseText = ''
+    
+    try {
+      responseText = await response.text()
+      errorData = JSON.parse(responseText)
+    } catch (parseError) {
+      console.error('❌ Lambda APIレスポンス解析エラー:', parseError)
+      errorData = { rawResponse: responseText }
+    }
+    
+    console.error('❌ Lambda API登録エラー詳細:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: Object.fromEntries(response.headers.entries()),
+      errorData: errorData,
+      responseText: responseText
+    })
     
     if (response.status === 400) {
       return NextResponse.json(
-        { error: errorData.error || 'このメールアドレスは既に登録されています' },
+        { error: errorData.error || errorData.message || 'リクエストエラーが発生しました' },
         { status: 400 }
       )
     }
     
-    throw new Error(`Lambda API registration failed: ${response.status}`)
+    if (response.status === 404) {
+      console.error('❌ Lambda API登録エンドポイントが見つかりません')
+      throw new Error('Registration endpoint not found')
+    }
+    
+    throw new Error(`Lambda API registration failed: ${response.status} - ${errorData.error || errorData.message || responseText}`)
   }
   
   const data = await response.json()
