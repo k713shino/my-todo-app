@@ -3,6 +3,74 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { createSecurityHeaders } from '@/lib/auth-utils'
 
+/**
+ * 🚨 緊急対応: Lambda API経由でのユーザー登録
+ */
+async function registerViaLambdaAPI(request: NextRequest): Promise<NextResponse> {
+  console.log('🔄 Lambda API経由登録開始')
+  
+  const requestData = await request.json()
+  const { name, email, password } = requestData
+  
+  // バリデーション
+  if (!email || !password || password.length < 8) {
+    return NextResponse.json(
+      { error: 'メールアドレスと8文字以上のパスワードが必要です' }, 
+      { status: 400 }
+    )
+  }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return NextResponse.json(
+      { error: '有効なメールアドレスを入力してください' }, 
+      { status: 400 }
+    )
+  }
+  
+  // Lambda API経由でユーザー登録
+  const response = await fetch(`${process.env.LAMBDA_API_URL}/auth/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: name?.trim() || null,
+      email: email.toLowerCase().trim(),
+      password: password
+    })
+  })
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    console.error('❌ Lambda API登録エラー:', response.status, errorData)
+    
+    if (response.status === 400) {
+      return NextResponse.json(
+        { error: errorData.error || 'このメールアドレスは既に登録されています' },
+        { status: 400 }
+      )
+    }
+    
+    throw new Error(`Lambda API registration failed: ${response.status}`)
+  }
+  
+  const data = await response.json()
+  console.log('✅ Lambda API経由登録成功')
+  
+  const responseObj = NextResponse.json({
+    message: '会員登録が完了しました',
+    user: data.user
+  })
+  
+  const securityHeaders = createSecurityHeaders()
+  Object.entries(securityHeaders).forEach(([key, value]) => {
+    responseObj.headers.set(key, value)
+  })
+  
+  return responseObj
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('🔍 会員登録API開始')
@@ -11,9 +79,21 @@ export async function POST(request: NextRequest) {
     console.log('🔍 環境チェック:', {
       nodeEnv: process.env.NODE_ENV,
       hasDatabaseUrl: !!process.env.DATABASE_URL,
+      hasLambdaApiUrl: !!process.env.LAMBDA_API_URL,
       prismaAvailable: !!prisma,
       bcryptAvailable: !!bcrypt
     })
+    
+    // 🚨 緊急対応: RDS接続問題時はLambda API経由で登録
+    if (process.env.LAMBDA_API_URL) {
+      console.log('🔄 Lambda API経由での会員登録を試行')
+      try {
+        return await registerViaLambdaAPI(request)
+      } catch (lambdaError) {
+        console.error('❌ Lambda API登録失敗、Prisma直接接続にフォールバック:', lambdaError)
+        // Lambda失敗時はPrisma直接接続を試行
+      }
+    }
     
     // リクエストボディの取得とログ出力
     let requestData
