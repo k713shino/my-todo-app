@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { prisma, testDatabaseConnection } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 import { createSecurityHeaders } from '@/lib/auth-utils'
 
 export async function POST(request: NextRequest) {
   try {
-    // 🛡️ セキュリティ強化: データベース接続確認
-    const dbConnectionResult = await testDatabaseConnection()
-    if (!dbConnectionResult.success) {
-      console.error('❌ 会員登録: データベース接続失敗:', dbConnectionResult.details)
-      return NextResponse.json(
-        { error: 'サービスが一時的に利用できません。しばらくお待ちください。' },
-        { status: 503 }
-      )
-    }
-
     const { name, email, password } = await request.json()
     
     // バリデーション
@@ -81,12 +71,31 @@ export async function POST(request: NextRequest) {
     
     // 🛡️ セキュリティ強化: エラー詳細の適切な処理
     const errorMessage = err instanceof Error ? err.message : '不明なエラー'
+    const errorCode = (err as any)?.code
     
     // データベース関連のエラーかチェック
-    if (errorMessage.includes('unique constraint') || errorMessage.includes('P2002')) {
+    if (errorMessage.includes('unique constraint') || errorCode === 'P2002') {
       return NextResponse.json(
         { error: 'このメールアドレスは既に登録されています' }, 
         { status: 400 }
+      )
+    }
+    
+    // データベース接続エラーの場合
+    if (errorCode === 'ECONNREFUSED' || errorCode === 'ENOTFOUND' || errorCode === 'ETIMEDOUT') {
+      console.error('❌ データベース接続エラー:', errorMessage)
+      return NextResponse.json(
+        { error: 'サービスが一時的に利用できません。しばらくお待ちください。' }, 
+        { status: 503 }
+      )
+    }
+    
+    // Prisma関連のその他のエラー
+    if (errorCode?.startsWith('P')) {
+      console.error('❌ データベースエラー:', errorCode, errorMessage)
+      return NextResponse.json(
+        { error: 'データベースエラーが発生しました。管理者にお問い合わせください。' }, 
+        { status: 500 }
       )
     }
     
