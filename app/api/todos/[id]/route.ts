@@ -35,6 +35,7 @@ export async function PUT(
           ? body.tags.map((tag: string) => tag.trim()).filter(Boolean)
           : []
       }),
+      userId: session.user.id // 🔧 修正: userIdを追加
     }
 
     const lambdaResponse = await lambdaAPI.put(`/todos/${id}`, updateData);
@@ -80,8 +81,8 @@ export async function DELETE(
 
     console.log('🔄 Lambda API経由でTodo削除を試行:', id);
     
-    // Lambda API経由でTodoを削除
-    const lambdaResponse = await lambdaAPI.delete(`/todos/${id}`);
+    // Lambda API経由でTodoを削除 (userIdをクエリパラメータで送信)
+    const lambdaResponse = await lambdaAPI.delete(`/todos/${id}?userId=${session.user.id}`);
     console.log('📥 Lambda API削除レスポンス:', lambdaResponse);
     
     if (lambdaResponse.success) {
