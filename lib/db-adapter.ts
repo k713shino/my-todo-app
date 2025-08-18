@@ -37,10 +37,11 @@ export const dbAdapter = {
           where: { id: userId },
           include: { _count: { select: { todos: true } } }
         })
-        return { success: true, data: user }
+        return { success: true, data: user, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -56,10 +57,83 @@ export const dbAdapter = {
           where: { email },
           include: { _count: { select: { todos: true } } }
         })
-        return { success: true, data: user }
+        return { success: true, data: user, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
+  },
+
+  async createUser(userData: any) {
+    if (USE_LAMBDA_DB) {
+      return lambdaDB.createUser(userData)
+    } else {
+      try {
+        const user = await prisma.user.create({
+          data: userData,
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        })
+        return { success: true, data: user, error: undefined }
+      } catch (error) {
+        return { 
+          success: false, 
+          data: null,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
+  },
+
+  async updateUser(userId: string, userData: any) {
+    if (USE_LAMBDA_DB) {
+      return lambdaDB.updateUser(userId, userData)
+    } else {
+      try {
+        const user = await prisma.user.update({
+          where: { id: userId },
+          data: userData,
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        })
+        return { success: true, data: user, error: undefined }
+      } catch (error) {
+        return { 
+          success: false, 
+          data: null,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
+  },
+
+  async deleteUser(userId: string) {
+    if (USE_LAMBDA_DB) {
+      return lambdaDB.deleteUser(userId)
+    } else {
+      try {
+        await prisma.user.delete({
+          where: { id: userId }
+        })
+        return { success: true, message: 'User deleted successfully', error: undefined }
+      } catch (error) {
+        return { 
+          success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -74,10 +148,11 @@ export const dbAdapter = {
     } else {
       try {
         const count = await prisma.user.count()
-        return { success: true, data: count }
+        return { success: true, data: count, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -104,10 +179,11 @@ export const dbAdapter = {
           },
           orderBy: { createdAt: 'desc' }
         })
-        return { success: true, data: todos }
+        return { success: true, data: todos, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -122,10 +198,11 @@ export const dbAdapter = {
         const todo = await prisma.todo.create({
           data: { ...todoData, userId }
         })
-        return { success: true, data: todo }
+        return { success: true, data: todo, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -141,10 +218,11 @@ export const dbAdapter = {
           where: { id: todoId, userId },
           data: todoData
         })
-        return { success: true, data: todo }
+        return { success: true, data: todo, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -159,10 +237,11 @@ export const dbAdapter = {
         await prisma.todo.delete({
           where: { id: todoId, userId }
         })
-        return { success: true }
+        return { success: true, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -179,10 +258,11 @@ export const dbAdapter = {
           where: { userId },
           select: { provider: true, providerAccountId: true }
         })
-        return { success: true, data: { authMethods: accounts } }
+        return { success: true, data: { authMethods: accounts }, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }
@@ -224,10 +304,11 @@ export const dbAdapter = {
           }
         }
 
-        return { success: true, data: exportData }
+        return { success: true, data: exportData, error: undefined }
       } catch (error) {
         return { 
           success: false, 
+          data: null,
           error: error instanceof Error ? error.message : String(error)
         }
       }

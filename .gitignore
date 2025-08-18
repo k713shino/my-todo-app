@@ -64,6 +64,8 @@ node_modules/
 .vscode/
 .idea/
 .serena/
+lambda/
+daily-notes/
 
 # ログ
 *.log

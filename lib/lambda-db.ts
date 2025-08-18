@@ -1,16 +1,18 @@
 // Lambda経由でのデータベース操作ライブラリ
 import { Todo } from '@/types/todo'
+import type { 
+  User, 
+  RegisterUserRequest, 
+  UpdateUserRequest,
+  LambdaResponse as LambdaAPILambdaResponse,
+  BatchUpdateRequest,
+  UserStatsResponse 
+} from '@/types/lambda-api'
 
 const LAMBDA_API_URL = process.env.LAMBDA_API_URL || process.env.NEXT_PUBLIC_LAMBDA_API_URL
 
-interface LambdaResponse<T = any> {
-  success: boolean
-  data?: T
-  error?: string
-  message?: string
-  httpStatus?: number
-  details?: any
-}
+// ローカル版からインポート版の型に移行
+type LambdaResponse<T = any> = LambdaAPILambdaResponse<T>
 
 class LambdaDB {
   private baseUrl: string
@@ -100,22 +102,22 @@ class LambdaDB {
   }
 
   // ユーザー操作
-  async getUser(userId: string): Promise<LambdaResponse> {
+  async getUser(userId: string): Promise<LambdaResponse<User>> {
     return this.request(`/users/${userId}`, { method: 'GET' })
   }
 
-  async getUserByEmail(email: string): Promise<LambdaResponse> {
+  async getUserByEmail(email: string): Promise<LambdaResponse<User>> {
     return this.request(`/users/email/${encodeURIComponent(email)}`, { method: 'GET' })
   }
 
-  async createUser(userData: any): Promise<LambdaResponse> {
+  async createUser(userData: RegisterUserRequest): Promise<LambdaResponse<User>> {
     return this.request('/users', {
       method: 'POST',
       body: JSON.stringify(userData)
     })
   }
 
-  async updateUser(userId: string, userData: any): Promise<LambdaResponse> {
+  async updateUser(userId: string, userData: UpdateUserRequest): Promise<LambdaResponse<User>> {
     return this.request(`/users/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(userData)
@@ -353,15 +355,15 @@ class LambdaDB {
   }
 
   // 統計情報
-  async getUserStats(userId: string): Promise<LambdaResponse> {
+  async getUserStats(userId: string): Promise<LambdaResponse<UserStatsResponse>> {
     return this.request(`/users/${userId}/stats`, { method: 'GET' })
   }
 
   // バッチ操作
-  async batchUpdateTodos(userId: string, updates: Array<{id: string, data: Partial<Todo>}>): Promise<LambdaResponse> {
+  async batchUpdateTodos(userId: string, updates: BatchUpdateRequest): Promise<LambdaResponse> {
     return this.request(`/users/${userId}/todos/batch`, {
       method: 'PATCH',
-      body: JSON.stringify({ updates })
+      body: JSON.stringify(updates)
     })
   }
 

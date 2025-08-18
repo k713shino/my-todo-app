@@ -6,6 +6,12 @@ import type {
   UpdateTodoRequest,
   LambdaAPIError,
   RequestOptions,
+  User,
+  RegisterUserRequest,
+  LoginUserRequest,
+  UpdateUserRequest,
+  RegisterUserResponse,
+  LoginUserResponse,
 } from '../types/lambda-api';
 
 export class LambdaAPI {
@@ -189,6 +195,98 @@ export class LambdaAPI {
   }
 
   /**
+   * ユーザー登録
+   */
+  async registerUser(userData: RegisterUserRequest): Promise<RegisterUserResponse> {
+    if (!userData.email || !userData.password) {
+      throw new Error('Email and password are required');
+    }
+    if (userData.password.length < 8) {
+      throw new Error('Password must be at least 8 characters long');
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(userData.email)) {
+      throw new Error('Valid email address is required');
+    }
+
+    return await this.request<RegisterUserResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: userData.name?.trim() || null,
+        email: userData.email.toLowerCase().trim(),
+        password: userData.password,
+      }),
+    });
+  }
+
+  /**
+   * ユーザーログイン
+   */
+  async loginUser(credentials: LoginUserRequest): Promise<LoginUserResponse> {
+    if (!credentials.email || !credentials.password) {
+      throw new Error('Email and password are required');
+    }
+
+    return await this.request<LoginUserResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: credentials.email.toLowerCase().trim(),
+        password: credentials.password,
+      }),
+    });
+  }
+
+  /**
+   * ユーザー情報取得
+   */
+  async getUser(userId: string): Promise<User> {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    return await this.request(`/users/${userId}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * メールアドレスでユーザー検索
+   */
+  async getUserByEmail(email: string): Promise<User> {
+    if (!email) {
+      throw new Error('Email is required');
+    }
+    return await this.request(`/users/email/${encodeURIComponent(email)}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * ユーザー情報更新
+   */
+  async updateUser(userId: string, updateData: UpdateUserRequest): Promise<User> {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    return await this.request(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData),
+    });
+  }
+
+  /**
+   * ユーザー削除
+   */
+  async deleteUser(userId: string): Promise<{ success: boolean; message: string }> {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    return await this.request(`/users/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
    * 汎用GETリクエスト（VercelAPIResponse形式の戻り値用）
    */
   async get<T = any>(endpoint: string): Promise<LambdaAPIResponse<T>> {
@@ -271,6 +369,66 @@ export class LambdaAPI {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * 汎用ユーザー登録リクエスト（VercelAPIResponse形式の戻り値用）
+   */
+  async registerUserWrapped(userData: RegisterUserRequest): Promise<LambdaAPIResponse<RegisterUserResponse>> {
+    try {
+      const response = await this.registerUser(userData);
+      return {
+        success: true,
+        data: response,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'User registration failed',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * 汎用ユーザーログインリクエスト（VercelAPIResponse形式の戻り値用）
+   */
+  async loginUserWrapped(credentials: LoginUserRequest): Promise<LambdaAPIResponse<LoginUserResponse>> {
+    try {
+      const response = await this.loginUser(credentials);
+      return {
+        success: true,
+        data: response,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'User login failed',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * 汎用ユーザー取得リクエスト（VercelAPIResponse形式の戻り値用）
+   */
+  async getUserWrapped(userId: string): Promise<LambdaAPIResponse<User>> {
+    try {
+      const response = await this.getUser(userId);
+      return {
+        success: true,
+        data: response,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'User fetch failed',
         timestamp: new Date().toISOString()
       };
     }
