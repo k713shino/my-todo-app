@@ -47,18 +47,16 @@ export async function GET(request: NextRequest) {
         const allTodos = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
         console.log('📊 全Todo件数:', allTodos.length);
         
-        // 🛡️ セキュリティ修正: 認証済みユーザーのTodoのみフィルタリング
-        // 🔧 修正: OAuth認証ユーザーのIDを数値に変換して比較
-        const numericCurrentUserId = parseInt(authResult.user!.id, 10);
+        // 🛡️ セキュリティ修正: 認証済みユーザーのTodoのみフィルタリング (TEXT型対応)
         const userTodos = allTodos.filter((todo: any) => {
           const todoUserId = todo.userId;
           const currentUserId = authResult.user!.id;
           
-          // 直接比較（文字列として）
-          if (todoUserId.toString() === currentUserId) return true;
+          // 文字列として直接比較 (TEXT型対応)
+          if (todoUserId === currentUserId) return true;
           
-          // 数値比較（OAuth認証ユーザー対応）
-          if (!isNaN(numericCurrentUserId) && todoUserId === numericCurrentUserId) return true;
+          // 念のため文字列変換して比較
+          if (todoUserId.toString() === currentUserId.toString()) return true;
           
           return false;
         });
@@ -203,19 +201,17 @@ export async function POST(request: NextRequest) {
     });
     
     // Lambda API用のリクエストデータ
-    // 🔧 修正: OAuth認証ユーザーのIDを数値に変換
-    const numericUserId = parseInt(session.user.id, 10);
-    if (isNaN(numericUserId)) {
-      console.error('❌ ユーザーIDが数値に変換できません:', session.user.id);
-      return NextResponse.json({ 
-        error: 'Invalid user ID format for Lambda API' 
-      }, { status: 400 });
-    }
+    // 🔧 修正: OAuth認証ユーザーのIDを文字列として送信 (TEXT型対応)
+    console.log('🔍 ユーザーID詳細:', {
+      originalId: session.user.id,
+      idType: typeof session.user.id,
+      idLength: session.user.id?.length
+    });
     
     const todoData = {
       title: body.title,
       description: body.description || undefined,
-      userId: numericUserId, // 数値に変換
+      userId: session.user.id, // 文字列として送信 (TEXT型対応)
       userEmail: session.user.email || undefined,
       userName: session.user.name || undefined,
       priority: body.priority || 'MEDIUM',

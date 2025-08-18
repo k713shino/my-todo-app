@@ -22,16 +22,7 @@ export async function PUT(
 
     console.log('🔄 Lambda API経由でTodo更新を試行:', id);
     
-    // 🔧 修正: OAuth認証ユーザーのIDを数値に変換
-    const numericUserId = parseInt(session.user.id, 10);
-    if (isNaN(numericUserId)) {
-      console.error('❌ ユーザーIDが数値に変換できません:', session.user.id);
-      return NextResponse.json({ 
-        error: 'Invalid user ID format for Lambda API' 
-      }, { status: 400 });
-    }
-
-    // Lambda API経由でTodoを更新
+    // Lambda API経由でTodoを更新 (TEXT型対応)
     const updateData = {
       ...(body.title !== undefined && { title: body.title.trim() }),
       ...(body.description !== undefined && { description: body.description?.trim() || null }),
@@ -44,7 +35,7 @@ export async function PUT(
           ? body.tags.map((tag: string) => tag.trim()).filter(Boolean)
           : []
       }),
-      userId: numericUserId // 数値に変換
+      userId: session.user.id // 文字列として送信 (TEXT型対応)
     }
 
     const lambdaResponse = await lambdaAPI.put(`/todos/${id}`, updateData);
@@ -90,17 +81,8 @@ export async function DELETE(
 
     console.log('🔄 Lambda API経由でTodo削除を試行:', id);
     
-    // 🔧 修正: OAuth認証ユーザーのIDを数値に変換
-    const numericUserId = parseInt(session.user.id, 10);
-    if (isNaN(numericUserId)) {
-      console.error('❌ ユーザーIDが数値に変換できません:', session.user.id);
-      return NextResponse.json({ 
-        error: 'Invalid user ID format for Lambda API' 
-      }, { status: 400 });
-    }
-    
-    // Lambda API経由でTodoを削除 (userIdをクエリパラメータで送信)
-    const lambdaResponse = await lambdaAPI.delete(`/todos/${id}?userId=${numericUserId}`);
+    // Lambda API経由でTodoを削除 (userIdをクエリパラメータで送信、TEXT型対応)
+    const lambdaResponse = await lambdaAPI.delete(`/todos/${id}?userId=${encodeURIComponent(session.user.id)}`);
     console.log('📥 Lambda API削除レスポンス:', lambdaResponse);
     
     if (lambdaResponse.success) {
