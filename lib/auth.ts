@@ -7,6 +7,17 @@ import type { JWT } from "next-auth/jwt"
 export const authOptions: AuthOptions = {
   // Lambda API経由でユーザー管理するため、adapterは使用しない
   secret: process.env.NEXTAUTH_SECRET,
+  logger: {
+    error(code, metadata) {
+      console.error('❌ NextAuth Error:', { code, metadata })
+    },
+    warn(code) {
+      console.warn('⚠️ NextAuth Warning:', code)
+    },
+    debug(code, metadata) {
+      console.log('🐛 NextAuth Debug:', { code, metadata })
+    }
+  },
   providers: [
     // GitHub OAuth
     ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET ? [
@@ -62,11 +73,23 @@ export const authOptions: AuthOptions = {
         password: { label: "パスワード", type: "password" }
       },
       async authorize(credentials) {
-        console.log('🔍 === 認証開始 ===')
+        console.log('🔍 === NextAuth.js 認証開始 ===')
         console.log('リクエスト情報:', {
           email: credentials?.email,
           hasPassword: !!credentials?.password,
-          passwordLength: credentials?.password?.length
+          passwordLength: credentials?.password?.length,
+          timestamp: new Date().toISOString(),
+          userAgent: process.env.VERCEL ? 'Vercel Production' : 'Local Development'
+        })
+        
+        // 重要な環境変数をすべてログ出力
+        console.log('🔧 重要な環境変数チェック:', {
+          NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
+          NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+          LAMBDA_API_URL: process.env.LAMBDA_API_URL,
+          NODE_ENV: process.env.NODE_ENV,
+          VERCEL: process.env.VERCEL,
+          VERCEL_ENV: process.env.VERCEL_ENV
         })
 
         if (!credentials?.email || !credentials?.password) {
@@ -76,6 +99,12 @@ export const authOptions: AuthOptions = {
         
         try {
           console.log('🔍 認証処理開始...')
+          console.log('🔧 環境変数チェック:', {
+            hasLambdaApiUrl: !!process.env.LAMBDA_API_URL,
+            lambdaApiUrl: process.env.LAMBDA_API_URL || 'NOT_SET',
+            nodeEnv: process.env.NODE_ENV,
+            vercelEnv: process.env.VERCEL_ENV || 'NOT_SET'
+          })
           
           // Lambda API URLが設定されているかチェック
           if (!process.env.LAMBDA_API_URL) {
@@ -116,6 +145,7 @@ export const authOptions: AuthOptions = {
           }
           
           // Lambda API経由でユーザー認証
+          console.log('🔗 Lambda API URL:', process.env.LAMBDA_API_URL)
           const response = await fetch(`${process.env.LAMBDA_API_URL}/auth/login`, {
             method: 'POST',
             headers: {
@@ -127,18 +157,23 @@ export const authOptions: AuthOptions = {
             })
           })
           
+          console.log('📡 Lambda API応答ステータス:', response.status)
+          
           if (!response.ok) {
             console.log('❌ Lambda API認証失敗:', response.status)
             return null
           }
           
           const data = await response.json()
-          const user = data.user
+          console.log('📊 Lambda API完全応答:', JSON.stringify(data, null, 2))
+          
+          const user = data.data?.user || data.user
           
           console.log('👤 Lambda API認証結果:', {
             success: data.success,
             found: !!user,
-            email: user?.email
+            email: user?.email,
+            fullData: data
           })
           
           if (!data.success || !user) {
@@ -167,6 +202,13 @@ export const authOptions: AuthOptions = {
   ],
   callbacks: {
     session: async ({ session, token }: { session: Session; token: JWT }) => {
+      console.log('🔄 Session callback:', {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        tokenSub: token.sub,
+        timestamp: new Date().toISOString()
+      })
+      
       if (session?.user && token.sub) {
         session.user.id = token.sub
         session.user.hasPassword = token.hasPassword || false
@@ -175,9 +217,14 @@ export const authOptions: AuthOptions = {
       return session
     },
     jwt: async ({ user, token, account }: { user?: User; token: JWT; account?: any }) => {
-      console.log('JWT更新前:', {
-        tokenPicture: token.picture,
-        userImage: user?.image
+      console.log('🔐 JWT callback:', {
+        hasUser: !!user,
+        hasToken: !!token,
+        hasAccount: !!account,
+        accountProvider: account?.provider,
+        userEmail: user?.email,
+        tokenSub: token.sub,
+        timestamp: new Date().toISOString()
       })
 
       if (user) {
