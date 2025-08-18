@@ -6,6 +6,7 @@ import { getAuthenticatedUser, createAuthErrorResponse, createSecurityHeaders } 
 import type { Todo } from '@/types/todo';
 import { safeToISOString } from '@/lib/date-utils';
 import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization';
+import { CacheManager } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic'
 
@@ -22,11 +23,36 @@ export async function GET(request: NextRequest) {
   
   return measureLambdaPerformance('GET /api/todos', async () => {
     try {
-      console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - セキュリティ強化版');
+      console.log('🚀 フロントエンドAPI GET /api/todos 呼び出し開始 - Redis対応版');
       console.log('👤 認証済みユーザー:', {
         userId: authResult.user!.id,
         email: authResult.user!.email
       });
+      
+      // キャッシュバイパスチェック
+      const { searchParams } = new URL(request.url)
+      const bypassCache = searchParams.get('cache') === 'false'
+      
+      // Redisキャッシュから取得を試行
+      let cachedTodos = null
+      if (!bypassCache) {
+        console.log('📦 Redis キャッシュからTodoを取得試行中...')
+        cachedTodos = await CacheManager.getTodos(authResult.user!.id)
+        if (cachedTodos) {
+          console.log('✅ Redis キャッシュヒット:', cachedTodos.length, '件')
+          const response = NextResponse.json(cachedTodos)
+          const securityHeaders = createSecurityHeaders()
+          Object.entries(securityHeaders).forEach(([key, value]) => {
+            response.headers.set(key, value)
+          })
+          response.headers.set('X-Cache-Status', 'hit')
+          return response
+        } else {
+          console.log('❌ Redis キャッシュミス - Lambda API経由で取得')
+        }
+      } else {
+        console.log('🔄 キャッシュバイパス指定 - Lambda API経由で取得')
+      }
       
       console.log('🔄 緊急回避策: /todos エンドポイント + フロントエンドフィルタリング使用');
       console.log('📝 理由: API Gatewayの/todos/user/{userId}ルーティング問題のため');
@@ -130,12 +156,23 @@ export async function GET(request: NextRequest) {
         
         console.log('✅ Todo取得成功:', safeTodos.length, '件');
         
+        // 🛡️ Redisキャッシュに保存 (5分間キャッシュ)
+        if (safeTodos.length > 0) {
+          try {
+            await CacheManager.setTodos(authResult.user!.id, safeTodos, 300) // 5分
+            console.log('📦 Redis キャッシュに保存完了:', safeTodos.length, '件')
+          } catch (cacheError) {
+            console.log('⚠️ Redis キャッシュ保存失敗:', cacheError)
+          }
+        }
+        
         // 🛡️ セキュリティヘッダーを追加
         const response = NextResponse.json(safeTodos);
         const securityHeaders = createSecurityHeaders();
         Object.entries(securityHeaders).forEach(([key, value]) => {
           response.headers.set(key, value);
         });
+        response.headers.set('X-Cache-Status', 'miss')
         
         return response;
         
@@ -276,6 +313,15 @@ export async function POST(request: NextRequest) {
         };
         
         console.log('✅ Todo作成成功:', newTodo.id);
+        
+        // キャッシュ無効化
+        try {
+          await CacheManager.invalidateUserTodos(session.user.id)
+          console.log('📦 キャッシュ無効化完了')
+        } catch (cacheError) {
+          console.log('⚠️ キャッシュ無効化失敗:', cacheError)
+        }
+        
         return NextResponse.json(newTodo, { status: 201 });
         
       } else {
@@ -357,6 +403,15 @@ export async function PUT(request: NextRequest) {
         };
         
         console.log('✅ Todo更新成功:', updatedTodo.id);
+        
+        // キャッシュ無効化
+        try {
+          await CacheManager.invalidateUserTodos(session.user.id)
+          console.log('📦 キャッシュ無効化完了')
+        } catch (cacheError) {
+          console.log('⚠️ キャッシュ無効化失敗:', cacheError)
+        }
+        
         return NextResponse.json(updatedTodo, { status: 200 });
         
       } else {
@@ -399,7 +454,7 @@ export async function DELETE(request: NextRequest) {
     const pathSegments = url.pathname.split('/');
     const todoId = pathSegments[pathSegments.length - 1];
 
-    console.log('DELETE request details:', { todoId, pathSegments });
+    console.log('DELETE request details:', { todoId, pathSegments, userId: session.user.id });
 
     if (!todoId) {
       return NextResponse.json({ error: 'Todo ID is required' }, { status: 400 });
@@ -407,7 +462,8 @@ export async function DELETE(request: NextRequest) {
 
     try {
       console.log('📞 Lambda DELETE /todos/{id} 呼び出し開始...');
-      const lambdaResponse = await lambdaAPI.delete(`/todos/${todoId}`);
+      // Lambda API経由でTodoを削除 (userIdをクエリパラメータで送信、TEXT型対応)
+      const lambdaResponse = await lambdaAPI.delete(`/todos/${todoId}?userId=${encodeURIComponent(session.user.id)}`);
       console.log('📡 Lambda API 削除レスポンス:', {
         success: lambdaResponse.success,
         hasData: !!lambdaResponse.data,
@@ -416,14 +472,25 @@ export async function DELETE(request: NextRequest) {
       
       if (lambdaResponse.success) {
         console.log('✅ Todo削除成功:', todoId);
+        
+        // キャッシュ無効化
+        try {
+          await CacheManager.invalidateUserTodos(session.user.id)
+          console.log('📦 キャッシュ無効化完了')
+        } catch (cacheError) {
+          console.log('⚠️ キャッシュ無効化失敗:', cacheError)
+        }
+        
         return NextResponse.json({ message: 'Todo deleted successfully' }, { status: 200 });
         
       } else {
         console.error('❌ Lambda API でのTodo削除失敗:', lambdaResponse.error);
+        // 404エラーの場合は適切なステータスコードを返す
+        const status = lambdaResponse.error?.includes('not found') ? 404 : 500;
         return NextResponse.json({ 
           error: 'Failed to delete todo',
           details: lambdaResponse.error
-        }, { status: 500 });
+        }, { status });
       }
       
     } catch (apiError) {

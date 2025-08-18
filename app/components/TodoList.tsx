@@ -65,24 +65,27 @@ export default function TodoList() {
     try {
       console.log('🔄 fetchTodos実行:', { bypassCache, 現在のTodos数: todos.length });
       
-      // キャッシュバスター用のタイムスタンプを追加
-      const timestamp = Date.now()
+      // 通常の取得ではブラウザキャッシュも活用
       const url = bypassCache 
-        ? `/api/todos?cache=false&_t=${timestamp}` 
-        : `/api/todos?_t=${timestamp}`
+        ? `/api/todos?cache=false&_t=${Date.now()}` 
+        : `/api/todos`
       
       const response = await fetch(url, {
-        // キャッシュを無効化
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
+        // bypassCacheが指定された場合のみキャッシュを無効化
+        ...(bypassCache ? {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        } : {
+          cache: 'default'
+        })
       })
       
       if (response.ok) {
         const data: TodoResponse[] = await response.json()
-        console.log('📥 API取得データ:', data.length, '件', data);
+        console.log('📥 API取得データ:', data.length, '件');
         const parsedTodos = data.map((todo) => safeParseTodoDate(todo));
         console.log('📋 取得後Todos設定:', parsedTodos.length, '件');
         setTodos(parsedTodos)
@@ -155,6 +158,14 @@ export default function TodoList() {
         })
         toast.success('📝 新しいTodoを作成しました！')
         
+        // キャッシュをクリアして次回取得時に最新データを取得
+        try {
+          await fetch('/api/cache?type=user', { method: 'DELETE' })
+          console.log('✨ キャッシュクリア完了')
+        } catch (error) {
+          console.log('⚠️ キャッシュクリア失敗:', error)
+        }
+        
         // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
         // 楽観的UI更新のみに依存
         console.log('✨ 楽観的UI更新のみ - 自動再読み込みを無効化');
@@ -206,6 +217,14 @@ export default function TodoList() {
         ))
         toast.success('✅ Todoを更新しました！')
         
+        // キャッシュをクリアして次回取得時に最新データを取得
+        try {
+          await fetch('/api/cache?type=user', { method: 'DELETE' })
+          console.log('✨ キャッシュクリア完了')
+        } catch (error) {
+          console.log('⚠️ キャッシュクリア失敗:', error)
+        }
+        
         // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
         console.log('✨ 更新完了 - 楽観的UI更新のみ');
       } else {
@@ -234,12 +253,27 @@ export default function TodoList() {
     setTodos(prev => prev.filter(todo => todo.id !== id))
     
     try {
+      console.log('🗑️ Todo削除開始:', id)
+      
       const response = await fetch(`/api/todos/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       })
+
+      console.log('📡 削除レスポンス:', response.status, response.statusText)
 
       if (response.ok) {
         toast.success('🗑️ Todoを削除しました！')
+        
+        // キャッシュをクリアして次回取得時に最新データを取得
+        try {
+          await fetch('/api/cache?type=user', { method: 'DELETE' })
+          console.log('✨ キャッシュクリア完了')
+        } catch (error) {
+          console.log('⚠️ キャッシュクリア失敗:', error)
+        }
         
         // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
         console.log('✨ 削除完了 - 楽観的UI更新のみ');
@@ -440,6 +474,18 @@ export default function TodoList() {
         onManualSearch={handleManualSearch}
         enablePersistence={true}
       />
+
+      {/* 手動更新ボタン */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => fetchTodos(true)}
+          disabled={isLoading}
+          className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
+        >
+          <span className={isLoading ? 'animate-spin' : ''}>🔄</span>
+          <span>{isLoading ? '更新中...' : '最新データを取得'}</span>
+        </button>
+      </div>
 
       {/* Todoリスト */}
       <div className="space-y-4">

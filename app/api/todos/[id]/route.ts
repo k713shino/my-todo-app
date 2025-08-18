@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { safeToISOString } from '@/lib/date-utils'
+import { CacheManager } from '@/lib/cache'
 
 /**
  * PUT: Todo更新API (Lambda経由)
@@ -51,6 +52,15 @@ export async function PUT(
       };
       
       console.log('✅ Lambda API でのTodo更新成功:', updatedTodo.id);
+      
+      // キャッシュ無効化
+      try {
+        await CacheManager.invalidateUserTodos(session.user.id)
+        console.log('📦 キャッシュ無効化完了')
+      } catch (cacheError) {
+        console.log('⚠️ キャッシュ無効化失敗:', cacheError)
+      }
+      
       return NextResponse.json(updatedTodo);
     } else {
       console.error('❌ Lambda API更新失敗:', lambdaResponse.error);
@@ -87,6 +97,15 @@ export async function DELETE(
     
     if (lambdaResponse.success) {
       console.log('✅ Lambda API でのTodo削除成功:', id);
+      
+      // キャッシュ無効化
+      try {
+        await CacheManager.invalidateUserTodos(session.user.id)
+        console.log('📦 キャッシュ無効化完了')
+      } catch (cacheError) {
+        console.log('⚠️ キャッシュ無効化失敗:', cacheError)
+      }
+      
       return NextResponse.json({ message: 'Todo deleted successfully' });
     } else {
       console.error('❌ Lambda API削除失敗:', lambdaResponse.error);
