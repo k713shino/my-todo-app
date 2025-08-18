@@ -51,8 +51,8 @@ export async function getAuthenticatedUser(request?: NextRequest): Promise<AuthV
       }
     }
 
-    // 🛡️ セキュリティ修正: IDの形式検証（cuid形式チェック）
-    if (!isValidCuid(session.user.id)) {
+    // 🛡️ セキュリティ修正: IDの形式検証（OAuth対応）
+    if (!isValidUserId(session.user.id)) {
       console.log('❌ 不正なユーザーID形式:', session.user.id)
       return {
         success: false,
@@ -94,12 +94,22 @@ export async function getAuthenticatedUser(request?: NextRequest): Promise<AuthV
 }
 
 /**
- * 🛡️ CUID形式の検証
+ * 🛡️ ユーザーID形式の検証（OAuth対応）
  */
-function isValidCuid(id: string): boolean {
+function isValidUserId(id: string): boolean {
   // CUID形式: 小文字 + 数字、25文字
   const cuidPattern = /^c[a-z0-9]{24}$/
-  return cuidPattern.test(id)
+  // GitHub ID形式: 数字のみ
+  const githubIdPattern = /^\d+$/
+  // Google ID形式: 数字21桁
+  const googleIdPattern = /^\d{21}$/
+  // その他の一般的なID形式: 英数字とハイフン、アンダースコア
+  const generalIdPattern = /^[a-zA-Z0-9_-]{1,255}$/
+  
+  return cuidPattern.test(id) || 
+         githubIdPattern.test(id) || 
+         googleIdPattern.test(id) || 
+         generalIdPattern.test(id)
 }
 
 /**
