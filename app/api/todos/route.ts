@@ -200,6 +200,8 @@ export async function POST(request: NextRequest) {
       name: session.user.name
     });
     
+    // 🔧 Note: OAuth認証ユーザーの存在確認・作成はLambda API内で自動処理されます
+    
     // Lambda API用のリクエストデータ
     // 🔧 修正: OAuth認証ユーザーのIDを文字列として送信 (TEXT型対応)
     console.log('🔍 ユーザーID詳細:', {
