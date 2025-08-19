@@ -126,13 +126,12 @@ export default function TodoItem({
             checked={todo.completed}
             onChange={handleToggleComplete}
             disabled={isLoading || isUpdating}
-            className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400 rounded focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600"
+            className="w-5 h-5 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400 rounded focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600 flex-shrink-0"
           />
-          <h3 className={`text-base sm:text-lg font-medium truncate ${
+          <h3 className={`text-sm sm:text-lg font-medium break-words ${
             todo.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'
           }`}>
-            <span className="inline sm:hidden">{priorityIcons[todo.priority]}</span>
-            <span className="hidden sm:inline">{priorityIcons[todo.priority]} </span>
+            <span className="mr-1">{priorityIcons[todo.priority]}</span>
             {todo.title}
           </h3>
         </div>
@@ -141,25 +140,25 @@ export default function TodoItem({
           <button
             onClick={() => onEdit(todo)}
             disabled={isLoading}
-            className="text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors p-1 sm:p-0"
+            className="text-gray-400 dark:text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors p-1 sm:p-1 min-w-[32px] min-h-[32px] flex items-center justify-center"
             title="編集"
           >
-            <span className="text-sm sm:text-base">✏️</span>
+            <span className="text-base sm:text-lg">✏️</span>
           </button>
           <button
             onClick={handleDelete}
             disabled={isLoading}
-            className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1 sm:p-0"
+            className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1 sm:p-1 min-w-[32px] min-h-[32px] flex items-center justify-center"
             title="削除"
           >
-            <span className="text-sm sm:text-base">🗑️</span>
+            <span className="text-base sm:text-lg">🗑️</span>
           </button>
         </div>
       </div>
 
       {/* 説明 */}
       {todo.description && (
-        <p className={`text-sm mb-3 ${
+        <p className={`text-sm mb-3 break-words ${
           todo.completed ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'
         }`}>
           {todo.description}
@@ -167,7 +166,7 @@ export default function TodoItem({
       )}
 
       {/* メタ情報 */}
-      <div className="flex flex-wrap items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm">
         {/* 優先度 */}
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[todo.priority]}`}>
           {priorityLabels[todo.priority]}
@@ -175,45 +174,48 @@ export default function TodoItem({
 
         {/* 期限 */}
         {todo.dueDate && (
-          <span className={`text-xs ${
+          <span className={`text-xs break-words ${
             isOverdue && !todo.completed 
               ? 'text-red-600 dark:text-red-400 font-medium' 
               : todo.completed 
               ? 'text-gray-400 dark:text-gray-500' 
               : 'text-gray-600 dark:text-gray-300'
           }`}>
-            📅 {format(todo.dueDate, 'yyyy年M月d日 HH:mm', { locale: ja })}
+            📅 <span className="hidden sm:inline">{format(todo.dueDate, 'yyyy年M月d日 HH:mm', { locale: ja })}</span>
+            <span className="sm:hidden">{format(todo.dueDate, 'M/d HH:mm', { locale: ja })}</span>
             {isOverdue && !todo.completed && ' (期限切れ)'}
           </span>
         )}
 
-        {/* 作成日 */}
-        <span className="text-xs text-gray-400 dark:text-gray-500">
+        {/* 作成日 - デスクトップのみ表示 */}
+        <span className="hidden sm:inline text-xs text-gray-400 dark:text-gray-500">
           作成: {format(todo.createdAt, 'M月d日 HH:mm', { locale: ja })}
         </span>
       </div>
 
       {/* カテゴリ・タグ */}
-      <div className="text-sm text-gray-500 mt-1 space-y-1">
-        {/* カテゴリ */}
-        {todo.category && (
-          <div>
-            <span className="font-semibold text-gray-700 dark:text-gray-300">カテゴリ:</span>{' '}
-            {todo.category}
-          </div>
-        )}
-        {/* タグ */}
-        {todo.tags && todo.tags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="font-semibold text-gray-700 dark:text-gray-300">タグ:</span>
-            {todo.tags.map((tag, index) => (
-              <span key={index} className="text-blue-600 dark:text-blue-400">
-                #{tag}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      {(todo.category || (todo.tags && todo.tags.length > 0)) && (
+        <div className="text-sm text-gray-500 mt-2 space-y-1">
+          {/* カテゴリ */}
+          {todo.category && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="font-semibold text-gray-700 dark:text-gray-300 text-xs sm:text-sm">カテゴリ:</span>
+              <span className="text-xs sm:text-sm break-words">{todo.category}</span>
+            </div>
+          )}
+          {/* タグ */}
+          {todo.tags && todo.tags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="font-semibold text-gray-700 dark:text-gray-300 text-xs sm:text-sm">タグ:</span>
+              {todo.tags.map((tag, index) => (
+                <span key={index} className="text-blue-600 dark:text-blue-400 text-xs sm:text-sm break-words">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

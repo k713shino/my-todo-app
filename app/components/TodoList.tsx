@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Priority } from '@prisma/client'
 import type { Todo, CreateTodoData, TodoStats, TodoFilters } from '@/types/todo'
 import TodoForm from './TodoForm'
@@ -10,6 +10,13 @@ import TodoStatsDisplay from './TodoStatsDisplay'
 // import RealtimeUpdates from './RealtimeUpdates'
 import { Toaster, toast } from 'react-hot-toast'
 import { safeParseTodoDate } from '@/lib/date-utils'
+import { 
+  retryWithBackoff, 
+  getErrorMessage, 
+  isTemporaryError, 
+  logApiError,
+  type ErrorWithStatus 
+} from '@/lib/error-utils'
 
 
 /**
@@ -60,39 +67,77 @@ export default function TodoList() {
   /**
    * サーバーからTodo一覧を取得
    * 取得したデータの日付文字列をDateオブジェクトに変換
+   * 改善されたエラーハンドリングとリトライ機能付き
    */
   const fetchTodos = async (bypassCache = false) => {
     try {
       console.log('🔄 fetchTodos実行:', { bypassCache, 現在のTodos数: todos.length });
       
-      // 通常の取得ではブラウザキャッシュも活用
       const url = bypassCache 
         ? `/api/todos?cache=false&_t=${Date.now()}` 
         : `/api/todos`
       
-      const response = await fetch(url, {
-        // bypassCacheが指定された場合のみキャッシュを無効化
-        ...(bypassCache ? {
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          }
-        } : {
-          cache: 'default'
+      // リトライ機能付きのフェッチ
+      const response = await retryWithBackoff(async () => {
+        return await fetch(url, {
+          ...(bypassCache ? {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            }
+          } : {
+            cache: 'default'
+          })
         })
+      }, {
+        maxRetries: 2,
+        shouldRetry: (error) => {
+          // ネットワークエラーまたは5xx系エラーのみリトライ
+          return error.name === 'TypeError' || 
+                 (error as any).status >= 500
+        }
       })
       
-      if (response.ok) {
-        const data: TodoResponse[] = await response.json()
-        console.log('📥 API取得データ:', data.length, '件');
-        const parsedTodos = data.map((todo) => safeParseTodoDate(todo));
-        console.log('📋 取得後Todos設定:', parsedTodos.length, '件');
-        setTodos(parsedTodos)
+      if (!response.ok) {
+        const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+        errorWithStatus.status = response.status
+        errorWithStatus.statusText = response.statusText
+        throw errorWithStatus
       }
+
+      const data: TodoResponse[] = await response.json()
+      console.log('📥 API取得データ:', data.length, '件');
+      const parsedTodos = data.map((todo) => safeParseTodoDate(todo));
+      console.log('📋 取得後Todos設定:', parsedTodos.length, '件');
+      setTodos(parsedTodos)
+      
     } catch (error) {
-      console.error('Todo取得エラー:', error)
-      alert('Todoの取得に失敗しました')
+      const errorWithStatus = error as ErrorWithStatus
+      logApiError(errorWithStatus, 'Todo取得')
+      
+      // ユーザーフレンドリーなエラーメッセージ
+      const friendlyMessage = getErrorMessage(errorWithStatus)
+      toast.error(friendlyMessage)
+      
+      // キャッシュからのフォールバック取得を試行
+      if (!bypassCache) {
+        try {
+          console.log('🔄 キャッシュからのフォールバック取得を試行...')
+          const cachedResponse = await fetch('/api/todos?cache=true')
+          if (cachedResponse.ok) {
+            const cachedData = await cachedResponse.json()
+            if (cachedData.length > 0) {
+              const parsedTodos = cachedData.map((todo: TodoResponse) => safeParseTodoDate(todo));
+              setTodos(parsedTodos)
+              toast.success('📦 キャッシュからデータを復旧しました')
+              return
+            }
+          }
+        } catch (fallbackError) {
+          console.warn('キャッシュからの復旧も失敗:', fallbackError)
+        }
+      }
     } finally {
       setIsLoading(false)
     }
@@ -100,9 +145,7 @@ export default function TodoList() {
 
   /**
    * 新規Todoの作成
-   * @param data 作成するTodoのデータ
-   * - 作成中は送信ボタンを無効化
-   * - エラー時はユーザーに通知
+   * 改善されたエラーハンドリング付き
    */
   const handleCreateTodo = async (data: CreateTodoData) => {
     setIsSubmitting(true)
@@ -124,62 +167,55 @@ export default function TodoList() {
     }
     
     console.log('🔵 楽観的UI更新 - 追加:', { tempId, title: data.title });
-    
-    // UIを即座に更新
-    setTodos(prev => {
-      console.log('📋 現在のTodos数:', prev.length);
-      const newTodos = [optimisticTodo, ...prev];
-      console.log('📋 更新後のTodos数:', newTodos.length);
-      return newTodos;
-    })
+    setTodos(prev => [optimisticTodo, ...prev])
     
     try {
-      const response = await fetch('/api/todos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+      const response = await retryWithBackoff(async () => {
+        return await fetch('/api/todos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+      }, {
+        maxRetries: 2,
+        shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
       })
 
-      if (response.ok) {
-        const newTodo: TodoResponse = await response.json()
-        console.log('✅ API成功レスポンス:', newTodo);
-        
-        // 一時的なTodoを実際のTodoで置き換え
-        setTodos(prev => {
-          console.log('🔄 置き換え前:', prev.find(t => t.id === tempId));
-          console.log('🔄 置き換え後:', newTodo);
-          const updatedTodos = prev.map(todo => 
-            todo.id === tempId 
-              ? safeParseTodoDate({ ...newTodo })
-              : todo
-          );
-          console.log('📋 置き換え後のTodos数:', updatedTodos.length);
-          return updatedTodos;
-        })
-        toast.success('📝 新しいTodoを作成しました！')
-        
-        // キャッシュをクリアして次回取得時に最新データを取得
-        try {
-          await fetch('/api/cache?type=user', { method: 'DELETE' })
-          console.log('✨ キャッシュクリア完了')
-        } catch (error) {
-          console.log('⚠️ キャッシュクリア失敗:', error)
-        }
-        
-        // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
-        // 楽観的UI更新のみに依存
-        console.log('✨ 楽観的UI更新のみ - 自動再読み込みを無効化');
-      } else {
-        // エラー時は楽観的更新を取り消し
-        setTodos(prev => prev.filter(todo => todo.id !== tempId))
-        const error = await response.json()
-        alert(error.error || 'Todoの作成に失敗しました')
+      if (!response.ok) {
+        const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+        errorWithStatus.status = response.status
+        errorWithStatus.statusText = response.statusText
+        throw errorWithStatus
       }
+
+      const newTodo: TodoResponse = await response.json()
+      console.log('✅ API成功レスポンス:', newTodo);
+      
+      // 一時的なTodoを実際のTodoで置き換え
+      setTodos(prev => prev.map(todo => 
+        todo.id === tempId 
+          ? safeParseTodoDate({ ...newTodo })
+          : todo
+      ))
+      toast.success('📝 新しいTodoを作成しました！')
+      
+      // キャッシュをクリアして次回取得時に最新データを取得
+      try {
+        await fetch('/api/cache?type=user', { method: 'DELETE' })
+        console.log('✨ キャッシュクリア完了')
+      } catch (error) {
+        console.log('⚠️ キャッシュクリア失敗:', error)
+      }
+      
     } catch (error) {
       // エラー時は楽観的更新を取り消し
       setTodos(prev => prev.filter(todo => todo.id !== tempId))
-      console.error('Todo作成エラー:', error)
-      alert('Todoの作成に失敗しました')
+      
+      const errorWithStatus = error as ErrorWithStatus
+      logApiError(errorWithStatus, 'Todo作成')
+      
+      const friendlyMessage = getErrorMessage(errorWithStatus)
+      toast.error(`Todo作成エラー: ${friendlyMessage}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -187,9 +223,7 @@ export default function TodoList() {
 
   /**
    * Todoの更新
-   * @param id 更新対象のTodoID
-   * @param data 更新するデータ（部分更新可能）
-   * - 更新後は一覧を再取得して表示を更新
+   * 改善されたエラーハンドリング付き
    */
   const handleUpdateTodo = async (id: string, data: UpdateTodoData) => {
     // 楽観的UI更新：即座にUIを更新
@@ -201,51 +235,56 @@ export default function TodoList() {
     ))
     
     try {
-      const response = await fetch(`/api/todos/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+      const response = await retryWithBackoff(async () => {
+        return await fetch(`/api/todos/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+      }, {
+        maxRetries: 2,
+        shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
       })
 
-      if (response.ok) {
-        const updatedTodo: TodoResponse = await response.json()
-        // 実際のレスポンスでUIを更新
-        setTodos(prev => prev.map(todo => 
-          todo.id === id 
-            ? safeParseTodoDate({ ...updatedTodo })
-            : todo
-        ))
-        toast.success('✅ Todoを更新しました！')
-        
-        // キャッシュをクリアして次回取得時に最新データを取得
-        try {
-          await fetch('/api/cache?type=user', { method: 'DELETE' })
-          console.log('✨ キャッシュクリア完了')
-        } catch (error) {
-          console.log('⚠️ キャッシュクリア失敗:', error)
-        }
-        
-        // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
-        console.log('✨ 更新完了 - 楽観的UI更新のみ');
-      } else {
-        // エラー時は元の状態に戻す
-        setTodos(originalTodos)
-        const error = await response.json()
-        toast.error(error.error || 'Todoの更新に失敗しました')
+      if (!response.ok) {
+        const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+        errorWithStatus.status = response.status
+        errorWithStatus.statusText = response.statusText
+        throw errorWithStatus
       }
+
+      const updatedTodo: TodoResponse = await response.json()
+      // 実際のレスポンスでUIを更新
+      setTodos(prev => prev.map(todo => 
+        todo.id === id 
+          ? safeParseTodoDate({ ...updatedTodo })
+          : todo
+      ))
+      toast.success('✅ Todoを更新しました！')
+      
+      // キャッシュをクリアして次回取得時に最新データを取得
+      try {
+        await fetch('/api/cache?type=user', { method: 'DELETE' })
+        console.log('✨ キャッシュクリア完了')
+      } catch (error) {
+        console.log('⚠️ キャッシュクリア失敗:', error)
+      }
+      
     } catch (error) {
       // エラー時は元の状態に戻す
       setTodos(originalTodos)
-      console.error('Todo更新エラー:', error)
-      alert('Todoの更新に失敗しました')
+      
+      const errorWithStatus = error as ErrorWithStatus
+      logApiError(errorWithStatus, 'Todo更新')
+      
+      const friendlyMessage = getErrorMessage(errorWithStatus)
+      toast.error(`Todo更新エラー: ${friendlyMessage}`)
     }
   }
 
   /**
    * Todoの削除
-   * @param id 削除対象のTodoID
-   * - 削除後は一覧を再取得
-   * - エラー時はユーザーに通知
+   * 改善されたエラーハンドリング付き
    */
   const handleDeleteTodo = async (id: string) => {
     // 楽観的UI更新：即座にUIから削除
@@ -255,47 +294,51 @@ export default function TodoList() {
     try {
       console.log('🗑️ Todo削除開始:', id)
       
-      const response = await fetch(`/api/todos/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const response = await retryWithBackoff(async () => {
+        return await fetch(`/api/todos/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+      }, {
+        maxRetries: 2,
+        shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
       })
 
       console.log('📡 削除レスポンス:', response.status, response.statusText)
 
-      if (response.ok) {
-        toast.success('🗑️ Todoを削除しました！')
-        
-        // キャッシュをクリアして次回取得時に最新データを取得
-        try {
-          await fetch('/api/cache?type=user', { method: 'DELETE' })
-          console.log('✨ キャッシュクリア完了')
-        } catch (error) {
-          console.log('⚠️ キャッシュクリア失敗:', error)
-        }
-        
-        // Lambda APIの同期遅延問題のため、自動再読み込みを無効化
-        console.log('✨ 削除完了 - 楽観的UI更新のみ');
-      } else {
-        // エラー時は元の状態に戻す
-        setTodos(originalTodos)
-        const error = await response.json()
-        alert(error.error || 'Todoの削除に失敗しました')
+      if (!response.ok) {
+        const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+        errorWithStatus.status = response.status
+        errorWithStatus.statusText = response.statusText
+        throw errorWithStatus
       }
+
+      toast.success('🗑️ Todoを削除しました！')
+      
+      // キャッシュをクリアして次回取得時に最新データを取得
+      try {
+        await fetch('/api/cache?type=user', { method: 'DELETE' })
+        console.log('✨ キャッシュクリア完了')
+      } catch (error) {
+        console.log('⚠️ キャッシュクリア失敗:', error)
+      }
+      
     } catch (error) {
       // エラー時は元の状態に戻す
       setTodos(originalTodos)
-      console.error('Todo削除エラー:', error)
-      alert('Todoの削除に失敗しました')
+      
+      const errorWithStatus = error as ErrorWithStatus
+      logApiError(errorWithStatus, 'Todo削除')
+      
+      const friendlyMessage = getErrorMessage(errorWithStatus)
+      toast.error(`Todo削除エラー: ${friendlyMessage}`)
     }
   }
 
   /**
    * Todo編集フォームの送信処理
-   * @param data 編集後のTodoデータ
-   * - 編集中は送信ボタンを無効化
-   * - 更新完了後は編集モードを解除
    */
   const handleEditSubmit = async (data: CreateTodoData) => {
     if (!editingTodo) return
@@ -308,27 +351,6 @@ export default function TodoList() {
       setIsSubmitting(false)
     }
   }
-
-  /**
-   * WebSocketによるリアルタイム更新ハンドラー群（一時的に無効化）
-   * - 他ユーザーによる更新をリアルタイムに反映
-   * - 更新、作成、削除それぞれに対応
-   */
-  /*
-  const handleRealtimeUpdate = (updatedTodo: Todo) => {
-    setTodos(prev => prev.map(todo => 
-      todo.id === updatedTodo.id ? updatedTodo : todo
-    ))
-  }
-
-  const handleRealtimeCreate = (newTodo: Todo) => {
-    setTodos(prev => [newTodo, ...prev])
-  }
-
-  const handleRealtimeDelete = (todoId: string) => {
-    setTodos(prev => prev.filter(todo => todo.id !== todoId))
-  }
-  */
 
   /**
    * フィルター条件に基づいてTodoを検索
@@ -361,27 +383,33 @@ export default function TodoList() {
       }
       if (filters.dateRange) params.append('dateRange', filters.dateRange)
 
-      const response = await fetch(`/api/todos/search?${params.toString()}`)
-      if (response.ok) {
-        const data = await response.json()
-        setTodos(data.results.map((todo: any) => safeParseTodoDate(todo)))
+      const response = await retryWithBackoff(async () => {
+        return await fetch(`/api/todos/search?${params.toString()}`)
+      }, {
+        maxRetries: 2,
+        shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
+      })
+      
+      if (!response.ok) {
+        const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+        errorWithStatus.status = response.status
+        errorWithStatus.statusText = response.statusText
+        throw errorWithStatus
       }
+      
+      const data = await response.json()
+      setTodos(data.results.map((todo: any) => safeParseTodoDate(todo)))
+      
     } catch (error) {
-      console.error('検索エラー:', error)
-      toast.error('検索に失敗しました')
+      const errorWithStatus = error as ErrorWithStatus
+      logApiError(errorWithStatus, 'Todo検索')
+      
+      const friendlyMessage = getErrorMessage(errorWithStatus)
+      toast.error(`検索エラー: ${friendlyMessage}`)
     } finally {
       setIsLoading(false)
     }
   }
-
-
-  /**
-   * フィルター条件変更時の処理（手動検索のみ）
-   * 自動検索は無効化し、手動検索ボタンクリック時のみ検索実行
-   */
-  // useEffect(() => {
-  //   debouncedSearchTodos(filter)
-  // }, [filter, debouncedSearchTodos])
 
   /**
    * 手動検索関数（即座に実行）
@@ -399,10 +427,6 @@ export default function TodoList() {
 
   /**
    * Todoの統計情報を計算
-   * - 全体の件数
-   * - 完了・未完了の件数
-   * - 期限切れの件数
-   * - 優先度ごとの件数
    */
   const stats: TodoStats = {
     total: todos.length,
@@ -421,7 +445,6 @@ export default function TodoList() {
 
   /**
    * コンポーネントマウント時の初期化処理
-   * - Todo一覧の初回読み込みを実行
    */
   useEffect(() => {
     fetchTodos()
@@ -441,20 +464,27 @@ export default function TodoList() {
       <Toaster 
         position="top-right"
         toastOptions={{
-          duration: 3000,
+          duration: 4000,
           style: {
             background: '#363636',
             color: '#fff',
           },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 6000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
         }}
       />
-
-      {/* リアルタイム更新コンポーネント（一時的に無効化） */}
-      {/* <RealtimeUpdates
-        onTodoUpdate={handleRealtimeUpdate}
-        onTodoCreate={handleRealtimeCreate}
-        onTodoDelete={handleRealtimeDelete}
-      /> */}
 
       {/* 統計表示 */}
       <TodoStatsDisplay stats={stats} />

@@ -66,6 +66,7 @@ node_modules/
 .serena/
 lambda/
 daily-notes/
+handover/
 
 # ログ
 *.log
