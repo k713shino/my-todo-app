@@ -84,3 +84,5 @@ accounts
 .env.local
 .env.production
 OAuth_tokens*
+
+*.zip

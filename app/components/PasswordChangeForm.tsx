@@ -73,7 +73,15 @@ export default function PasswordChangeForm() {
         🔐 パスワード変更
       </h2>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {process.env.NODE_ENV === 'production' && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-700 mb-4">
+          <p className="text-yellow-700 dark:text-yellow-300">
+            パスワード変更機能は現在調整中です。しばらくお待ちください。
+          </p>
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-4" style={{display: process.env.NODE_ENV === 'production' ? 'none' : 'block'}}>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             現在のパスワード
