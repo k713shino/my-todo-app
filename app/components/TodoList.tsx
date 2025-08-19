@@ -63,6 +63,40 @@ export default function TodoList() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [filter, setFilter] = useState<TodoFilters>({})
+  const [lambdaWarmedUp, setLambdaWarmedUp] = useState(false)
+
+  /**
+   * Lambda関数ウォームアップ機能
+   * コールドスタート問題を軽減
+   */
+  const warmupLambda = async () => {
+    if (lambdaWarmedUp) return // 既にウォームアップ済み
+    
+    try {
+      console.log('🔥 Lambda関数ウォームアップ開始（バックグラウンド）')
+      const warmupStart = performance.now()
+      
+      // 非同期でウォームアップ実行（UI をブロックしない）
+      fetch('/api/lambda/warmup', { 
+        method: 'GET',
+        cache: 'no-store' 
+      }).then(async (response) => {
+        const warmupTime = performance.now() - warmupStart
+        const result = await response.json()
+        
+        if (result.success) {
+          console.log(`🚀 Lambda関数ウォームアップ完了 (${warmupTime.toFixed(2)}ms)`)
+          setLambdaWarmedUp(true)
+        } else {
+          console.warn('⚠️ Lambda関数ウォームアップ失敗:', result.error)
+        }
+      }).catch(error => {
+        console.warn('⚠️ Lambda関数ウォームアップエラー:', error)
+      })
+    } catch (error) {
+      console.warn('⚠️ Lambda関数ウォームアップエラー:', error)
+    }
+  }
 
   /**
    * サーバーからTodo一覧を取得
@@ -70,16 +104,20 @@ export default function TodoList() {
    * 改善されたエラーハンドリングとリトライ機能付き
    */
   const fetchTodos = async (bypassCache = false) => {
+    const startTime = performance.now()
+    
     try {
-      console.log('🔄 fetchTodos実行:', { bypassCache, 現在のTodos数: todos.length });
+      console.log('⚡ 高速Todo取得開始:', { bypassCache, 現在のTodos数: todos.length });
       
+      // 🚀 最適化されたユーザー専用エンドポイント使用
       const url = bypassCache 
-        ? `/api/todos?cache=false&_t=${Date.now()}` 
-        : `/api/todos`
+        ? `/api/todos/user?cache=false&_t=${Date.now()}` 
+        : `/api/todos/user`
       
-      // リトライ機能付きのフェッチ
+      // リトライ機能付きの高速フェッチ
       const response = await retryWithBackoff(async () => {
-        return await fetch(url, {
+        const fetchStart = performance.now()
+        const res = await fetch(url, {
           ...(bypassCache ? {
             cache: 'no-store',
             headers: {
@@ -90,6 +128,9 @@ export default function TodoList() {
             cache: 'default'
           })
         })
+        const fetchTime = performance.now() - fetchStart
+        console.log(`📡 API呼び出し時間: ${fetchTime.toFixed(2)}ms`)
+        return res
       }, {
         maxRetries: 2,
         shouldRetry: (error) => {
@@ -107,24 +148,51 @@ export default function TodoList() {
       }
 
       const data: TodoResponse[] = await response.json()
-      console.log('📥 API取得データ:', data.length, '件');
+      const totalTime = performance.now() - startTime
+      
+      // パフォーマンス分析
+      const performanceLevel = totalTime < 500 ? '🟢 高速' : 
+                              totalTime < 1000 ? '🟡 普通' : '🔴 要改善'
+      
+      console.log(`✅ Todo取得完了 (${totalTime.toFixed(2)}ms) ${performanceLevel}:`, {
+        todoCount: data.length,
+        cacheStatus: response.headers.get('X-Cache-Status'),
+        apiResponseTime: response.headers.get('X-Response-Time'),
+        lambdaWarmedUp
+      });
+      
       const parsedTodos = data.map((todo) => safeParseTodoDate(todo));
-      console.log('📋 取得後Todos設定:', parsedTodos.length, '件');
       setTodos(parsedTodos)
       
+      // パフォーマンスが1秒を超えた場合の警告
+      if (totalTime > 1000) {
+        console.warn(`⚠️ パフォーマンス警告: 読み込みに${totalTime.toFixed(2)}msかかりました`)
+        
+        // Lambda関数のウォームアップを次回のために実行
+        if (!lambdaWarmedUp) {
+          warmupLambda()
+        }
+      }
+      
     } catch (error) {
+      const totalTime = performance.now() - startTime
       const errorWithStatus = error as ErrorWithStatus
-      logApiError(errorWithStatus, 'Todo取得')
+      logApiError(errorWithStatus, `Todo取得 (${totalTime.toFixed(2)}ms)`)
       
       // ユーザーフレンドリーなエラーメッセージ
       const friendlyMessage = getErrorMessage(errorWithStatus)
       toast.error(friendlyMessage)
       
+      // エラー後にウォームアップを試行（次回のパフォーマンス向上のため）
+      if (!lambdaWarmedUp) {
+        warmupLambda()
+      }
+      
       // キャッシュからのフォールバック取得を試行
       if (!bypassCache) {
         try {
           console.log('🔄 キャッシュからのフォールバック取得を試行...')
-          const cachedResponse = await fetch('/api/todos?cache=true')
+          const cachedResponse = await fetch('/api/todos/user?cache=true')
           if (cachedResponse.ok) {
             const cachedData = await cachedResponse.json()
             if (cachedData.length > 0) {
@@ -445,15 +513,23 @@ export default function TodoList() {
 
   /**
    * コンポーネントマウント時の初期化処理
+   * Lambda関数のウォームアップも実行
    */
   useEffect(() => {
+    // 初回読み込み開始
     fetchTodos()
+    
+    // バックグラウンドでLambda関数をウォームアップ
+    warmupLambda()
   }, [])
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex flex-col justify-center items-center h-64 space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 dark:border-purple-400"></div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          {lambdaWarmedUp ? '📊 データを読み込み中...' : '🔥 システムを準備中...'}
+        </div>
       </div>
     )
   }
@@ -485,6 +561,13 @@ export default function TodoList() {
           },
         }}
       />
+
+      {/* パフォーマンス状態表示 */}
+      {lambdaWarmedUp && (
+        <div className="hidden sm:block text-xs text-green-600 dark:text-green-400 text-center">
+          🚀 高速モード有効
+        </div>
+      )}
 
       {/* 統計表示 */}
       <TodoStatsDisplay stats={stats} />
