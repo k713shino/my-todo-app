@@ -6,6 +6,7 @@ import { getAuthenticatedUser, createAuthErrorResponse, createSecurityHeaders } 
 import type { Todo } from '@/types/todo';
 import { safeToISOString } from '@/lib/date-utils';
 import { CacheManager } from '@/lib/cache';
+import { extractUserIdFromPrefixed } from '@/lib/user-id-utils';
 
 export const dynamic = 'force-dynamic'
 
@@ -48,9 +49,10 @@ export async function GET(request: NextRequest) {
       console.log('🔄 キャッシュバイパス指定 - Lambda API経由で取得')
     }
     
-    // 🚀 最適化されたユーザー専用エンドポイント使用
-    console.log('🚀 Lambda最適化エンドポイント呼び出し:', `/todos/user/${authResult.user!.id}`)
-    const lambdaResponse = await lambdaAPI.get(`/todos/user/${encodeURIComponent(authResult.user!.id)}`)
+    // 🚀 最適化されたユーザー専用エンドポイント使用（認証方法別ユーザーID変換）
+    const actualUserId = extractUserIdFromPrefixed(authResult.user!.id)
+    console.log('🚀 Lambda最適化エンドポイント呼び出し:', `/todos/user/${actualUserId} (元ID: ${authResult.user!.id})`)
+    const lambdaResponse = await lambdaAPI.get(`/todos/user/${encodeURIComponent(actualUserId)}`)
     
     console.log('📡 Lambda API レスポンス:', {
       success: lambdaResponse.success,
@@ -144,10 +146,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
+    // 認証方法別ユーザーID変換
+    const actualUserId = extractUserIdFromPrefixed(session.user.id)
+    
     const todoData = {
       title: body.title,
       description: body.description || undefined,
-      userId: session.user.id,
+      userId: actualUserId, // 実際のユーザーIDを使用
       userEmail: session.user.email || undefined,
       userName: session.user.name || undefined,
       priority: body.priority || 'MEDIUM',

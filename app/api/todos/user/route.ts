@@ -8,6 +8,7 @@ import { getAuthenticatedUser, createAuthErrorResponse } from '@/lib/auth-utils'
 import { CacheManager } from '@/lib/cache'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { createSecurityHeaders } from '@/lib/security'
+import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 
 export async function GET(request: NextRequest) {
   const startTime = performance.now()
@@ -18,14 +19,16 @@ export async function GET(request: NextRequest) {
   }
   
   const userId = authResult.user.id
-  console.log('⚡ 高速ユーザー専用Todo取得開始:', { userId })
+  // 認証方法別ユーザーID変換
+  const actualUserId = extractUserIdFromPrefixed(userId)
+  console.log('⚡ 高速ユーザー専用Todo取得開始:', { userId, actualUserId })
   
   try {
     // キャッシュバイパスチェック
     const { searchParams } = new URL(request.url)
     const bypassCache = searchParams.get('cache') === 'false'
     
-    // 📦 Redis キャッシュから取得を試行
+    // 📦 Redis キャッシュから取得を試行（NextAuthのユーザーIDをキーとして使用）
     if (!bypassCache) {
       console.log('📦 Redis キャッシュ確認中...')
       const cachedTodos = await CacheManager.getTodos(userId)
@@ -53,11 +56,11 @@ export async function GET(request: NextRequest) {
       console.log('❌ Redis キャッシュミス - Lambda API経由で取得')
     }
     
-    // 🎯 最適化されたLambda ユーザー専用エンドポイントを使用
-    console.log('🚀 Lambda最適化エンドポイント呼び出し:', `/todos/user/${userId}`)
+    // 🎯 最適化されたLambda ユーザー専用エンドポイントを使用（実際のユーザーIDで）
+    console.log('🚀 Lambda最適化エンドポイント呼び出し:', `/todos/user/${actualUserId} (元ID: ${userId})`)
     const lambdaStart = performance.now()
     
-    const lambdaResponse = await lambdaAPI.get(`/todos/user/${encodeURIComponent(userId)}`)
+    const lambdaResponse = await lambdaAPI.get(`/todos/user/${encodeURIComponent(actualUserId)}`)
     const lambdaTime = performance.now() - lambdaStart
     
     console.log(`📡 Lambda API レスポンス (${lambdaTime.toFixed(2)}ms):`, {

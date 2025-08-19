@@ -33,7 +33,7 @@ export const authOptions: AuthOptions = {
         },
         profile(profile) {
           return {
-            id: profile.id.toString(),
+            id: `github_${profile.id}`, // プロバイダー固有のIDにする
             name: profile.name || profile.login,
             email: profile.email,
             image: profile.avatar_url,
@@ -56,7 +56,7 @@ export const authOptions: AuthOptions = {
         },
         profile(profile) {
           return {
-            id: profile.sub,
+            id: `google_${profile.sub}`, // プロバイダー固有のIDにする
             name: profile.name,
             email: profile.email,
             image: profile.picture,
@@ -132,7 +132,7 @@ export const authOptions: AuthOptions = {
               
               console.log('✅ Prisma直接認証成功!')
               return {
-                id: user.id,
+                id: `email_${user.id}`, // メール認証用の固有IDにする
                 email: user.email,
                 name: user.name,
                 image: user.image,
@@ -183,7 +183,7 @@ export const authOptions: AuthOptions = {
           
           console.log('✅ Lambda API認証成功!')
           return {
-            id: user.id,
+            id: `email_${user.id}`, // メール認証用の固有IDにする
             email: user.email,
             name: user.name,
             image: user.image,
@@ -266,163 +266,15 @@ export const authOptions: AuthOptions = {
           accountId: account?.providerAccountId
         })
         
-        // OAuth認証時のユーザー統合処理
+        // 🔧 認証方法別ユーザー分離: 同一メールでも認証方法ごとに別ユーザーとして処理
         if (account?.provider && account.provider !== 'credentials') {
-          console.log(`OAuth認証成功: ${user.email} (${account.provider})`)
+          console.log(`OAuth認証成功: ${user.email} (${account.provider}) - 認証方法別ユーザーID: ${user.id}`)
           
-          // 🛡️ セキュリティ修正: データベース操作の安全なエラーハンドリング
-          try {
-            // Lambda環境の場合の処理
-            if (process.env.USE_LAMBDA_DB === 'true') {
-              console.log('🔧 Lambda環境でのOAuth統合処理')
-              
-              const dbAdapter = await import('@/lib/db-adapter')
-              
-              // 既存ユーザーをメールアドレスで検索
-              const existingUserResult = await dbAdapter.default.getUserByEmail(user.email!)
-              
-              if (!existingUserResult.success) {
-                console.error('❌ Lambda: ユーザー検索エラー:', existingUserResult.error)
-                // 🔧 修正: Lambda環境でエラーが発生した場合も認証を継続（新規ユーザーとして処理）
-                console.log('⚠️ Lambda環境エラー - 認証は継続します')
-                return true
-              }
-              
-              if (existingUserResult.data) {
-                const existingUser = existingUserResult.data
-                console.log(`🔗 Lambda: 既存ユーザーを発見、OAuth統合中... ${existingUser.id}`)
-                
-                // 🛡️ セキュリティ修正: 安全なIDマッピング
-                const originalOAuthId = user.id
-                user.id = existingUser.id
-                account.userId = existingUser.id
-                console.log(`✅ Lambda: ユーザーIDマッピング完了: ${originalOAuthId} → ${existingUser.id}`)
-                
-                return true
-              } else {
-                console.log('👤 Lambda: 新規ユーザー - 認証は継続します')
-                return true
-              }
-            }
-            
-            // 🔧 修正: 開発環境でのデータベース接続チェックを緩和
-            let isDatabaseAvailable = true
-            if (process.env.NODE_ENV !== 'production') {
-              try {
-                const { testDatabaseConnection } = await import('@/lib/prisma')
-                const dbConnectionResult = await testDatabaseConnection()
-                isDatabaseAvailable = dbConnectionResult.success
-                
-                if (!isDatabaseAvailable) {
-                  console.log('⚠️ 開発環境: データベース接続不可 - OAuth認証は継続します')
-                  return true
-                }
-              } catch (dbTestError) {
-                console.log('⚠️ 開発環境: データベーステスト失敗 - OAuth認証は継続します')
-                return true
-              }
-            }
-            
-            // データベースが利用可能な場合のみPrisma処理を実行
-            if (isDatabaseAvailable) {
-              const { prisma } = await import('@/lib/prisma')
-              
-              // 🛡️ セキュリティ修正: 厳格なユーザー検索と検証
-              const existingUser = await prisma.user.findUnique({
-                where: { email: user.email! },
-                include: { 
-                  accounts: {
-                    where: {
-                      provider: account.provider,
-                      providerAccountId: account.providerAccountId
-                    }
-                  }
-                }
-              })
-              
-              if (existingUser) {
-                console.log('🔗 既存ユーザーを発見、OAuth統合中...', existingUser.id)
-                
-                // 既存のOAuth連携をチェック
-                if (existingUser.accounts.length > 0) {
-                  console.log('✅ OAuth連携は既に存在します')
-                } else {
-                  // 新しいOAuth連携を追加
-                  await prisma.account.create({
-                    data: {
-                      userId: existingUser.id,
-                      type: account.type,
-                      provider: account.provider,
-                      providerAccountId: account.providerAccountId,
-                      access_token: account.access_token,
-                      refresh_token: account.refresh_token,
-                      expires_at: account.expires_at,
-                      token_type: account.token_type,
-                      scope: account.scope,
-                      id_token: account.id_token,
-                      session_state: account.session_state,
-                    }
-                  })
-                  console.log('✅ OAuth連携を既存アカウントに追加')
-                }
-                
-                // ユーザー情報を更新（名前や画像が更新されている場合）
-                await prisma.user.update({
-                  where: { id: existingUser.id },
-                  data: {
-                    name: user.name || existingUser.name,
-                    image: user.image || existingUser.image,
-                  }
-                })
-                
-                // 🛡️ セキュリティ修正: 安全なIDマッピング
-                const originalOAuthId = user.id
-                user.id = existingUser.id
-                account.userId = existingUser.id
-                console.log(`✅ ユーザーIDマッピング完了: ${originalOAuthId} → ${existingUser.id}`)
-                
-              } else {
-                // 🔧 修正: 新規ユーザー作成を許可
-                console.log('👤 新規ユーザー作成中...')
-                
-                // 新規ユーザーとアカウントを作成（IDは自動生成されるcuidを使用）
-                const newUser = await prisma.user.create({
-                  data: {
-                    // IDは指定せず、Prismaの自動生成cuidを使用
-                    email: user.email!,
-                    name: user.name,
-                    image: user.image,
-                    accounts: {
-                      create: {
-                        type: account.type,
-                        provider: account.provider,
-                        providerAccountId: account.providerAccountId,
-                        access_token: account.access_token,
-                        refresh_token: account.refresh_token,
-                        expires_at: account.expires_at,
-                        token_type: account.token_type,
-                        scope: account.scope,
-                        id_token: account.id_token,
-                        session_state: account.session_state,
-                      }
-                    }
-                  }
-                })
-                
-                // 🛡️ セキュリティ修正: OAuth IDをPrismaで生成されたDB IDに変更
-                const originalOAuthId = user.id
-                user.id = newUser.id
-                account.userId = newUser.id
-                console.log(`✅ 新規ユーザー作成完了: ${originalOAuthId} → ${newUser.id}`)
-              }
-            }
-            
-          } catch (error) {
-            console.error('❌ OAuth統合エラー:', error)
-            // 🔧 修正: データベースエラーでも OAuth 認証を継続（ログはエラーとして残す）
-            console.log('⚠️ OAuth統合でエラーが発生しましたが、認証は継続します')
-            return true
-          }
+          // 🔧 修正: ユーザー統合を無効化し、認証方法ごとに独立したユーザーとして処理
+          console.log('📋 認証方法別ユーザー分離ポリシー: 同一メールアドレスでも認証方法ごとに別ユーザーとして処理します')
+          
+          // OAuth認証では、プロバイダー固有のIDをそのまま使用して独立したユーザーとして処理
+          console.log(`✅ ${account.provider}認証ユーザー確定: ${user.id}`)
         }
         return true
       } catch (error: unknown) {

@@ -3,6 +3,7 @@ import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { safeToISOString } from '@/lib/date-utils'
 import { CacheManager } from '@/lib/cache'
+import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 
 /**
  * PUT: Todo更新API (Lambda経由)
@@ -36,10 +37,15 @@ export async function PUT(
           ? body.tags.map((tag: string) => tag.trim()).filter(Boolean)
           : []
       }),
-      userId: session.user.id // 必須: ユーザー認証用
+      userId: extractUserIdFromPrefixed(session.user.id) // 必須: ユーザー認証用（実際のユーザーID）
     }
     
-    console.log('📤 Lambda API更新データ:', { todoId: id, userId: session.user.id, updateFields: Object.keys(updateData) })
+    console.log('📤 Lambda API更新データ:', { 
+      todoId: id, 
+      userId: session.user.id, 
+      actualUserId: extractUserIdFromPrefixed(session.user.id),
+      updateFields: Object.keys(updateData) 
+    })
 
     const lambdaResponse = await lambdaAPI.put(`/todos/${id}`, updateData);
     console.log('📥 Lambda API更新レスポンス:', lambdaResponse);
@@ -91,11 +97,18 @@ export async function DELETE(
 
     const { id } = await params
 
-    console.log('🔄 Lambda API経由でTodo削除を試行:', id);
-    console.log('📤 削除リクエスト詳細:', { todoId: id, userId: session.user.id, userIdType: typeof session.user.id });
+    const actualUserId = extractUserIdFromPrefixed(session.user.id)
     
-    // Lambda API経由でTodoを削除 (userIdをクエリパラメータで送信、TEXT型対応)
-    const deleteEndpoint = `/todos/${id}?userId=${encodeURIComponent(session.user.id)}`
+    console.log('🔄 Lambda API経由でTodo削除を試行:', id);
+    console.log('📤 削除リクエスト詳細:', { 
+      todoId: id, 
+      userId: session.user.id, 
+      actualUserId,
+      userIdType: typeof session.user.id 
+    });
+    
+    // Lambda API経由でTodoを削除 (実際のuserIdをクエリパラメータで送信、TEXT型対応)
+    const deleteEndpoint = `/todos/${id}?userId=${encodeURIComponent(actualUserId)}`
     console.log('🔗 削除エンドポイント:', deleteEndpoint);
     
     const lambdaResponse = await lambdaAPI.delete(deleteEndpoint);
