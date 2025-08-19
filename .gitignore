@@ -64,7 +64,7 @@ node_modules/
 .vscode/
 .idea/
 .serena/
-lambda/
+lambda-js/
 daily-notes/
 handover/
 
