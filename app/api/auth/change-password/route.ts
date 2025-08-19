@@ -45,9 +45,10 @@ export async function POST(request: NextRequest) {
       })
 
       if (!response.success) {
+        console.error('Lambda password change failed:', response.error)
         return NextResponse.json({ 
           error: response.error || 'Password change failed' 
-        }, { status: 400 })
+        }, { status: response.data?.status || 400 })
       }
 
       return NextResponse.json({ 

@@ -115,9 +115,10 @@ export async function POST(request: NextRequest) {
       })
 
       if (!response.success) {
+        console.error('Lambda import failed:', response.error)
         return NextResponse.json({ 
           error: response.error || 'Import failed' 
-        }, { status: 400 })
+        }, { status: response.data?.status || 400 })
       }
 
       return NextResponse.json({ 
