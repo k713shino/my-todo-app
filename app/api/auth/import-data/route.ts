@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ 
         success: true,
-        importedCount: response.importedCount || normalizedTodos.length,
+        importedCount: (response.data as any)?.importedCount || normalizedTodos.length,
         message: 'Data imported successfully'
       })
 
