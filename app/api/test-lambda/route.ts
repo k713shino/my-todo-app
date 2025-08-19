@@ -1,48 +1,44 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server'
 
-interface LambdaResponse {
-  success: boolean;
-  message?: string;
-  data?: any;
-  timestamp?: string;
-  error?: string;
-}
-
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest) {
   try {
-    console.log('🚀 Lambda API呼び出し開始...');
+    const lambdaApiUrl = process.env.LAMBDA_API_URL
     
-    const response = await fetch('https://wmo3ty4ngk.execute-api.ap-northeast-1.amazonaws.com/prod/', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    if (!lambdaApiUrl) {
+      return NextResponse.json({
+        error: 'LAMBDA_API_URL not configured',
+        env: {
+          NODE_ENV: process.env.NODE_ENV,
+          VERCEL: process.env.VERCEL,
+          hasLambdaUrl: !!lambdaApiUrl
+        }
+      }, { status: 500 })
     }
 
-    const data = await response.json();
-    console.log('✅ Lambda APIレスポンス:', data);
-
-    const responseData: LambdaResponse = {
+    // Lambda APIヘルスチェック
+    const response = await fetch(`${lambdaApiUrl}/`)
+    const data = await response.json()
+    
+    return NextResponse.json({
       success: true,
-      message: 'Lambda経由でRDS接続成功！',
-      data: data,
-      timestamp: new Date().toISOString()
-    };
-
-    return NextResponse.json(responseData);
-
+      lambdaApiUrl: lambdaApiUrl,
+      lambdaResponse: data,
+      environment: {
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL: !!process.env.VERCEL,
+        hasLambdaUrl: !!lambdaApiUrl
+      }
+    })
+    
   } catch (error) {
-    console.error('❌ Lambda API呼び出しエラー:', error);
-    
-    const errorResponse: LambdaResponse = {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
-    
-    return NextResponse.json(errorResponse, { status: 500 });
+    return NextResponse.json({
+      error: 'Lambda API test failed',
+      details: error instanceof Error ? error.message : String(error),
+      environment: {
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL: !!process.env.VERCEL,
+        hasLambdaUrl: !!process.env.LAMBDA_API_URL
+      }
+    }, { status: 500 })
   }
 }
