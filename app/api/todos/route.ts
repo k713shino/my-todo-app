@@ -54,138 +54,66 @@ export async function GET(request: NextRequest) {
         console.log('🔄 キャッシュバイパス指定 - Lambda API経由で取得')
       }
       
-      console.log('🔄 緊急回避策: /todos エンドポイント + フロントエンドフィルタリング使用');
-      console.log('📝 理由: API Gatewayの/todos/user/{userId}ルーティング問題のため');
-      console.log('👤 現在のユーザーID:', authResult.user!.id);
+      // 🚀 最適化されたユーザー専用エンドポイント使用
+      console.log('🚀 Lambda最適化エンドポイント呼び出し:', `/todos/user/${authResult.user!.id}`)
+      const lambdaResponse = await lambdaAPI.get(`/todos/user/${encodeURIComponent(authResult.user!.id)}`)
       
-      // 緊急回避策: /todos エンドポイントを使用してフロントエンドでフィルタリング
-      const fallbackResponse = await lambdaAPI.get('/todos');
       console.log('📡 Lambda API レスポンス:', {
-        success: fallbackResponse.success,
-        hasData: !!fallbackResponse.data,
-        dataType: typeof fallbackResponse.data,
-        dataLength: fallbackResponse.data ? fallbackResponse.data.length : 0,
-        error: fallbackResponse.error,
-        timestamp: fallbackResponse.timestamp
-      });
+        success: lambdaResponse.success,
+        hasData: !!lambdaResponse.data,
+        dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0,
+        error: lambdaResponse.error
+      })
       
-      if (fallbackResponse.success && fallbackResponse.data) {
-        const allTodos = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [];
-        console.log('📊 全Todo件数:', allTodos.length);
-        
-        // 🛡️ セキュリティ修正: 認証済みユーザーのTodoのみフィルタリング (TEXT型対応)
-        const userTodos = allTodos.filter((todo: any) => {
-          const todoUserId = todo.userId;
-          const currentUserId = authResult.user!.id;
-          
-          // 文字列として直接比較 (TEXT型対応)
-          if (todoUserId === currentUserId) return true;
-          
-          // 念のため文字列変換して比較
-          if (todoUserId.toString() === currentUserId.toString()) return true;
-          
-          return false;
-        });
-        
-        console.log('📊 フィルタリング後Todo件数:', userTodos.length);
-        
-        // 🛡️ セキュリティ修正: 新規ユーザー検出ロジックを安全化
-        if (userTodos.length === 0) {
-          console.log('🔍 新規ユーザーの可能性をチェック');
-          
-          // 現在のセッションでのTodo作成履歴を確認（最近30分以内）
-          const newUserTodos = allTodos.filter((todo: any) => {
-            const userId = todo.userId;
-            // CUID形式の検証を追加
-            if (!userId || !userId.startsWith('c') || userId.length < 15) return false;
-            
-            // 最近30分以内に作成されたTodoかチェック
-            const todoCreatedAt = new Date(todo.createdAt);
-            const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-            
-            return todoCreatedAt > thirtyMinutesAgo;
-          });
-          
-          console.log('🕒 最近30分の新規ユーザーTodo:', newUserTodos.length, '件');
-          
-          if (newUserTodos.length > 0) {
-            // 最も最近作成されたTodoのユーザーIDを取得
-            const sortedTodos = newUserTodos.sort((a, b) => 
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            );
-            const detectedUserId = sortedTodos[0].userId;
-            
-            // 🛡️ セキュリティ修正: 検出されたユーザーIDと現在のセッションユーザーIDの関連性を確認
-            // この部分は今後、より安全な方法（データベースでの明示的なマッピング）に置き換える必要がある
-            console.log('🆕 新規ユーザー検出:', {
-              detectedUserId,
-              recentTodoCount: newUserTodos.length,
-              sessionUserId: authResult.user!.id
-            });
-            
-            // 検出されたユーザーIDで全Todoを再フィルタリング
-            const allUserTodos = allTodos.filter((todo: any) => todo.userId === detectedUserId);
-            console.log('🔄 検出されたユーザーIDの全Todo:', allUserTodos.length, '件');
-            
-            userTodos.push(...allUserTodos);
-          }
-        }
-        
-        console.log('📊 最終フィルタリング後Todo件数:', userTodos.length);
-        
-        if (userTodos.length > 0) {
-          console.log('📝 フィルタリング結果サンプル:', userTodos.slice(0, 3).map((t: any) => ({
-            id: t.id,
-            title: t.title,
-            userId: t.userId,
-            completed: t.completed
-          })));
-        }
-        
-        // 🛡️ セキュリティ修正: データサニタイズ
-        const safeTodos = userTodos.map((todo: any) => ({
-          ...todo,
-          createdAt: safeToISOString(todo.createdAt),
-          updatedAt: safeToISOString(todo.updatedAt),
-          dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
+      if (lambdaResponse.success && Array.isArray(lambdaResponse.data)) {
+        // 🛡️ データサニタイズ (Date オブジェクトに変換)
+        const safeTodos = lambdaResponse.data.map((todo: any) => ({
+          id: todo.id,
+          title: todo.title,
+          description: todo.description || null,
+          completed: Boolean(todo.completed),
           priority: todo.priority || 'MEDIUM',
+          dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
+          createdAt: new Date(todo.createdAt),
+          updatedAt: new Date(todo.updatedAt),
           userId: todo.userId,
           category: todo.category || null,
           tags: Array.isArray(todo.tags) ? todo.tags : []
-        }));
+        }))
         
-        console.log('✅ Todo取得成功:', safeTodos.length, '件');
+        console.log('✅ Todo取得成功:', safeTodos.length, '件')
         
         // 🛡️ Redisキャッシュに保存 (5分間キャッシュ)
-        if (safeTodos.length > 0) {
+        if (safeTodos.length >= 0) {
           try {
-            await CacheManager.setTodos(authResult.user!.id, safeTodos, 300) // 5分
+            await CacheManager.setTodos(authResult.user!.id, safeTodos, 300)
             console.log('📦 Redis キャッシュに保存完了:', safeTodos.length, '件')
           } catch (cacheError) {
             console.log('⚠️ Redis キャッシュ保存失敗:', cacheError)
           }
         }
         
+        // JSON レスポンス用のデータ変換 (日付を文字列に)
+        const responseData = safeTodos.map(todo => ({
+          ...todo,
+          dueDate: todo.dueDate ? todo.dueDate.toISOString() : null,
+          createdAt: todo.createdAt.toISOString(),
+          updatedAt: todo.updatedAt.toISOString()
+        }))
+        
         // 🛡️ セキュリティヘッダーを追加
-        const response = NextResponse.json(safeTodos);
-        const securityHeaders = createSecurityHeaders();
+        const response = NextResponse.json(responseData)
+        const securityHeaders = createSecurityHeaders()
         Object.entries(securityHeaders).forEach(([key, value]) => {
-          response.headers.set(key, value);
-        });
+          response.headers.set(key, value)
+        })
         response.headers.set('X-Cache-Status', 'miss')
         
-        return response;
+        return response
         
       } else {
-        console.log('⚠️ Lambda API 失敗:', {
-          success: fallbackResponse.success,
-          error: fallbackResponse.error,
-          data: fallbackResponse.data,
-          timestamp: fallbackResponse.timestamp
-        });
-        
-        // エラーの場合も空配列を返してUIの破綻を防ぐ
-        return NextResponse.json([], { status: 200 });
+        console.log('⚠️ Lambda API 失敗:', lambdaResponse.error)
+        return NextResponse.json([], { status: 200 })
       }
 
     } catch (error) {
@@ -200,57 +128,33 @@ export async function GET(request: NextRequest) {
 
 // 新しいTodoを作成
 export async function POST(request: NextRequest) {
+  const startTime = performance.now()
+  
   try {
-    console.log('🚀 フロントエンドAPI POST /api/todos 呼び出し開始 - デバッグ版 v4');
+    console.log('🚀 高速Todo作成開始')
     
     const session = await getAuthSession()
-    console.log('👤 セッション情報:', {
-      hasSession: !!session,
-      userId: session?.user?.id,
-      userEmail: session?.user?.email
-    });
     
     if (!isAuthenticated(session)) {
-      console.log('❌ 認証されていません');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     let body: any;
     try {
       body = await request.json();
-      console.log('📥 リクエストボディ:', body);
     } catch (parseError) {
-      console.error('❌ JSON解析エラー:', parseError);
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
     
     // バリデーション
     if (!body.title) {
-      console.log('❌ タイトルが不足');
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    console.log('🆕 Lambda API経由でTodo作成開始');
-    console.log('👤 現在のユーザー:', {
-      id: session.user.id,
-      email: session.user.email,
-      name: session.user.name
-    });
-    
-    // 🔧 Note: OAuth認証ユーザーの存在確認・作成はLambda API内で自動処理されます
-    
-    // Lambda API用のリクエストデータ
-    // 🔧 修正: OAuth認証ユーザーのIDを文字列として送信 (TEXT型対応)
-    console.log('🔍 ユーザーID詳細:', {
-      originalId: session.user.id,
-      idType: typeof session.user.id,
-      idLength: session.user.id?.length
-    });
-    
     const todoData = {
       title: body.title,
       description: body.description || undefined,
-      userId: session.user.id, // 文字列として送信 (TEXT型対応)
+      userId: session.user.id,
       userEmail: session.user.email || undefined,
       userName: session.user.name || undefined,
       priority: body.priority || 'MEDIUM',
@@ -259,49 +163,18 @@ export async function POST(request: NextRequest) {
       tags: body.tags || undefined
     };
     
-    console.log('📤 Lambda API送信データ:', todoData);
-    
-    // まずLambdaヘルスチェック
-    try {
-      console.log('🏥 Lambda ヘルスチェック (POST前)...');
-      const healthResponse = await lambdaAPI.get('/');
-      console.log('🏥 Lambda ヘルスチェック結果:', {
-        success: healthResponse.success,
-        error: healthResponse.error
-      });
-      
-      if (!healthResponse.success) {
-        console.log('⚠️ Lambda接続不良 - エラーを返す');
-        return NextResponse.json({ 
-          error: 'Lambda service unavailable', 
-          details: healthResponse.error 
-        }, { status: 503 });
-      }
-    } catch (healthError) {
-      console.error('❌ Lambda ヘルスチェックで例外:', healthError);
-      return NextResponse.json({ 
-        error: 'Lambda service unavailable',
-        details: healthError instanceof Error ? healthError.message : 'Unknown error'
-      }, { status: 503 });
-    }
+    // 🚀 高速Todo作成: ヘルスチェックをスキップして直接作成
     
     // Lambda API経由でTodoを作成
     try {
-      console.log('📞 Lambda POST /todos 呼び出し開始...');
-      const lambdaResponse = await lambdaAPI.post('/todos', todoData);
-      console.log('📡 Lambda API 作成レスポンス:', {
-        success: lambdaResponse.success,
-        hasData: !!lambdaResponse.data,
-        error: lambdaResponse.error,
-        timestamp: lambdaResponse.timestamp
-      });
+      const lambdaStart = performance.now()
+      const lambdaResponse = await lambdaAPI.post('/todos', todoData)
+      const lambdaTime = performance.now() - lambdaStart
       
       if (lambdaResponse.success && lambdaResponse.data) {
-        // Lambdaからの新しい形式のレスポンスを処理
-        const responseData = lambdaResponse.data;
-        console.log('✅ Lambda からのレスポンスデータ:', responseData);
+        const responseData = lambdaResponse.data
         
-        // レスポンスデータの安全な日付変換とPrisma型との互換性確保
+        // レスポンスデータの安全な日付変換
         const newTodo = {
           ...responseData,
           createdAt: safeToISOString(responseData.createdAt),
@@ -310,39 +183,39 @@ export async function POST(request: NextRequest) {
           priority: responseData.priority || 'MEDIUM',
           category: responseData.category || null,
           tags: responseData.tags || []
-        };
-        
-        console.log('✅ Todo作成成功:', newTodo.id);
-        
-        // キャッシュ無効化
-        try {
-          await CacheManager.invalidateUserTodos(session.user.id)
-          console.log('📦 キャッシュ無効化完了')
-        } catch (cacheError) {
-          console.log('⚠️ キャッシュ無効化失敗:', cacheError)
         }
         
-        return NextResponse.json(newTodo, { status: 201 });
+        // キャッシュ無効化（非同期）
+        CacheManager.invalidateUserTodos(session.user.id).catch(() => {})
+        
+        const totalTime = performance.now() - startTime
+        const performanceLevel = totalTime < 500 ? '🟢 高速' : 
+                                totalTime < 1000 ? '🟡 普通' : '🔴 要改善'
+        
+        console.log(`✅ Todo作成完了 (${totalTime.toFixed(2)}ms) ${performanceLevel}:`, {
+          id: newTodo.id,
+          lambdaTime: lambdaTime.toFixed(2) + 'ms'
+        })
+        
+        return NextResponse.json(newTodo, { status: 201 })
         
       } else {
-        console.error('❌ Lambda API でのTodo作成失敗:', lambdaResponse.error);
         return NextResponse.json({ 
           error: 'Failed to create todo',
           details: lambdaResponse.error
-        }, { status: 500 });
+        }, { status: 500 })
       }
       
     } catch (apiError) {
-      console.error('❌ Lambda API呼び出しで例外:', apiError);
       return NextResponse.json({ 
         error: 'Failed to create todo',
         details: apiError instanceof Error ? apiError.message : 'Unknown error'
-      }, { status: 500 });
+      }, { status: 500 })
     }
 
   } catch (error) {
-    console.error('❌ Todo作成処理で例外発生:', error);
-    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+    const totalTime = performance.now() - startTime
+    console.error(`❌ Todo作成エラー (${totalTime.toFixed(2)}ms):`, error instanceof Error ? error.message : 'Unknown error')
     return NextResponse.json({ 
       error: 'Internal server error during todo creation',
       details: error instanceof Error ? error.message : 'Unknown error'
