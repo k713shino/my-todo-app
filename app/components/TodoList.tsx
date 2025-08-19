@@ -521,7 +521,7 @@ export default function TodoList() {
     
     // バックグラウンドでLambda関数をウォームアップ
     warmupLambda()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (

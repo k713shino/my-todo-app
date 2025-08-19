@@ -10,7 +10,6 @@ import { CacheManager } from '@/lib/cache'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { createSecurityHeaders } from '@/lib/security'
 import { measureLambdaPerformance, optimizeForLambda } from '@/lib/lambda-utils'
-import { safeToISOString } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   const authResult = await getAuthenticatedUser(request)
@@ -83,9 +82,9 @@ export async function GET(request: NextRequest) {
         description: todo.description || null,
         completed: Boolean(todo.completed),
         priority: todo.priority || 'MEDIUM',
-        dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
-        createdAt: safeToISOString(todo.createdAt),
-        updatedAt: safeToISOString(todo.updatedAt),
+        dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
+        createdAt: new Date(todo.createdAt),
+        updatedAt: new Date(todo.updatedAt),
         userId: todo.userId,
         category: todo.category || null,
         tags: Array.isArray(todo.tags) ? todo.tags : []
@@ -111,8 +110,16 @@ export async function GET(request: NextRequest) {
         performance: typeof totalTime === 'number' && totalTime < 800 ? '🟢 高速' : '🟡 改善余地あり'
       })
       
+      // JSON レスポンス用のデータ変換 (日付を文字列に)
+      const responseData = safeTodos.map(todo => ({
+        ...todo,
+        dueDate: todo.dueDate ? todo.dueDate.toISOString() : null,
+        createdAt: todo.createdAt.toISOString(),
+        updatedAt: todo.updatedAt.toISOString()
+      }))
+      
       // セキュリティヘッダー設定
-      const apiResponse = NextResponse.json(safeTodos)
+      const apiResponse = NextResponse.json(responseData)
       const securityHeaders = createSecurityHeaders()
       Object.entries(securityHeaders).forEach(([key, value]) => {
         apiResponse.headers.set(key, value)

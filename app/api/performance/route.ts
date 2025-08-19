@@ -20,10 +20,11 @@ export async function GET(request: NextRequest) {
     console.log('📊 パフォーマンス監視データ収集開始')
     const startTime = performance.now()
     
-    const performanceData = {
+    const performanceData: any = {
       timestamp: new Date().toISOString(),
       userId: authResult.user.id,
-      tests: [] as any[]
+      tests: [] as any[],
+      summary: {} as any
     }
 
     // 1. キャッシュ応答速度テスト
@@ -104,9 +105,9 @@ export async function GET(request: NextRequest) {
     // 4. 総合評価
     const totalTime = performance.now() - startTime
     const avgResponseTime = performanceData.tests
-      .filter(test => test.responseTime > 0)
-      .reduce((sum, test) => sum + test.responseTime, 0) / 
-      performanceData.tests.filter(test => test.responseTime > 0).length
+      .filter((test: any) => test.responseTime > 0)
+      .reduce((sum: number, test: any) => sum + test.responseTime, 0) / 
+      performanceData.tests.filter((test: any) => test.responseTime > 0).length
 
     performanceData.summary = {
       totalTestTime: Math.round(totalTime),
