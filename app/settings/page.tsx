@@ -5,7 +5,8 @@ import ThemeToggle from '@/app/components/ThemeToggle'
 import SignOutButton from '@/app/components/SignOutButton'
 import AccountEditor from '@/app/components/AccountEditor'
 import AuthMethodDisplay from '@/app/components/AuthMethodDisplay'
-import DataExportForm from '@/app/components/DataExportForm'
+import PasswordChangeForm from '@/app/components/PasswordChangeForm'
+import DataManagementForm from '@/app/components/DataManagementForm'
 import AccountDeletionForm from '@/app/components/AccountDeletionForm'
 import AccountLinkingSection from '@/app/components/AccountLinkingSection'
 
@@ -73,6 +74,9 @@ export default async function SettingsPage() {
             </div>
           </section>
 
+          {/* パスワード変更 */}
+          <PasswordChangeForm />
+
           {/* アカウント連携 */}
           <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -86,7 +90,7 @@ export default async function SettingsPage() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               📊 データ管理
             </h2>
-            <DataExportForm userId={session.user.id} />
+            <DataManagementForm userId={session.user.id} />
           </section>
 
           {/* アカウント削除 */}
