@@ -273,6 +273,40 @@ export const authOptions: AuthOptions = {
           // 🔧 修正: ユーザー統合を無効化し、認証方法ごとに独立したユーザーとして処理
           console.log('📋 認証方法別ユーザー分離ポリシー: 同一メールアドレスでも認証方法ごとに別ユーザーとして処理します')
           
+          // 🚀 Lambda APIにOAuth認証ユーザーを登録
+          try {
+            if (process.env.LAMBDA_API_URL) {
+              console.log('🔄 Lambda APIにOAuth認証ユーザーを登録中...')
+              
+              // プレフィックスからactualUserIdを抽出
+              const { extractUserIdFromPrefixed } = await import('@/lib/user-id-utils')
+              const actualUserId = extractUserIdFromPrefixed(user.id)
+              
+              const response = await fetch(`${process.env.LAMBDA_API_URL}/auth/oauth-ensure`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  id: actualUserId,  // 実際のユーザーID (プレフィックスなし)
+                  email: user.email,
+                  name: user.name,
+                  image: user.image
+                })
+              })
+              
+              if (response.ok) {
+                const result = await response.json()
+                console.log('✅ Lambda APIにOAuth認証ユーザー登録成功:', result)
+              } else {
+                console.error('❌ Lambda APIにOAuth認証ユーザー登録失敗:', response.status)
+              }
+            }
+          } catch (apiError) {
+            console.error('❌ OAuth認証ユーザー登録APIエラー:', apiError)
+            // エラーでも認証は継続
+          }
+          
           // OAuth認証では、プロバイダー固有のIDをそのまま使用して独立したユーザーとして処理
           console.log(`✅ ${account.provider}認証ユーザー確定: ${user.id}`)
         }
