@@ -29,10 +29,24 @@ export async function PUT(request: NextRequest) {
         image: image || null
       })
 
+      console.log('Lambda user update response:', response)
+
       if (!response.success) {
+        console.error('Lambda user update failed:', response.error)
+        
+        // エラーメッセージから適切なステータスコードを判定
+        let statusCode = 400
+        if (response.error?.includes('not found')) {
+          statusCode = 404
+        } else if (response.error?.includes('Unauthorized')) {
+          statusCode = 401
+        } else if (response.error?.includes('required')) {
+          statusCode = 400
+        }
+        
         return NextResponse.json({ 
           error: response.error || 'User update failed' 
-        }, { status: 400 })
+        }, { status: statusCode })
       }
 
       console.log('✅ User updated successfully via Lambda:', actualUserId)
