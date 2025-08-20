@@ -28,11 +28,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    console.log('Request body keys:', Object.keys(body))
+    console.log('🔍 Request body keys:', Object.keys(body))
+    console.log('🔍 Has passwords:', { 
+      hasCurrentPassword: !!body.currentPassword, 
+      hasNewPassword: !!body.newPassword,
+      currentPasswordLength: body.currentPassword?.length,
+      newPasswordLength: body.newPassword?.length
+    })
     
     const { currentPassword, newPassword } = body
 
     if (!currentPassword || !newPassword) {
+      console.log('❌ Password validation failed:', { currentPassword: !!currentPassword, newPassword: !!newPassword })
       return NextResponse.json({ 
         error: 'Current password and new password are required' 
       }, { status: 400 })
@@ -45,6 +52,12 @@ export async function POST(request: NextRequest) {
     }
 
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
+    console.log('🔄 Calling Lambda API for password change:', {
+      endpoint: '/auth/change-password',
+      userId: actualUserId,
+      hasCurrentPassword: !!currentPassword,
+      hasNewPassword: !!newPassword
+    })
 
     try {
       // Lambda API経由で現在のパスワードを確認し、新しいパスワードに更新
@@ -57,7 +70,11 @@ export async function POST(request: NextRequest) {
       console.log('Lambda password change response:', response)
 
       if (!response.success) {
-        console.error('Lambda password change failed:', response.error)
+        console.error('🚨 Lambda password change failed:', {
+          error: response.error,
+          timestamp: response.timestamp,
+          fullResponse: response
+        })
         
         // エラーメッセージから適切なステータスコードを判定
         let statusCode = 400
@@ -67,6 +84,8 @@ export async function POST(request: NextRequest) {
           statusCode = 404
         } else if (response.error?.includes('Unauthorized')) {
           statusCode = 401
+        } else if (response.error?.includes('500') || response.error?.includes('Internal Server Error')) {
+          statusCode = 500
         }
         
         return NextResponse.json({ 

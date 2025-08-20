@@ -18,15 +18,23 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
+    console.log('🔍 Request body:', body)
     console.log('Request body keys:', Object.keys(body))
     
     const { name, image } = body
 
     if (!name || name.trim().length === 0) {
+      console.log('❌ Name validation failed:', { name, hasName: !!name, trimLength: name?.trim()?.length })
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
 
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
+    console.log('🔄 Calling Lambda API with:', {
+      endpoint: '/auth/update-user',
+      userId: actualUserId,
+      name: name.trim(),
+      image: image || null
+    })
 
     try {
       // Lambda API経由でユーザー情報を更新
@@ -39,7 +47,11 @@ export async function PUT(request: NextRequest) {
       console.log('Lambda user update response:', response)
 
       if (!response.success) {
-        console.error('Lambda user update failed:', response.error)
+        console.error('🚨 Lambda user update failed:', {
+          error: response.error,
+          timestamp: response.timestamp,
+          fullResponse: response
+        })
         
         // エラーメッセージから適切なステータスコードを判定
         let statusCode = 400
@@ -49,6 +61,8 @@ export async function PUT(request: NextRequest) {
           statusCode = 401
         } else if (response.error?.includes('required')) {
           statusCode = 400
+        } else if (response.error?.includes('500') || response.error?.includes('Internal Server Error')) {
+          statusCode = 500
         }
         
         return NextResponse.json({ 
