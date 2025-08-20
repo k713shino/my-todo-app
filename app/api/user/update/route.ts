@@ -45,13 +45,52 @@ export async function PUT(request: NextRequest) {
     
     console.log('3️⃣ Session validation passed')
     
-    // セッション処理が成功した場合
+    // リクエストボディ解析をテスト
+    console.log('4️⃣ Parsing request body...')
+    let body;
+    try {
+      body = await request.json()
+      console.log('5️⃣ Request body parsed successfully:', body)
+      console.log('Request body keys:', Object.keys(body))
+    } catch (bodyError) {
+      console.error('4️⃣❌ Body parsing error:', {
+        error: bodyError,
+        message: bodyError instanceof Error ? bodyError.message : 'Unknown',
+        stack: bodyError instanceof Error ? bodyError.stack : 'No stack'
+      })
+      
+      return NextResponse.json({
+        error: 'Request body parsing error',
+        details: bodyError instanceof Error ? bodyError.message : 'Unknown body parsing error',
+        test: 'body_parsing_failed',
+        timestamp: new Date().toISOString()
+      }, { status: 500 })
+    }
+    
+    const { name, image } = body
+    
+    console.log('6️⃣ Validating name field...')
+    if (!name || name.trim().length === 0) {
+      console.log('❌ Name validation failed:', { name, hasName: !!name, trimLength: name?.trim()?.length })
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    }
+
+    console.log('7️⃣ Extracting user ID...')
+    const actualUserId = extractUserIdFromPrefixed(session.user.id)
+    console.log('8️⃣ User ID extracted:', actualUserId)
+    
+    // リクエストボディ解析が成功した場合
     return NextResponse.json({ 
-      test: 'session_working',
+      test: 'body_parsing_working',
       session: {
         hasSession: !!session,
         userId: session?.user?.id,
         email: session?.user?.email
+      },
+      requestData: {
+        name,
+        image,
+        actualUserId
       },
       timestamp: new Date().toISOString() 
     }, { status: 200 })
