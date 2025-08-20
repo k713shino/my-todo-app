@@ -114,11 +114,24 @@ export async function POST(request: NextRequest) {
         todos: normalizedTodos
       })
 
+      console.log('Lambda import response:', response)
+
       if (!response.success) {
         console.error('Lambda import failed:', response.error)
+        
+        // エラーメッセージから適切なステータスコードを判定
+        let statusCode = 400
+        if (response.error?.includes('Unauthorized')) {
+          statusCode = 401
+        } else if (response.error?.includes('not found')) {
+          statusCode = 404
+        } else if (response.error?.includes('required')) {
+          statusCode = 400
+        }
+        
         return NextResponse.json({ 
           error: response.error || 'Import failed' 
-        }, { status: response.data?.status || 400 })
+        }, { status: statusCode })
       }
 
       return NextResponse.json({ 

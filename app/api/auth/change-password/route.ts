@@ -44,11 +44,24 @@ export async function POST(request: NextRequest) {
         newPassword
       })
 
+      console.log('Lambda password change response:', response)
+
       if (!response.success) {
         console.error('Lambda password change failed:', response.error)
+        
+        // エラーメッセージから適切なステータスコードを判定
+        let statusCode = 400
+        if (response.error?.includes('Invalid') || response.error?.includes('incorrect')) {
+          statusCode = 400
+        } else if (response.error?.includes('not found')) {
+          statusCode = 404
+        } else if (response.error?.includes('Unauthorized')) {
+          statusCode = 401
+        }
+        
         return NextResponse.json({ 
           error: response.error || 'Password change failed' 
-        }, { status: response.data?.status || 400 })
+        }, { status: statusCode })
       }
 
       return NextResponse.json({ 
