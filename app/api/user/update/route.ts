@@ -79,21 +79,65 @@ export async function PUT(request: NextRequest) {
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
     console.log('8️⃣ User ID extracted:', actualUserId)
     
-    // リクエストボディ解析が成功した場合
-    return NextResponse.json({ 
-      test: 'body_parsing_working',
-      session: {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        email: session?.user?.email
-      },
-      requestData: {
-        name,
-        image,
-        actualUserId
-      },
-      timestamp: new Date().toISOString() 
-    }, { status: 200 })
+    // Lambda API呼び出しをテスト
+    console.log('9️⃣ Testing Lambda API call...')
+    try {
+      console.log('9.1️⃣ Preparing Lambda API call with data:', {
+        endpoint: '/auth/update-user',
+        userId: actualUserId,
+        name: name.trim(),
+        image: image || null
+      })
+      
+      const response = await lambdaAPI.post('/auth/update-user', {
+        userId: actualUserId,
+        name: name.trim(),
+        image: image || null
+      })
+      
+      console.log('9.2️⃣ Lambda API call completed, response:', response)
+      
+      return NextResponse.json({ 
+        test: 'lambda_api_working',
+        session: {
+          hasSession: !!session,
+          userId: session?.user?.id,
+          email: session?.user?.email
+        },
+        requestData: {
+          name,
+          image,
+          actualUserId
+        },
+        lambdaResponse: response,
+        timestamp: new Date().toISOString() 
+      }, { status: 200 })
+      
+    } catch (lambdaError) {
+      console.error('9️⃣❌ Lambda API error:', {
+        error: lambdaError,
+        message: lambdaError instanceof Error ? lambdaError.message : 'Unknown',
+        stack: lambdaError instanceof Error ? lambdaError.stack : 'No stack',
+        fullError: JSON.stringify(lambdaError, Object.getOwnPropertyNames(lambdaError))
+      })
+      
+      return NextResponse.json({
+        error: 'Lambda API call error',
+        details: lambdaError instanceof Error ? lambdaError.message : 'Unknown Lambda API error',
+        test: 'lambda_api_failed',
+        session: {
+          hasSession: !!session,
+          userId: session?.user?.id,
+          email: session?.user?.email
+        },
+        requestData: {
+          name,
+          image,
+          actualUserId
+        },
+        timestamp: new Date().toISOString()
+      }, { status: 500 })
+    }
 
     /*
     console.log('4️⃣ Parsing request body...')
