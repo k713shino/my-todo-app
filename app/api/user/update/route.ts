@@ -6,20 +6,13 @@ import { lambdaAPI } from '@/lib/lambda-api'
 export const dynamic = 'force-dynamic'
 
 export async function PUT(request: NextRequest) {
-  // まず最小限のテストで動作確認
-  console.log('🚀 === MINIMAL TEST API called at:', new Date().toISOString(), '===')
+  // セッション処理テスト
+  console.log('🚀 === SESSION TEST API called at:', new Date().toISOString(), '===')
   
   try {
     console.log('0️⃣ API route started')
     
-    // まずは最も簡単なレスポンスを返してみる
-    return NextResponse.json({ 
-      test: 'API working',
-      timestamp: new Date().toISOString() 
-    }, { status: 200 })
-    
-    // TODO: セッション処理は後で追加
-    /*
+    // セッション処理をテスト
     console.log('1️⃣ Starting session validation...')
     
     let session;
@@ -33,7 +26,14 @@ export async function PUT(request: NextRequest) {
         message: sessionError instanceof Error ? sessionError.message : 'Unknown',
         stack: sessionError instanceof Error ? sessionError.stack : 'No stack'
       })
-      throw sessionError;
+      
+      // セッションエラーの詳細を返す
+      return NextResponse.json({
+        error: 'Session error',
+        details: sessionError instanceof Error ? sessionError.message : 'Unknown session error',
+        test: 'session_failed',
+        timestamp: new Date().toISOString()
+      }, { status: 500 })
     }
     
     console.log('2️⃣ Session retrieved:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
@@ -44,7 +44,17 @@ export async function PUT(request: NextRequest) {
     }
     
     console.log('3️⃣ Session validation passed')
-    */
+    
+    // セッション処理が成功した場合
+    return NextResponse.json({ 
+      test: 'session_working',
+      session: {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        email: session?.user?.email
+      },
+      timestamp: new Date().toISOString() 
+    }, { status: 200 })
 
     /*
     console.log('4️⃣ Parsing request body...')
