@@ -6,30 +6,37 @@ import { lambdaAPI } from '@/lib/lambda-api'
 export const dynamic = 'force-dynamic'
 
 export async function PUT(request: NextRequest) {
+  console.log('🚀 === User update API called ===')
+  
   try {
-    console.log('👤 User update API called')
+    console.log('1️⃣ Starting session validation...')
     
     const session = await getAuthSession()
-    console.log('Session:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
+    console.log('2️⃣ Session retrieved:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
     
     if (!isAuthenticated(session)) {
       console.log('❌ Unauthorized access attempt')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    
+    console.log('3️⃣ Session validation passed')
 
+    console.log('4️⃣ Parsing request body...')
     const body = await request.json()
-    console.log('🔍 Request body:', body)
+    console.log('5️⃣ Request body parsed:', body)
     console.log('Request body keys:', Object.keys(body))
     
     const { name, image } = body
 
+    console.log('6️⃣ Validating name field...')
     if (!name || name.trim().length === 0) {
       console.log('❌ Name validation failed:', { name, hasName: !!name, trimLength: name?.trim()?.length })
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
     }
 
+    console.log('7️⃣ Extracting user ID...')
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
-    console.log('🔄 Calling Lambda API with:', {
+    console.log('8️⃣ Preparing Lambda API call with:', {
       endpoint: '/auth/update-user',
       userId: actualUserId,
       name: name.trim(),
@@ -37,6 +44,7 @@ export async function PUT(request: NextRequest) {
     })
 
     try {
+      console.log('9️⃣ Making Lambda API call...')
       // Lambda API経由でユーザー情報を更新
       const response = await lambdaAPI.post('/auth/update-user', {
         userId: actualUserId,
@@ -44,7 +52,7 @@ export async function PUT(request: NextRequest) {
         image: image || null
       })
 
-      console.log('Lambda user update response:', response)
+      console.log('🔟 Lambda user update response received:', response)
 
       if (!response.success) {
         console.error('🚨 Lambda user update failed:', {
@@ -83,23 +91,49 @@ export async function PUT(request: NextRequest) {
       })
 
     } catch (error) {
-      console.error('Lambda API error:', error)
-      return NextResponse.json({ 
+      console.error('🚨💥 Lambda API catch block error:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        name: error instanceof Error ? error.name : 'Unknown',
+        stack: error instanceof Error ? error.stack : 'No stack',
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
+      })
+      
+      const errorResponse = { 
         error: 'Lambda API error',
         details: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined
-      }, { status: 500 })
+        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined,
+        debugInfo: {
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          timestamp: new Date().toISOString()
+        }
+      }
+      
+      console.log('🚨📤 Sending Lambda API error response:', errorResponse)
+      return NextResponse.json(errorResponse, { status: 500 })
     }
 
   } catch (error) {
-    console.error('❌ User update API error:', error)
-    return NextResponse.json(
-      { 
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined
-      },
-      { status: 500 }
-    )
+    console.error('🚨💥 Outer catch block error:', {
+      error,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      name: error instanceof Error ? error.name : 'Unknown',
+      stack: error instanceof Error ? error.stack : 'No stack',
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
+    })
+    
+    const errorResponse = {
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined,
+      debugInfo: {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        timestamp: new Date().toISOString(),
+        location: 'API_ROUTE_OUTER_CATCH'
+      }
+    }
+    
+    console.log('🚨📤 Sending outer error response:', errorResponse)
+    return NextResponse.json(errorResponse, { status: 500 })
   }
 }

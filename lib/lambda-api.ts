@@ -53,50 +53,75 @@ export class LambdaAPI {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      console.log(`🚀 Lambda API呼び出し: ${url}`);
-      console.log('📤 リクエスト詳細:', {
+      console.log(`🚀🟠 === Lambda API request START ===`);
+      console.log(`🟠1️⃣ URL: ${url}`);
+      console.log('🟠2️⃣ Request details:', {
         method: finalOptions.method || 'GET',
         headers: finalOptions.headers,
         body: finalOptions.body ? JSON.parse(finalOptions.body as string) : null,
         timeout: timeout
       });
       
+      console.log('🟠3️⃣ Making fetch request...');
       const response = await fetch(url, {
         ...finalOptions,
         signal: controller.signal,
       });
       
-      console.log('📥 HTTPレスポンス:', {
+      console.log('🟠4️⃣ Fetch completed, HTTP response:', {
         status: response.status,
         statusText: response.statusText,
         ok: response.ok,
-        url: response.url
+        url: response.url,
+        type: response.type,
+        redirected: response.redirected
       });
 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        console.log('🟠5️⃣ Response not OK, reading error text...');
         const errorText = await response.text();
+        console.log('🟠❌ Error text:', errorText);
+        
         const error: LambdaAPIError = new Error(
           `HTTP error! status: ${response.status}, message: ${errorText}`
         );
         error.status = response.status;
         error.statusText = response.statusText;
+        
+        console.log('🟠❌ Throwing HTTP error:', {
+          message: error.message,
+          status: error.status,
+          statusText: error.statusText
+        });
         throw error;
       }
 
+      console.log('🟠6️⃣ Response OK, parsing JSON...');
       const data: T = await response.json();
-      console.log(`✅ Lambda APIレスポンス:`, data);
+      console.log(`🟠✅ Lambda API response parsed:`, data);
       
       return data;
     } catch (error) {
       clearTimeout(timeoutId);
       
+      console.error('🟠💥 Lambda API request catch block:', {
+        error,
+        errorType: typeof error,
+        errorConstructor: error instanceof Error ? error.constructor.name : 'Unknown',
+        errorMessage: error instanceof Error ? error.message : 'Unknown',
+        errorName: error instanceof Error ? error.name : 'Unknown',
+        errorStack: error instanceof Error ? error.stack : 'No stack',
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
+      });
+      
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
+          console.log('🟠💥 Request timeout detected');
           throw new Error(`Request timeout after ${timeout}ms`);
         }
-        console.error(`❌ Lambda API呼び出しエラー:`, error);
+        console.error(`🟠💥 Lambda API error:`, error);
       }
       throw error;
     }
@@ -310,37 +335,53 @@ export class LambdaAPI {
    * 汎用POSTリクエスト（VercelAPIResponse形式の戻り値用）
    */
   async post<T = any>(endpoint: string, data: any): Promise<LambdaAPIResponse<T>> {
+    console.log('🚀🔵 === Lambda API POST START ===', { endpoint, data });
+    
     try {
-      console.log('🚀 Lambda API POST request:', { endpoint, data });
+      console.log('🔵1️⃣ Calling this.request...');
       
       const response = await this.request<T>(endpoint, {
         method: 'POST',
         body: JSON.stringify(data),
       });
       
-      console.log('✅ Lambda API POST success:', response);
+      console.log('🔵2️⃣ Lambda API request successful, response:', response);
       
-      return {
+      const successResponse = {
         success: true,
         data: response,
         timestamp: new Date().toISOString()
       };
+      
+      console.log('🔵3️⃣ Returning success response:', successResponse);
+      return successResponse;
+      
     } catch (error) {
-      console.error('🚨 Lambda API POST error:', {
+      console.error('🚨🔴 Lambda API POST error caught:', {
         endpoint,
         data,
-        error: error instanceof Error ? {
-          message: error.message,
-          name: error.name,
-          stack: error.stack?.split('\n').slice(0, 3)
-        } : error
+        errorType: typeof error,
+        errorConstructor: error instanceof Error ? error.constructor.name : 'Unknown',
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorName: error instanceof Error ? error.name : 'Unknown',
+        errorStack: error instanceof Error ? error.stack : 'No stack',
+        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
       });
       
-      return {
+      const errorResponse = {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        debugInfo: {
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          errorName: error instanceof Error ? error.name : 'Unknown',
+          endpoint,
+          data
+        }
       };
+      
+      console.log('🔴📤 Returning error response:', errorResponse);
+      return errorResponse;
     }
   }
 
