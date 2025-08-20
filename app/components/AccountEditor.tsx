@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
@@ -17,6 +17,16 @@ export default function AccountEditor({ className = '' }: AccountEditorProps) {
     name: session?.user?.name || '',
     image: session?.user?.image || ''
   })
+
+  // フォームデータをセッション変更時に同期
+  useEffect(() => {
+    if (session?.user) {
+      setFormData({
+        name: session.user.name || '',
+        image: session.user.image || ''
+      })
+    }
+  }, [session?.user?.name, session?.user?.image])
 
   const handleSave = async () => {
     if (!session?.user) return
@@ -38,14 +48,17 @@ export default function AccountEditor({ className = '' }: AccountEditorProps) {
         throw new Error('アカウント情報の更新に失敗しました')
       }
 
+      const result = await response.json()
+      console.log('Update response:', result)
+
       // セッションを更新
-      if (session?.user) {
+      if (session?.user && result.success) {
         await update({
           ...session,
           user: {
             ...session.user,
-            name: formData.name,
-            image: formData.image
+            name: result.user.name,
+            image: result.user.image
           }
         })
       }
