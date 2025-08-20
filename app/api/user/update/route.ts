@@ -7,13 +7,20 @@ export const dynamic = 'force-dynamic'
 
 export async function PUT(request: NextRequest) {
   try {
+    console.log('👤 User update API called')
+    
     const session = await getAuthSession()
+    console.log('Session:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
     
     if (!isAuthenticated(session)) {
+      console.log('❌ Unauthorized access attempt')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { name, image } = await request.json()
+    const body = await request.json()
+    console.log('Request body keys:', Object.keys(body))
+    
+    const { name, image } = body
 
     if (!name || name.trim().length === 0) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })

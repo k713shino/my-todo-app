@@ -6,21 +6,31 @@ import { lambdaAPI } from '@/lib/lambda-api'
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('🔐 Password change API called')
+    
     const session = await getAuthSession()
+    console.log('Session:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
     
     if (!isAuthenticated(session)) {
+      console.log('❌ Unauthorized access attempt')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // クレデンシャル認証のユーザーのみ許可
     const authMethod = getAuthMethodFromUserId(session.user.id)
+    console.log('Auth method:', authMethod, 'for user:', session.user.id)
+    
     if (authMethod !== 'email') {
+      console.log('❌ OAuth user attempting password change')
       return NextResponse.json({ 
         error: 'Password change is only available for email authentication users' 
       }, { status: 403 })
     }
 
-    const { currentPassword, newPassword } = await request.json()
+    const body = await request.json()
+    console.log('Request body keys:', Object.keys(body))
+    
+    const { currentPassword, newPassword } = body
 
     if (!currentPassword || !newPassword) {
       return NextResponse.json({ 

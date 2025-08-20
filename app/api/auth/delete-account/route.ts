@@ -7,15 +7,23 @@ import { prisma } from '@/lib/prisma'
 import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization'
 
 export async function DELETE(request: NextRequest) {
-  await optimizeForLambda()
+  try {
+    console.log('🗑️ Account deletion API called')
+    
+    await optimizeForLambda()
+    console.log('✅ Lambda optimization completed')
   
-  return measureLambdaPerformance('DELETE /api/auth/delete-account', async () => {
-    try {
-      const session = await getAuthSession()
-      
-      if (!isAuthenticated(session)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+    return measureLambdaPerformance('DELETE /api/auth/delete-account', async () => {
+      try {
+        console.log('📊 Performance measurement started')
+        
+        const session = await getAuthSession()
+        console.log('Session:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
+        
+        if (!isAuthenticated(session)) {
+          console.log('❌ Unauthorized access attempt')
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
 
       // レート制限は一旦コメントアウト（cache.tsファイルが存在しないため）
       /*
@@ -192,6 +200,13 @@ export async function DELETE(request: NextRequest) {
       )
     }
   })
+  } catch (topLevelError) {
+    console.error('❌ Top-level error in account deletion:', topLevelError)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
 }
 
 // OPTIONS メソッドの追加（CORS対応）

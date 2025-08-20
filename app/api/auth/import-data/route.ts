@@ -5,14 +5,19 @@ import { lambdaAPI } from '@/lib/lambda-api'
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('📥 Data import API called')
+    
     const session = await getAuthSession()
+    console.log('Session:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
     
     if (!isAuthenticated(session)) {
+      console.log('❌ Unauthorized access attempt')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const formData = await request.formData()
     const file = formData.get('file') as File
+    console.log('File:', file ? { name: file.name, size: file.size, type: file.type } : 'null')
 
     if (!file) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
