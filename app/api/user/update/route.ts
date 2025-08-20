@@ -85,14 +85,20 @@ export async function PUT(request: NextRequest) {
     } catch (error) {
       console.error('Lambda API error:', error)
       return NextResponse.json({ 
-        error: 'Internal server error' 
+        error: 'Lambda API error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined
       }, { status: 500 })
     }
 
   } catch (error) {
     console.error('❌ User update API error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined
+      },
       { status: 500 }
     )
   }

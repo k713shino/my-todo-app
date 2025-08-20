@@ -101,14 +101,18 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error('Password change error:', error)
       return NextResponse.json({ 
-        error: 'Internal server error' 
+        error: 'Lambda API error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined
       }, { status: 500 })
     }
 
   } catch (error) {
     console.error('Password change API error:', error)
     return NextResponse.json({ 
-      error: 'Internal server error' 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack?.split('\n').slice(0, 3) : undefined
     }, { status: 500 })
   }
 }
