@@ -53,16 +53,35 @@ export default function AccountEditor({ className = '' }: AccountEditorProps) {
 
       // セッションを更新
       if (session?.user && result.success) {
-        await update({
-          name: result.user.name,
-          image: result.user.image
-        })
+        console.log('Updating session with:', result.user)
         
-        // フォームデータも即座に更新
-        setFormData({
-          name: result.user.name || '',
-          image: result.user.image || ''
-        })
+        try {
+          // セッション更新を実行
+          const updateResult = await update({
+            name: result.user.name,
+            image: result.user.image
+          })
+          
+          console.log('Session update result:', updateResult)
+          
+          // セッション更新を確実に反映させるため少し待機
+          await new Promise(resolve => setTimeout(resolve, 200))
+          
+          // フォームデータも即座に更新
+          setFormData({
+            name: result.user.name || '',
+            image: result.user.image || ''
+          })
+          
+        } catch (sessionError) {
+          console.error('Session update error:', sessionError)
+          
+          // セッション更新に失敗した場合でもフォームデータは更新
+          setFormData({
+            name: result.user.name || '',
+            image: result.user.image || ''
+          })
+        }
       }
 
       setIsEditing(false)

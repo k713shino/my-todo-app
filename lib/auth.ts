@@ -211,21 +211,35 @@ export const authOptions: AuthOptions = {
       
       if (session?.user && token.sub) {
         session.user.id = token.sub
+        session.user.name = token.name || session.user.name
         session.user.hasPassword = token.hasPassword || false
         session.user.image = token.picture || null
       }
       return session
     },
-    jwt: async ({ user, token, account }: { user?: User; token: JWT; account?: any }) => {
+    jwt: async ({ user, token, account, trigger, session }: { user?: User; token: JWT; account?: any; trigger?: "signIn" | "signUp" | "update"; session?: any }) => {
       console.log('🔐 JWT callback:', {
         hasUser: !!user,
         hasToken: !!token,
         hasAccount: !!account,
+        trigger,
         accountProvider: account?.provider,
         userEmail: user?.email,
         tokenSub: token.sub,
         timestamp: new Date().toISOString()
       })
+
+      // セッション更新時の処理
+      if (trigger === "update" && session) {
+        console.log('🔄 Session update triggered:', session)
+        if (session.name) {
+          token.name = session.name
+        }
+        if (session.image !== undefined) {
+          token.picture = session.image
+        }
+        return token
+      }
 
       if (user) {
         token.sub = user.id
