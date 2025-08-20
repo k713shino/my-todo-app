@@ -6,12 +6,36 @@ import { lambdaAPI } from '@/lib/lambda-api'
 export const dynamic = 'force-dynamic'
 
 export async function PUT(request: NextRequest) {
-  console.log('🚀 === User update API called ===')
+  // まず最小限のテストで動作確認
+  console.log('🚀 === MINIMAL TEST API called at:', new Date().toISOString(), '===')
   
   try {
+    console.log('0️⃣ API route started')
+    
+    // まずは最も簡単なレスポンスを返してみる
+    return NextResponse.json({ 
+      test: 'API working',
+      timestamp: new Date().toISOString() 
+    }, { status: 200 })
+    
+    // TODO: セッション処理は後で追加
+    /*
     console.log('1️⃣ Starting session validation...')
     
-    const session = await getAuthSession()
+    let session;
+    try {
+      console.log('1.1️⃣ Calling getAuthSession()...')
+      session = await getAuthSession()
+      console.log('1.2️⃣ getAuthSession() completed')
+    } catch (sessionError) {
+      console.error('1️⃣❌ Session error:', {
+        error: sessionError,
+        message: sessionError instanceof Error ? sessionError.message : 'Unknown',
+        stack: sessionError instanceof Error ? sessionError.stack : 'No stack'
+      })
+      throw sessionError;
+    }
+    
     console.log('2️⃣ Session retrieved:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
     
     if (!isAuthenticated(session)) {
@@ -20,7 +44,9 @@ export async function PUT(request: NextRequest) {
     }
     
     console.log('3️⃣ Session validation passed')
+    */
 
+    /*
     console.log('4️⃣ Parsing request body...')
     const body = await request.json()
     console.log('5️⃣ Request body parsed:', body)
@@ -112,6 +138,7 @@ export async function PUT(request: NextRequest) {
       console.log('🚨📤 Sending Lambda API error response:', errorResponse)
       return NextResponse.json(errorResponse, { status: 500 })
     }
+    */
 
   } catch (error) {
     console.error('🚨💥 Outer catch block error:', {
