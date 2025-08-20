@@ -54,12 +54,14 @@ export default function AccountEditor({ className = '' }: AccountEditorProps) {
       // セッションを更新
       if (session?.user && result.success) {
         await update({
-          ...session,
-          user: {
-            ...session.user,
-            name: result.user.name,
-            image: result.user.image
-          }
+          name: result.user.name,
+          image: result.user.image
+        })
+        
+        // フォームデータも即座に更新
+        setFormData({
+          name: result.user.name || '',
+          image: result.user.image || ''
         })
       }
 
