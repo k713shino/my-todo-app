@@ -311,16 +311,31 @@ export class LambdaAPI {
    */
   async post<T = any>(endpoint: string, data: any): Promise<LambdaAPIResponse<T>> {
     try {
+      console.log('🚀 Lambda API POST request:', { endpoint, data });
+      
       const response = await this.request<T>(endpoint, {
         method: 'POST',
         body: JSON.stringify(data),
       });
+      
+      console.log('✅ Lambda API POST success:', response);
+      
       return {
         success: true,
         data: response,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
+      console.error('🚨 Lambda API POST error:', {
+        endpoint,
+        data,
+        error: error instanceof Error ? {
+          message: error.message,
+          name: error.name,
+          stack: error.stack?.split('\n').slice(0, 3)
+        } : error
+      });
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
