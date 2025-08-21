@@ -121,7 +121,8 @@ export async function POST(request: NextRequest) {
                   todo.completed = value.toLowerCase() === 'true'
                   break
                 case 'Priority':
-                  todo.priority = value.toLowerCase()
+                  todo.priority = value
+                  console.log('🔍 CSV Priority処理:', { header, value, result: value })
                   break
                 case 'Due Date':
                   todo.dueDate = value
@@ -159,12 +160,21 @@ export async function POST(request: NextRequest) {
     // GDPR準拠データの正規化とバリデーション
     const normalizedTodos = todoData.map(todo => {
       // 基本的なデータ正規化
+      // 優先度を大文字に変換（UIコンポーネントの要求に合わせる）
+      const priorityValue = todo.priority && ['low', 'medium', 'high'].includes(todo.priority.toLowerCase()) 
+        ? todo.priority.toUpperCase() 
+        : 'MEDIUM'
+      
+      console.log('🔍 優先度正規化:', { 
+        originalPriority: todo.priority, 
+        normalizedPriority: priorityValue,
+        title: todo.title 
+      })
+      
       const normalized: any = {
         title: todo.title || 'Untitled',
         description: todo.description || '',
-        priority: todo.priority && ['low', 'medium', 'high'].includes(todo.priority.toLowerCase()) 
-          ? todo.priority.toLowerCase() 
-          : 'medium',
+        priority: priorityValue,
         category: todo.category || 'general',
         dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString().split('T')[0] : null,
         tags: typeof todo.tags === 'string' ? todo.tags : (Array.isArray(todo.tags) ? todo.tags.join(',') : '')
@@ -199,9 +209,14 @@ export async function POST(request: NextRequest) {
       sampleData: normalizedTodos.slice(0, 2).map(t => ({
         title: t.title,
         completed: t.completed,
+        priority: t.priority,
         originalId: t.originalId,
         hasTimestamp: !!t.originalCreatedAt
       }))
+    })
+    
+    console.log('🔍 優先度の詳細チェック:', {
+      priorities: normalizedTodos.map(t => ({ title: t.title, priority: t.priority, originalPriority: todoData.find(orig => orig.title === t.title)?.priority }))
     })
 
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
