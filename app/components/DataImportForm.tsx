@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
+import ImportResultModal from './ImportResultModal'
 
 interface DataImportFormProps {
   userId: string
@@ -10,6 +11,15 @@ interface DataImportFormProps {
 export default function DataImportForm({ userId: _userId }: DataImportFormProps) {
   const [isImporting, setIsImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [modalResult, setModalResult] = useState<{
+    type: 'success' | 'info' | 'error'
+    title: string
+    message: string
+    importedCount?: number
+    skippedCount?: number
+    totalCount?: number
+  } | null>(null)
+  const [showModal, setShowModal] = useState(false)
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -18,13 +28,23 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
     // ファイル形式チェック
     const allowedTypes = ['application/json', 'text/csv', 'text/plain']
     if (!allowedTypes.includes(file.type) && !file.name.endsWith('.json') && !file.name.endsWith('.csv')) {
-      toast.error('JSON形式またはCSV形式のファイルを選択してください')
+      setModalResult({
+        type: 'error',
+        title: 'ファイル形式エラー',
+        message: 'JSON形式またはCSV形式のファイルを選択してください。対応形式: .json, .csv'
+      })
+      setShowModal(true)
       return
     }
 
     // ファイルサイズチェック (10MB制限)
     if (file.size > 10 * 1024 * 1024) {
-      toast.error('ファイルサイズは10MB以下にしてください')
+      setModalResult({
+        type: 'error',
+        title: 'ファイルサイズエラー',
+        message: `ファイルサイズが制限を超えています。10MB以下のファイルを選択してください。\n現在のサイズ: ${(file.size / 1024 / 1024).toFixed(1)}MB`
+      })
+      setShowModal(true)
       return
     }
 
@@ -58,45 +78,69 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
           fileInputRef.current.value = ''
         }
 
-        // より詳細な成功メッセージ
+        // 詳細な結果をモーダルで表示
         if (importedCount > 0) {
-          toast.success(`✅ ${importedCount}件のTodoをインポートしました！${skippedCount > 0 ? ` (${skippedCount}件は重複のためスキップ)` : ''}`, {
-            duration: 5000
+          setModalResult({
+            type: 'success',
+            title: 'インポート完了！',
+            message: `Todoのインポートが正常に完了しました。${skippedCount > 0 ? '重複するTodoは自動的にスキップされました。' : ''}`,
+            importedCount,
+            skippedCount,
+            totalCount
           })
+          setShowModal(true)
           
           // 新しいTodoがインポートされた場合のみページをリロード
           setTimeout(() => {
             window.location.reload()
-          }, 1500)
+          }, 2000)
         } else if (skippedCount > 0) {
-          toast(`ℹ️ ${totalCount}件のTodoがすべて重複のためスキップされました。新しいTodoはインポートされませんでした。`, {
-            duration: 4000
+          setModalResult({
+            type: 'info',
+            title: 'インポート完了',
+            message: 'すべてのTodoが重複のためスキップされました。新しいTodoはインポートされませんでした。',
+            importedCount: 0,
+            skippedCount,
+            totalCount
           })
+          setShowModal(true)
         } else {
-          toast.error('⚠️ ファイルに有効なTodoデータが見つかりませんでした。', {
-            duration: 4000
+          setModalResult({
+            type: 'error',
+            title: 'インポートエラー',
+            message: 'ファイルに有効なTodoデータが見つかりませんでした。ファイル形式やデータ内容を確認してください。',
+            totalCount: 0
           })
+          setShowModal(true)
         }
         
       } else {
         const data = await response.json()
         if (data.maintenanceMode) {
-          toast.error('🔧 ' + (data.error || 'データベースメンテナンス中です'), {
-            duration: 6000
+          setModalResult({
+            type: 'error',
+            title: 'メンテナンス中',
+            message: data.error || 'データベースメンテナンス中です。しばらく時間をおいてから再度お試しください。'
           })
         } else {
-          toast.error('❌ ' + (data.error || 'インポートに失敗しました'), {
-            duration: 6000
+          setModalResult({
+            type: 'error',
+            title: 'インポートエラー',
+            message: data.error || 'インポートに失敗しました。ファイルの内容やネットワーク接続を確認してください。'
           })
         }
+        setShowModal(true)
       }
     } catch (error) {
       console.error('Import error:', error)
       // ローディングトースターを削除（エラー時）
       toast.dismiss(loadingToast)
-      toast.error('❌ ネットワークエラーまたはサーバーエラーが発生しました', {
-        duration: 6000
+      setModalResult({
+        type: 'error',
+        title: 'ネットワークエラー',
+        message: 'ネットワークエラーまたはサーバーエラーが発生しました。インターネット接続を確認して再度お試しください。'
       })
+      setShowModal(true)
     } finally {
       setIsImporting(false)
     }
@@ -175,6 +219,13 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
           </p>
         </div>
       </div>
+
+      {/* インポート結果モーダル */}
+      <ImportResultModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        result={modalResult}
+      />
     </div>
   )
 }
