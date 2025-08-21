@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import AccountDeletionResultModal from './AccountDeletionResultModal'
 
 export default function AccountDeletionForm() {
   const { data: session } = useSession()
@@ -16,6 +17,19 @@ export default function AccountDeletionForm() {
     reason: ''
   })
   const [error, setError] = useState('')
+  const [modalResult, setModalResult] = useState<{
+    type: 'success' | 'error'
+    title: string
+    message: string
+    details?: {
+      todoCount?: number
+      authMethod?: string
+      memberSince?: string
+      deletedAt?: string
+    }
+    errorCode?: string
+  } | null>(null)
+  const [showModal, setShowModal] = useState(false)
 
   const reasons = [
     '他のサービスに移行するため',
@@ -106,26 +120,61 @@ export default function AccountDeletionForm() {
       
       if (response.ok) {
         console.log('✅ Account deletion successful:', data)
-        toast.success('アカウントが正常に削除されました')
         
-        // ログアウトして削除完了ページへ
+        // 成功モーダルを表示
+        setModalResult({
+          type: 'success',
+          title: 'アカウント削除完了',
+          message: 'アカウントが正常に削除されました。すべてのデータがGDPR準拠で完全に削除されました。',
+          details: {
+            todoCount: data.stats?.todoCount,
+            authMethod: data.stats?.authMethod,
+            memberSince: data.stats?.memberSince,
+            deletedAt: data.deletedAt
+          }
+        })
+        setShowModal(true)
+        
+        // ログアウト処理
         try {
           await signOut({ redirect: false })
-          router.push('/account-deleted')
         } catch (signOutError) {
           console.error('Sign out error:', signOutError)
-          // エラーでもリダイレクトする
-          window.location.href = '/account-deleted'
         }
       } else {
         console.error('❌ Account deletion failed:', data)
         setError(data.error || `削除に失敗しました (ステータス: ${response.status})`)
-        toast.error(data.error || 'アカウント削除に失敗しました')
+        
+        // エラーモーダルを表示
+        let errorTitle = 'アカウント削除エラー'
+        if (data.maintenanceMode) {
+          errorTitle = 'データベースメンテナンス中'
+        } else if (response.status === 401) {
+          errorTitle = '認証エラー'
+        } else if (response.status === 400) {
+          errorTitle = '入力エラー'
+        }
+        
+        setModalResult({
+          type: 'error',
+          title: errorTitle,
+          message: data.error || 'アカウント削除に失敗しました。しばらく時間をおいてから再度お試しください。',
+          errorCode: `HTTP ${response.status}`
+        })
+        setShowModal(true)
       }
     } catch (error) {
       console.error('❌ Account deletion network error:', error)
       setError('ネットワークエラーが発生しました。インターネット接続を確認してください。')
-      toast.error('エラーが発生しました')
+      
+      // ネットワークエラーモーダルを表示
+      setModalResult({
+        type: 'error',
+        title: 'ネットワークエラー',
+        message: 'ネットワークエラーが発生しました。インターネット接続を確認してから再度お試しください。',
+        errorCode: 'NETWORK_ERROR'
+      })
+      setShowModal(true)
     } finally {
       setIsDeleting(false)
     }
@@ -204,104 +253,110 @@ export default function AccountDeletionForm() {
       )}
 
       <div className="space-y-4">
-        {/* 削除理由 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            削除理由（オプション）
-          </label>
-          <select
-            value={formData.reason}
-            onChange={(e) => setFormData({...formData, reason: e.target.value})}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
-            disabled={isDeleting}
-          >
-            <option value="">選択してください</option>
-            {reasons.map(reason => (
-              <option key={reason} value={reason}>{reason}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* パスワード確認（パスワード認証の場合のみ） */}
-        {session?.user?.hasPassword && (
-          <div>
+        <form onSubmit={(e) => { e.preventDefault(); handleFinalDelete(); }}>
+          {/* 削除理由 */}
+          <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              パスワード確認 *
+              削除理由（オプション）
             </label>
-            <input
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({...formData, password: e.target.value})}
+            <select
+              value={formData.reason}
+              onChange={(e) => setFormData({...formData, reason: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="現在のパスワードを入力"
+              disabled={isDeleting}
+              autoComplete="off"
+            >
+              <option value="">選択してください</option>
+              {reasons.map(reason => (
+                <option key={reason} value={reason}>{reason}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* パスワード確認（パスワード認証の場合のみ） */}
+          {session?.user?.hasPassword && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                パスワード確認 *
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                placeholder="現在のパスワードを入力"
+                required
+                disabled={isDeleting}
+                autoComplete="current-password"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                セキュリティのため、現在のパスワードを入力してください
+              </p>
+            </div>
+          )}
+
+          {/* OAuth認証の場合の説明 */}
+          {!session?.user?.hasPassword && (
+            <div className="bg-blue-50 p-4 rounded-lg mb-4">
+              <p className="text-sm text-blue-700">
+                <strong>OAuth認証アカウント</strong><br />
+                GitHub/Google認証でログインしているため、パスワード確認は不要です。
+              </p>
+            </div>
+          )}
+
+          {/* 確認テキスト */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              確認テキスト *
+            </label>
+            <p className="text-sm text-gray-600 mb-2">
+              削除を確認するため、下のボックスに <code className="bg-gray-100 px-1 rounded font-mono">DELETE</code> と正確に入力してください
+            </p>
+            <input
+              type="text"
+              value={formData.confirmationText}
+              onChange={(e) => setFormData({...formData, confirmationText: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
+              placeholder="DELETE"
               required
               disabled={isDeleting}
+              autoComplete="off"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              セキュリティのため、現在のパスワードを入力してください
-            </p>
+            {formData.confirmationText && formData.confirmationText !== 'DELETE' && (
+              <p className="text-sm text-red-600 mt-1">
+                ❌ 「DELETE」と正確に入力してください（大文字小文字を区別します）
+              </p>
+            )}
           </div>
-        )}
 
-        {/* OAuth認証の場合の説明 */}
-        {!session?.user?.hasPassword && (
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <p className="text-sm text-blue-700">
-              <strong>OAuth認証アカウント</strong><br />
-              GitHub/Google認証でログインしているため、パスワード確認は不要です。
-            </p>
+          {/* ボタン */}
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                setShowConfirmation(false)
+                setError('')
+                setFormData({ confirmationText: '', password: '', reason: '' })
+              }}
+              className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
+              disabled={isDeleting}
+            >
+              キャンセル
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              disabled={
+                isDeleting || 
+                formData.confirmationText !== 'DELETE' || 
+                (session?.user?.hasPassword && !formData.password)
+              }
+            >
+              {isDeleting ? '削除中...' : '完全に削除する'}
+            </button>
           </div>
-        )}
-
-        {/* 確認テキスト */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            確認テキスト *
-          </label>
-          <p className="text-sm text-gray-600 mb-2">
-            削除を確認するため、下のボックスに <code className="bg-gray-100 px-1 rounded font-mono">DELETE</code> と正確に入力してください
-          </p>
-          <input
-            type="text"
-            value={formData.confirmationText}
-            onChange={(e) => setFormData({...formData, confirmationText: e.target.value})}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
-            placeholder="DELETE"
-            required
-            disabled={isDeleting}
-          />
-          {formData.confirmationText && formData.confirmationText !== 'DELETE' && (
-            <p className="text-sm text-red-600 mt-1">
-              ❌ 「DELETE」と正確に入力してください（大文字小文字を区別します）
-            </p>
-          )}
-        </div>
-
-        {/* ボタン */}
-        <div className="flex space-x-3">
-          <button
-            onClick={() => {
-              setShowConfirmation(false)
-              setError('')
-              setFormData({ confirmationText: '', password: '', reason: '' })
-            }}
-            className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
-            disabled={isDeleting}
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleFinalDelete}
-            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-            disabled={
-              isDeleting || 
-              formData.confirmationText !== 'DELETE' || 
-              (session?.user?.hasPassword && !formData.password)
-            }
-          >
-            {isDeleting ? '削除中...' : '完全に削除する'}
-          </button>
-        </div>
+        </form>
 
         {/* 法的情報 */}
         <div className="mt-6 p-4 bg-blue-50 rounded-lg">
@@ -323,6 +378,13 @@ export default function AccountDeletionForm() {
           </div>
         )}
       </div>
+
+      {/* アカウント削除結果モーダル */}
+      <AccountDeletionResultModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        result={modalResult}
+      />
     </div>
   )
 }
