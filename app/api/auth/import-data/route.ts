@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         todoData = lines.slice(1).map(line => {
           // CSVの値を適切に解析（カンマ区切りとダブルクォート処理）
           const csvRegex = /("(?:[^"]+|"")*"|[^",]*)/g
-          const values = []
+          const values: string[] = []
           let match
           while ((match = csvRegex.exec(line)) !== null) {
             values.push(match[1].replace(/^"|"$/g, '').replace(/""/g, '"'))
