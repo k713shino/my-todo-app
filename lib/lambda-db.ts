@@ -130,10 +130,15 @@ class LambdaDB {
 
   // Todo操作
   async getTodos(userId: string, filters?: any): Promise<LambdaResponse<Todo[]>> {
+    // OAuth認証ユーザーIDから実際のデータベースユーザーIDを抽出
+    const { extractUserIdFromPrefixed } = await import('@/lib/user-id-utils')
+    const actualUserId = extractUserIdFromPrefixed(userId)
+    console.log(`🔄 User ID mapping for getTodos: ${userId} -> ${actualUserId}`)
+    
     const queryParams = new URLSearchParams()
     
-    // UserID をクエリパラメータとして追加
-    queryParams.append('userId', userId)
+    // 実際のUserID をクエリパラメータとして追加
+    queryParams.append('userId', actualUserId)
     
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -149,18 +154,18 @@ class LambdaDB {
     // Lambda関数がユーザーフィルタリングをサポートしていない場合、クライアント側でフィルタリング
     if (result.success && Array.isArray(result.data)) {
       console.log(`🔍 Raw data from Lambda: ${result.data.length} todos`)
-      console.log(`🔍 Target userId: "${userId}"`)
+      console.log(`🔍 Target actualUserId: "${actualUserId}"`)
       console.log(`🔍 Sample todo userIds:`, result.data.slice(0, 3).map((todo: any) => `"${todo.userId}"`))
       
       const filteredTodos = result.data.filter((todo: any) => {
-        const matches = todo.userId === userId
+        const matches = todo.userId === actualUserId
         if (!matches) {
           console.log(`🔍 Filtering out todo "${todo.title}" (userId: "${todo.userId}")`)
         }
         return matches
       })
       
-      console.log(`🔍 Filtered todos for user ${userId}: ${filteredTodos.length}/${result.data.length}`)
+      console.log(`🔍 Filtered todos for user ${actualUserId}: ${filteredTodos.length}/${result.data.length}`)
       
       return {
         ...result,
@@ -203,25 +208,16 @@ class LambdaDB {
     try {
       console.log(`🔄 Building export data for user ${userId} in ${format} format`)
       
-      // まずは全データを取得して、どのようなuserIdが存在するかを確認
-      console.log(`🔍 Investigating user ID mapping for OAuth user: "${userId}"`)
-      const allTodosResult = await this.request('/todos', { method: 'GET' })
-      
-      if (allTodosResult.success && Array.isArray(allTodosResult.data)) {
-        const todoList = allTodosResult.data as any[]
-        const uniqueUserIds = Array.from(new Set(todoList.map((todo: any) => todo.userId)))
-        console.log(`🔍 Found ${uniqueUserIds.length} unique userIds in database:`, uniqueUserIds)
-        
-        // OAuth認証時のユーザーIDとデータベースのユーザーIDが異なる場合の対処
-        // OAuthのユーザーIDはデータベースのuser.providerIdやuser.idに対応する可能性がある
-        console.log(`🔍 Looking for todos that might belong to OAuth user ${userId}`)
-      }
+      // OAuth認証ユーザーIDから実際のデータベースユーザーIDを抽出
+      const { extractUserIdFromPrefixed } = await import('@/lib/user-id-utils')
+      const actualUserId = extractUserIdFromPrefixed(userId)
+      console.log(`🔄 User ID mapping: ${userId} -> ${actualUserId}`)
       
       // 1. ユーザー専用のTodosデータを取得（フィルタリング済み）
-      console.log(`🔄 Fetching todos for userId: "${userId}"`)
-      const todosResult = await this.getTodos(userId)
+      console.log(`🔄 Fetching todos for actualUserId: "${actualUserId}"`)
+      const todosResult = await this.getTodos(actualUserId)
       if (!todosResult.success) {
-        console.error(`❌ Failed to fetch todos for user ${userId}:`, todosResult.error)
+        console.error(`❌ Failed to fetch todos for user ${actualUserId}:`, todosResult.error)
         return { 
           success: false, 
           error: `Failed to fetch user todos: ${todosResult.error}` 
@@ -229,71 +225,7 @@ class LambdaDB {
       }
       
       const todos = todosResult.data || []
-      console.log(`🔄 Retrieved ${todos.length} todos for user ${userId}`)
-      
-      // フィルタリング後もデータが空の場合、ID マッピング問題として診断モードを提供
-      if (todos.length === 0 && allTodosResult.success) {
-        console.log(`⚠️ No todos found for user ${userId}. Enabling diagnostic mode with all available data.`)
-        const todoList = allTodosResult.data as any[]
-        const availableUserIds = Array.from(new Set(todoList.map((todo: any) => todo.userId)))
-        console.log(`🔍 Available userIds in database:`, availableUserIds)
-        
-        // 緊急回避策: OAuth認証とDBユーザーIDのマッピングが不明な場合、
-        // 全データを表示して診断情報を含める
-        console.log(`🔧 Providing diagnostic export with all user data for manual identification`)
-        
-        // 各ユーザーごとのTodo統計を生成
-        const userStats = availableUserIds.map(dbUserId => {
-          const userTodos = todoList.filter((todo: any) => todo.userId === dbUserId)
-          return {
-            userId: dbUserId,
-            todoCount: userTodos.length,
-            completedCount: userTodos.filter((todo: any) => todo.completed).length,
-            sampleTodos: userTodos.slice(0, 3).map((todo: any) => ({
-              title: todo.title,
-              category: todo.category,
-              createdAt: todo.createdAt
-            }))
-          }
-        })
-        
-        // 診断モードのエクスポートデータを作成
-        const diagnosticExportData = {
-          exportInfo: {
-            exportedAt: new Date().toISOString(),
-            format,
-            version: '1.0-lambda-diagnostic',
-            userId,
-            note: 'Diagnostic mode: OAuth user ID not found in database. All available data included for manual identification.'
-          },
-          authUser: {
-            id: userId,
-            name: `OAuth User ${userId.slice(-8)}`,
-            email: `oauth.${userId.slice(-8)}@app.com`,
-            dataSource: 'Lambda API + Session'
-          },
-          diagnostic: {
-            issue: 'OAuth user ID mapping not found',
-            oauthUserId: userId,
-            availableDbUserIds: availableUserIds,
-            userStats,
-            recommendation: 'Check which database user corresponds to your OAuth account'
-          },
-          allTodos: todoList,
-          statistics: {
-            totalTodos: todoList.length,
-            totalUsers: availableUserIds.length,
-            userBreakdown: userStats
-          }
-        }
-        
-        console.log(`✅ Diagnostic export data built: ${todoList.length} todos from ${availableUserIds.length} users`)
-        
-        return {
-          success: true,
-          data: diagnosticExportData
-        }
-      }
+      console.log(`🔄 Retrieved ${todos.length} todos for user ${actualUserId}`)
       
       // 2. ユーザーの統計情報を計算
       const totalTodos = todos.length
@@ -318,13 +250,15 @@ class LambdaDB {
           exportedAt: new Date().toISOString(),
           format,
           version: '1.0-lambda',
-          userId,
-          note: 'User-specific data export via Lambda'
+          originalUserId: userId,
+          actualUserId: actualUserId,
+          note: 'User-specific data export via Lambda with proper OAuth ID mapping'
         },
         user: {
-          id: userId,
-          name: `User ${userId.slice(-8)}`, // UserIDの末尾8文字を使用
-          email: `user.${userId.slice(-8)}@app.com`,
+          id: actualUserId,
+          originalId: userId,
+          name: `User ${actualUserId.slice(-8)}`, // UserIDの末尾8文字を使用
+          email: `user.${actualUserId.slice(-8)}@app.com`,
           dataSource: 'Lambda API'
         },
         todos: todos,
@@ -338,7 +272,7 @@ class LambdaDB {
         }
       }
       
-      console.log(`✅ Export data built successfully: ${totalTodos} todos for user ${userId}`)
+      console.log(`✅ Export data built successfully: ${totalTodos} todos for user ${actualUserId} (original: ${userId})`)
       
       return {
         success: true,
