@@ -30,6 +30,11 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
 
     setIsImporting(true)
 
+    // インポート開始のローディングトースター
+    const loadingToast = toast.loading('📤 ファイルをアップロード中...', {
+      duration: Infinity // 手動で削除するまで表示
+    })
+
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -38,6 +43,9 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
         method: 'POST',
         body: formData
       })
+
+      // ローディングトースターを削除
+      toast.dismiss(loadingToast)
 
       if (response.ok) {
         const result = await response.json()
@@ -52,20 +60,20 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
 
         // より詳細な成功メッセージ
         if (importedCount > 0) {
-          toast.success(`${importedCount}件のTodoをインポートしました！${skippedCount > 0 ? ` (${skippedCount}件は重複のためスキップ)` : ''}`)
+          toast.success(`✅ ${importedCount}件のTodoをインポートしました！${skippedCount > 0 ? ` (${skippedCount}件は重複のためスキップ)` : ''}`, {
+            duration: 5000
+          })
           
           // 新しいTodoがインポートされた場合のみページをリロード
           setTimeout(() => {
             window.location.reload()
-          }, 1000)
+          }, 1500)
         } else if (skippedCount > 0) {
-          toast(`${totalCount}件のTodoがすべて重複のためスキップされました。新しいTodoはインポートされませんでした。`, {
-            icon: 'ℹ️',
+          toast(`ℹ️ ${totalCount}件のTodoがすべて重複のためスキップされました。新しいTodoはインポートされませんでした。`, {
             duration: 4000
           })
         } else {
-          toast('ファイルに有効なTodoデータが見つかりませんでした。', {
-            icon: '⚠️',
+          toast.error('⚠️ ファイルに有効なTodoデータが見つかりませんでした。', {
             duration: 4000
           })
         }
@@ -73,14 +81,22 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
       } else {
         const data = await response.json()
         if (data.maintenanceMode) {
-          toast.error('🔧 ' + (data.error || 'データベースメンテナンス中です'))
+          toast.error('🔧 ' + (data.error || 'データベースメンテナンス中です'), {
+            duration: 6000
+          })
         } else {
-          toast.error(data.error || 'インポートに失敗しました')
+          toast.error('❌ ' + (data.error || 'インポートに失敗しました'), {
+            duration: 6000
+          })
         }
       }
     } catch (error) {
       console.error('Import error:', error)
-      toast.error('エラーが発生しました')
+      // ローディングトースターを削除（エラー時）
+      toast.dismiss(loadingToast)
+      toast.error('❌ ネットワークエラーまたはサーバーエラーが発生しました', {
+        duration: 6000
+      })
     } finally {
       setIsImporting(false)
     }
@@ -91,9 +107,11 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
   }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md mt-6">
+    <div className={`bg-white p-6 rounded-lg shadow-md mt-6 transition-all duration-300 ${
+      isImporting ? 'opacity-75 pointer-events-none' : ''
+    }`}>
       <h3 className="text-lg font-semibold text-gray-900 mb-4">
-        📥 データインポート
+        📥 データインポート {isImporting && <span className="text-orange-500 text-sm ml-2">処理中...</span>}
       </h3>
 
       <p className="text-gray-600 mb-4">
@@ -115,17 +133,21 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
           <button
             onClick={handleImportClick}
             disabled={isImporting}
-            className="w-full px-4 py-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+            className={`w-full px-4 py-3 rounded-md transition-all duration-300 flex items-center justify-center space-x-2 ${
+              isImporting 
+                ? 'bg-orange-500 text-white cursor-not-allowed' 
+                : 'bg-purple-600 text-white hover:bg-purple-700 hover:shadow-lg'
+            }`}
           >
             {isImporting ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>インポート中...</span>
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                <span className="font-medium">📤 処理中...</span>
               </>
             ) : (
               <>
                 <span>📁</span>
-                <span>ファイルを選択してインポート</span>
+                <span className="font-medium">ファイルを選択してインポート</span>
               </>
             )}
           </button>
