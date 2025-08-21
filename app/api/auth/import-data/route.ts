@@ -50,35 +50,95 @@ export async function POST(request: NextRequest) {
       if (file.name.endsWith('.json')) {
         const jsonData = JSON.parse(fileContent)
         
-        // JSONデータの構造チェック
+        // GDPR準拠エクスポート形式の構造チェック
         if (jsonData.todos && Array.isArray(jsonData.todos)) {
+          // GDPR準拠エクスポートファイル（推奨形式）
           todoData = jsonData.todos
+          console.log('📋 GDPR準拠エクスポート形式を検出:', {
+            exportInfo: jsonData.exportInfo?.version || 'unknown',
+            userInfo: jsonData.user?.id || 'unknown',
+            todoCount: jsonData.todos.length,
+            hasStatistics: !!jsonData.statistics
+          })
         } else if (Array.isArray(jsonData)) {
+          // 従来の配列形式
           todoData = jsonData
+          console.log('📋 従来の配列形式を検出:', { todoCount: jsonData.length })
         } else {
-          throw new Error('Invalid JSON structure')
+          throw new Error('Invalid JSON structure. Expected format: {todos: [...]} or [...]')
         }
       } else if (file.name.endsWith('.csv')) {
-        // CSV解析（簡易版）
+        // GDPR準拠CSV解析（エクスポート形式対応）
         const lines = fileContent.split('\n').filter(line => line.trim())
         if (lines.length < 2) {
           throw new Error('CSV file must have header and at least one data row')
         }
 
         const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
-        const requiredHeaders = ['title']
+        console.log('📋 CSVヘッダーを検出:', headers)
         
-        if (!requiredHeaders.every(header => headers.includes(header))) {
-          throw new Error('CSV must contain at least a "title" column')
+        // GDPR準拠エクスポート形式のヘッダーチェック
+        const expectedHeaders = ['ID', 'Title', 'Description', 'Completed', 'Priority', 'Due Date', 'Created At', 'Updated At']
+        const hasGDPRFormat = expectedHeaders.some(header => headers.includes(header))
+        
+        if (hasGDPRFormat) {
+          console.log('📋 GDPR準拠CSVエクスポート形式を検出')
+        }
+        
+        // 最低限必要なヘッダーチェック
+        const titleHeader = headers.find(h => 
+          h.toLowerCase().includes('title') || h === 'Title'
+        )
+        
+        if (!titleHeader) {
+          throw new Error('CSV must contain a "Title" or "title" column')
         }
 
         todoData = lines.slice(1).map(line => {
-          const values = line.split(',').map(v => v.trim().replace(/"/g, ''))
+          // CSVの値を適切に解析（カンマ区切りとダブルクォート処理）
+          const csvRegex = /("(?:[^"]+|"")*"|[^",]*)/g
+          const values = []
+          let match
+          while ((match = csvRegex.exec(line)) !== null) {
+            values.push(match[1].replace(/^"|"$/g, '').replace(/""/g, '"'))
+          }
+          
           const todo: any = {}
           
           headers.forEach((header, index) => {
-            if (values[index]) {
-              todo[header] = values[index]
+            const value = values[index]?.trim()
+            if (value) {
+              // ヘッダー名を標準形式にマッピング
+              switch (header) {
+                case 'ID':
+                  todo.originalId = value
+                  break
+                case 'Title':
+                  todo.title = value
+                  break
+                case 'Description':
+                  todo.description = value
+                  break
+                case 'Completed':
+                  todo.completed = value.toLowerCase() === 'true'
+                  break
+                case 'Priority':
+                  todo.priority = value.toLowerCase()
+                  break
+                case 'Due Date':
+                  todo.dueDate = value
+                  break
+                case 'Created At':
+                  todo.createdAt = value
+                  break
+                case 'Updated At':
+                  todo.updatedAt = value
+                  break
+                default:
+                  // 小文字のヘッダーもサポート
+                  todo[header.toLowerCase()] = value
+                  break
+              }
             }
           })
           
@@ -98,15 +158,53 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // データの正規化とバリデーション
-    const normalizedTodos = todoData.map(todo => ({
-      title: todo.title || 'Untitled',
-      description: todo.description || '',
-      priority: ['low', 'medium', 'high'].includes(todo.priority) ? todo.priority : 'medium',
-      category: todo.category || 'general',
-      dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString().split('T')[0] : null,
-      tags: typeof todo.tags === 'string' ? todo.tags : (Array.isArray(todo.tags) ? todo.tags.join(',') : '')
-    })).filter(todo => todo.title.trim().length > 0)
+    // GDPR準拠データの正規化とバリデーション
+    const normalizedTodos = todoData.map(todo => {
+      // 基本的なデータ正規化
+      const normalized: any = {
+        title: todo.title || 'Untitled',
+        description: todo.description || '',
+        priority: ['low', 'medium', 'high'].includes(todo.priority?.toLowerCase()) 
+          ? todo.priority.toLowerCase() 
+          : 'medium',
+        category: todo.category || 'general',
+        dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString().split('T')[0] : null,
+        tags: typeof todo.tags === 'string' ? todo.tags : (Array.isArray(todo.tags) ? todo.tags.join(',') : '')
+      }
+      
+      // GDPR準拠エクスポートデータの追加フィールドを保持
+      if (todo.completed !== undefined) {
+        normalized.completed = Boolean(todo.completed)
+      }
+      
+      // 元のIDが存在する場合は保持（重複チェック用）
+      if (todo.originalId || todo.id) {
+        normalized.originalId = todo.originalId || todo.id
+      }
+      
+      // タイムスタンプ情報の保持（参考情報として）
+      if (todo.createdAt) {
+        normalized.originalCreatedAt = todo.createdAt
+      }
+      if (todo.updatedAt) {
+        normalized.originalUpdatedAt = todo.updatedAt
+      }
+      
+      return normalized
+    }).filter(todo => todo.title.trim().length > 0)
+    
+    console.log('📊 正規化されたデータサンプル:', {
+      totalCount: normalizedTodos.length,
+      hasCompleted: normalizedTodos.some(t => t.completed !== undefined),
+      hasOriginalIds: normalizedTodos.some(t => t.originalId),
+      hasTimestamps: normalizedTodos.some(t => t.originalCreatedAt),
+      sampleData: normalizedTodos.slice(0, 2).map(t => ({
+        title: t.title,
+        completed: t.completed,
+        originalId: t.originalId,
+        hasTimestamp: !!t.originalCreatedAt
+      }))
+    })
 
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
     

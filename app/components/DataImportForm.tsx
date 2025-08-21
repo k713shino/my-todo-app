@@ -135,11 +135,22 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
         <div className="bg-blue-50 p-4 rounded-lg">
           <h4 className="font-medium text-blue-800 mb-2">📋 インポートについて</h4>
           <ul className="text-sm text-blue-700 space-y-1">
+            <li>• 🆕 <strong>GDPR準拠エクスポートファイル</strong>をそのままインポート可能</li>
             <li>• 同じタイトルのTodoは重複として自動的にスキップされます</li>
-            <li>• JSON形式とCSV形式に対応しています</li>
+            <li>• JSON形式とCSV形式に対応しています（エクスポート形式完全互換）</li>
             <li>• ファイルサイズは最大10MBまでです</li>
             <li>• インポート後、ページが自動的に更新されます</li>
           </ul>
+        </div>
+
+        {/* GDPR準拠インポートの説明 */}
+        <div className="bg-green-50 p-4 rounded-lg">
+          <h4 className="font-medium text-green-800 mb-2">✅ GDPR準拠データ互換性</h4>
+          <p className="text-sm text-green-700">
+            データエクスポート機能で作成されたJSONファイルやCSVファイルを
+            そのままインポートできます。エクスポート時の完了状態、カテゴリ、
+            優先度などの情報が正しく復元されます。
+          </p>
         </div>
       </div>
     </div>
