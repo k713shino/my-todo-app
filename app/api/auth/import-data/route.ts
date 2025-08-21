@@ -109,6 +109,14 @@ export async function POST(request: NextRequest) {
     })).filter(todo => todo.title.trim().length > 0)
 
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
+    
+    console.log('📊 Import request details:', {
+      userId: actualUserId,
+      userEmail: session.user.email,
+      userName: session.user.name,
+      todoCount: normalizedTodos.length,
+      sampleTodos: normalizedTodos.slice(0, 2).map(t => ({ title: t.title, priority: t.priority }))
+    })
 
     try {
       // Lambda API経由でデータをインポート
@@ -139,10 +147,28 @@ export async function POST(request: NextRequest) {
         }, { status: statusCode })
       }
 
+      // Lambdaからの詳細なレスポンスを解析
+      const lambdaData = response.data as any
+      const importedCount = lambdaData?.importedCount || 0
+      const skippedCount = lambdaData?.skippedCount || 0
+      const totalCount = lambdaData?.totalCount || normalizedTodos.length
+
+      console.log('📈 Import results:', {
+        imported: importedCount,
+        skipped: skippedCount,
+        total: totalCount,
+        originalFileCount: todoData.length,
+        normalizedCount: normalizedTodos.length
+      })
+
       return NextResponse.json({ 
         success: true,
-        importedCount: (response.data as any)?.importedCount || normalizedTodos.length,
-        message: 'Data imported successfully'
+        importedCount,
+        skippedCount,
+        totalCount,
+        message: importedCount > 0 
+          ? `Successfully imported ${importedCount} todos${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`
+          : `All ${totalCount} todos were skipped due to duplicates`
       })
 
     } catch (error) {

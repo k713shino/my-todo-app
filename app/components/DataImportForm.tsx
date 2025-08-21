@@ -41,17 +41,29 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
 
       if (response.ok) {
         const result = await response.json()
-        toast.success(`データをインポートしました（${result.importedCount || 0}件のTodoを追加）`)
+        const importedCount = result.importedCount || 0
+        const skippedCount = result.skippedCount || 0
+        const totalCount = result.totalCount || 0
         
         // ファイル入力をリセット
         if (fileInputRef.current) {
           fileInputRef.current.value = ''
         }
 
-        // ページをリロードしてデータを反映
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
+        // より詳細な成功メッセージ
+        if (importedCount > 0) {
+          toast.success(`${importedCount}件のTodoをインポートしました！${skippedCount > 0 ? ` (${skippedCount}件は重複のためスキップ)` : ''}`)
+          
+          // 新しいTodoがインポートされた場合のみページをリロード
+          setTimeout(() => {
+            window.location.reload()
+          }, 1000)
+        } else if (skippedCount > 0) {
+          toast.info(`${totalCount}件のTodoがすべて重複のためスキップされました。新しいTodoはインポートされませんでした。`)
+        } else {
+          toast.warning('ファイルに有効なTodoデータが見つかりませんでした。')
+        }
+        
       } else {
         const data = await response.json()
         if (data.maintenanceMode) {
@@ -110,6 +122,23 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
                 <span>ファイルを選択してインポート</span>
               </>
             )}
+          </button>
+        </div>
+
+        {/* 注意事項 */}
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <h4 className="font-medium text-blue-800 mb-2">📋 インポートについて</h4>
+          <ul className="text-sm text-blue-700 space-y-1">
+            <li>• 同じタイトルのTodoは重複として自動的にスキップされます</li>
+            <li>• JSON形式とCSV形式に対応しています</li>
+            <li>• ファイルサイズは最大10MBまでです</li>
+            <li>• インポート後、ページが自動的に更新されます</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  )
+}
           </button>
         </div>
 
