@@ -59,9 +59,15 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
             window.location.reload()
           }, 1000)
         } else if (skippedCount > 0) {
-          toast.info(`${totalCount}件のTodoがすべて重複のためスキップされました。新しいTodoはインポートされませんでした。`)
+          toast(`${totalCount}件のTodoがすべて重複のためスキップされました。新しいTodoはインポートされませんでした。`, {
+            icon: 'ℹ️',
+            duration: 4000
+          })
         } else {
-          toast.warning('ファイルに有効なTodoデータが見つかりませんでした。')
+          toast('ファイルに有効なTodoデータが見つかりませんでした。', {
+            icon: '⚠️',
+            duration: 4000
+          })
         }
         
       } else {
@@ -135,45 +141,6 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
             <li>• インポート後、ページが自動的に更新されます</li>
           </ul>
         </div>
-      </div>
-    </div>
-  )
-}
-          </button>
-        </div>
-
-        {/* インポート可能形式の説明 */}
-        <div className="bg-purple-50 p-4 rounded-lg">
-          <h4 className="text-sm font-medium text-purple-800 mb-2">📋 対応形式</h4>
-          <ul className="text-sm text-purple-700 space-y-1">
-            <li>• JSON形式（エクスポート機能で作成されたファイル）</li>
-            <li>• CSV形式（タイトル、説明、優先度、カテゴリ、期限の列を含む）</li>
-            <li>• ファイルサイズ上限: 10MB</li>
-          </ul>
-        </div>
-
-        {/* 注意事項 */}
-        <div className="bg-yellow-50 p-4 rounded-lg">
-          <h4 className="text-sm font-medium text-yellow-800 mb-2">⚠️ 注意事項</h4>
-          <ul className="text-sm text-yellow-700 space-y-1">
-            <li>• インポートしたデータは既存のTodoに追加されます</li>
-            <li>• 重複するTodoは自動的にスキップされます</li>
-            <li>• インポート後、ページが自動的に更新されます</li>
-            <li>• 大量のデータの場合、処理に時間がかかることがあります</li>
-          </ul>
-        </div>
-
-        {/* CSV形式のサンプル */}
-        <details className="bg-gray-50 p-4 rounded-lg">
-          <summary className="cursor-pointer text-sm font-medium text-gray-800 mb-2">
-            💡 CSV形式のサンプル（クリックして展開）
-          </summary>
-          <pre className="text-xs text-gray-600 mt-2 overflow-x-auto">
-{`title,description,priority,category,dueDate,tags
-"買い物リスト作成","明日の買い物リストを作成する","medium","personal","2024-01-20","買い物,リスト"
-"会議資料準備","来週の会議資料を準備","high","work","2024-01-25","会議,資料"`}
-          </pre>
-        </details>
       </div>
     </div>
   )
