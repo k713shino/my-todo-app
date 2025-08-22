@@ -274,6 +274,13 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     if (enablePersistence) {
       clearPersistedFilters()
     }
+    
+    // フィルタークリア後に全データを再取得
+    if (onManualSearch) {
+      setTimeout(() => {
+        onManualSearch()
+      }, 100) // 状態更新後に実行
+    }
   }
 
   const hasActiveFilters = Object.keys(filter).some(key => 

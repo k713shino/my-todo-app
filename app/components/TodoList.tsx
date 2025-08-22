@@ -439,6 +439,7 @@ export default function TodoList() {
       console.log('📊 hasFilters:', hasFilters)
       
       if (!hasFilters) {
+        console.log('📋 フィルター条件なし - 全Todoを取得')
         await fetchTodos()
         return
       }
@@ -469,10 +470,17 @@ export default function TodoList() {
       }
       
       const data = await response.json()
-      console.log('📋 検索結果:', data.results.length, '件')
+      console.log('📋 検索結果:', data.results?.length || 0, '件')
+      
+      // 検索結果が配列でない場合のエラーハンドリング
+      if (!Array.isArray(data.results)) {
+        console.error('❌ 無効な検索結果形式:', data)
+        throw new Error('Invalid search results format')
+      }
+      
       const parsedResults = data.results.map((todo: any) => safeParseTodoDate(todo))
       setTodos(parsedResults)
-      console.log('✅ setTodos完了')
+      console.log('✅ setTodos完了 - 表示件数:', parsedResults.length)
       
     } catch (error) {
       const errorWithStatus = error as ErrorWithStatus
@@ -598,7 +606,22 @@ export default function TodoList() {
       {/* 手動更新ボタン */}
       <div className="flex justify-center">
         <button
-          onClick={() => fetchTodos(true)}
+          onClick={() => {
+            // フィルターが適用されている場合は検索を再実行、そうでなければ全データ取得
+            const hasFilters = Object.keys(filter).some(key => 
+              filter[key as keyof TodoFilters] !== undefined && 
+              filter[key as keyof TodoFilters] !== '' &&
+              !(Array.isArray(filter[key as keyof TodoFilters]) && (filter[key as keyof TodoFilters] as any[]).length === 0)
+            )
+            
+            if (hasFilters) {
+              console.log('🔄 フィルター適用中のため検索を再実行')
+              searchTodos(filter)
+            } else {
+              console.log('🔄 全データを最新取得')
+              fetchTodos(true)
+            }
+          }}
           disabled={isLoading}
           className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
         >
