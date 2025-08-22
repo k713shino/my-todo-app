@@ -1,45 +1,17 @@
 // app/api/auth/delete-account/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { prisma } from '@/lib/prisma'
-// import { CacheManager, RateLimiter } from '@/lib/cache'
-import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization'
+import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
+import { lambdaAPI } from '@/lib/lambda-api'
 
 export async function DELETE(request: NextRequest) {
   try {
-    console.log('🗑️ Account deletion API called')
+    const session = await getAuthSession()
+    console.log('🗑️ Account deletion request from:', session?.user?.email)
     
-    await optimizeForLambda()
-    console.log('✅ Lambda optimization completed')
-  
-    return measureLambdaPerformance('DELETE /api/auth/delete-account', async () => {
-      try {
-        console.log('📊 Performance measurement started')
-        
-        const session = await getAuthSession()
-        console.log('Session:', session ? { userId: session.user?.id, email: session.user?.email } : 'null')
-        
-        if (!isAuthenticated(session)) {
-          console.log('❌ Unauthorized access attempt')
-          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-
-      // レート制限は一旦コメントアウト（cache.tsファイルが存在しないため）
-      /*
-      const rateLimitResult = await RateLimiter.checkRateLimit(
-        `delete_account:${session.user.id}`, 
-        86400, // 24時間
-        3
-      )
-      
-      if (!rateLimitResult.allowed) {
-        return NextResponse.json(
-          { error: 'アカウント削除の試行回数が上限に達しました。24時間後に再試行してください。' },
-          { status: 429 }
-        )
-      }
-      */
+    if (!isAuthenticated(session)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const body = await request.json()
     const { confirmationText, password, reason } = body
@@ -52,160 +24,74 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Prismaクライアント接続確認
+    const userId = extractUserIdFromPrefixed(session.user.id)
+    console.log('🔍 Deleting account for user:', { 
+      userId, 
+      email: session.user.email,
+      name: session.user.name 
+    })
+
     try {
-      console.log('⏳ Testing Prisma connection for account deletion...')
-      await prisma.$queryRaw`SELECT 1`
-      console.log('✅ Prisma connection successful')
-    } catch (connectionError) {
-      console.error('❌ Prisma connection failed:', connectionError)
+      // Lambda API経由でアカウント削除を実行
+      const response = await lambdaAPI.post('/delete-account', {
+        userId,
+        userEmail: session.user.email,
+        userName: session.user.name,
+        confirmationText,
+        password,
+        reason,
+        hasPassword: session.user.hasPassword
+      })
+
+      console.log('Lambda delete account response:', response)
+
+      if (!response.success) {
+        console.error('Lambda account deletion failed:', response.error)
+        
+        // エラーメッセージから適切なステータスコードを判定
+        let statusCode = 500
+        if (response.error?.includes('Unauthorized')) {
+          statusCode = 401
+        } else if (response.error?.includes('not found')) {
+          statusCode = 404
+        } else if (response.error?.includes('maintenance')) {
+          statusCode = 503
+        } else if (response.error?.includes('confirmation') || response.error?.includes('password')) {
+          statusCode = 400
+        }
+        
+        return NextResponse.json({ 
+          error: response.error || 'Account deletion failed',
+          maintenanceMode: statusCode === 503
+        }, { status: statusCode })
+      }
+
+      // 削除が成功した場合の統計情報
+      const lambdaData = response.data as any
+      console.log('✅ Account deleted successfully via Lambda API')
+      
       return NextResponse.json({ 
-        error: 'データベースメンテナンス中のため、アカウント削除はできません。しばらく後に再試行してください。',
-        maintenanceMode: true
-      }, { status: 503 })
-    }
-
-    // ユーザー情報取得
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
-        todos: true,
-        accounts: true,
-        sessions: true
-      }
-    })
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'ユーザーが見つかりません' }, 
-        { status: 404 }
-      )
-    }
-
-    // パスワード認証のユーザーの場合のみパスワード確認
-    if (user.password && session.user.hasPassword) {
-      if (!password) {
-        return NextResponse.json(
-          { error: 'パスワードが必要です' }, 
-          { status: 400 }
-        )
-      }
-
-      const isPasswordValid = await bcrypt.compare(password, user.password)
-      if (!isPasswordValid) {
-        return NextResponse.json(
-          { error: 'パスワードが正しくありません' }, 
-          { status: 400 }
-        )
-      }
-    }
-
-    // 削除前のデータ統計（ログ用）
-    const deletionStats = {
-      userId: user.id,
-      email: user.email,
-      todoCount: user.todos.length,
-      accountCount: user.accounts.length,
-      sessionCount: user.sessions.length,
-      authMethod: user.password ? 'credentials' : 'oauth',
-      createdAt: user.createdAt,
-      deletedAt: new Date().toISOString(),
-      reason: reason || 'Not specified'
-    }
-
-    console.log('🗑️ Account deletion initiated:', {
-      userId: user.id,
-      email: user.email,
-      authMethod: deletionStats.authMethod,
-      dataCount: {
-        todos: deletionStats.todoCount,
-        sessions: deletionStats.sessionCount,
-        accounts: deletionStats.accountCount
-      }
-    })
-
-    // トランザクションでデータ削除
-    await prisma.$transaction(async (tx) => {
-      // 1. Todoの削除（カスケード削除されるが明示的に）
-      const deletedTodos = await tx.todo.deleteMany({
-        where: { userId: session.user.id }
+        message: 'アカウントが正常に削除されました',
+        deletedAt: lambdaData.deletedAt || new Date().toISOString(),
+        stats: lambdaData.stats || {
+          todoCount: 0,
+          authMethod: session.user.hasPassword ? 'credentials' : 'oauth'
+        }
       })
-      console.log(`📝 Deleted ${deletedTodos.count} todos`)
 
-      // 2. セッションの削除
-      const deletedSessions = await tx.session.deleteMany({
-        where: { userId: session.user.id }
-      })
-      console.log(`🔑 Deleted ${deletedSessions.count} sessions`)
-
-      // 3. OAuth アカウントの削除
-      const deletedAccounts = await tx.account.deleteMany({
-        where: { userId: session.user.id }
-      })
-      console.log(`🔗 Deleted ${deletedAccounts.count} OAuth accounts`)
-
-      // 4. ユーザーアカウントの削除
-      await tx.user.delete({
-        where: { id: session.user.id }
-      })
-      console.log(`👤 Deleted user account: ${user.email}`)
-    })
-
-    // Redisからユーザー関連データを削除（一旦コメントアウト）
-    /*
-    try {
-      const deletedCacheKeys = await CacheManager.deletePattern(`*${session.user.id}*`)
-      console.log(`🧹 Deleted ${deletedCacheKeys} cache keys`)
     } catch (error) {
-      console.warn('Redis cleanup failed (non-critical):', error)
-    }
-    */
-
-    // 削除ログ記録（監査用）
-    console.log('✅ Account deletion completed:', JSON.stringify(deletionStats, null, 2))
-
-    // GDPR準拠のログ（外部webhook送信）
-    if (process.env.GDPR_AUDIT_WEBHOOK) {
-      try {
-        await fetch(process.env.GDPR_AUDIT_WEBHOOK, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'account_deletion',
-            timestamp: deletionStats.deletedAt,
-            ...deletionStats
-          })
-        })
-        console.log('📋 GDPR audit log sent')
-      } catch (error) {
-        console.error('GDPR audit log failed:', error)
-      }
+      console.error('❌ Lambda API error during account deletion:', error)
+      return NextResponse.json({ 
+        error: 'サーバーエラーが発生しました。しばらく後に再試行してください。',
+        maintenanceMode: false
+      }, { status: 500 })
     }
 
+  } catch (error) {
+    console.error('❌ Account deletion API error:', error)
     return NextResponse.json({ 
-      message: 'アカウントが正常に削除されました',
-      deletedAt: deletionStats.deletedAt,
-      stats: {
-        todoCount: deletionStats.todoCount,
-        authMethod: deletionStats.authMethod,
-        memberSince: deletionStats.createdAt
-      }
-    })
-
-    } catch (error) {
-      console.error('❌ Account deletion error:', error)
-      return NextResponse.json(
-        { error: 'アカウント削除に失敗しました。しばらく後に再試行してください。' }, 
-        { status: 500 }
-      )
-    }
-  })
-  } catch (topLevelError) {
-    console.error('❌ Top-level error in account deletion:', topLevelError)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+      error: 'Internal server error' 
+    }, { status: 500 })
   }
 }
 
