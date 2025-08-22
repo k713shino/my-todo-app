@@ -426,6 +426,7 @@ export default function TodoList() {
    */
   const searchTodos = async (filters: TodoFilters) => {
     try {
+      console.log('🚀 searchTodos開始:', filters)
       setIsLoading(true)
       
       // フィルター条件が空の場合は通常のTodo一覧を取得
@@ -434,6 +435,8 @@ export default function TodoList() {
         filters[key as keyof TodoFilters] !== '' &&
         !(Array.isArray(filters[key as keyof TodoFilters]) && (filters[key as keyof TodoFilters] as any[]).length === 0)
       )
+      
+      console.log('📊 hasFilters:', hasFilters)
       
       if (!hasFilters) {
         await fetchTodos()
@@ -466,7 +469,10 @@ export default function TodoList() {
       }
       
       const data = await response.json()
-      setTodos(data.results.map((todo: any) => safeParseTodoDate(todo)))
+      console.log('📋 検索結果:', data.results.length, '件')
+      const parsedResults = data.results.map((todo: any) => safeParseTodoDate(todo))
+      setTodos(parsedResults)
+      console.log('✅ setTodos完了')
       
     } catch (error) {
       const errorWithStatus = error as ErrorWithStatus
@@ -483,6 +489,7 @@ export default function TodoList() {
    * 手動検索関数（即座に実行）
    */
   const handleManualSearch = () => {
+    console.log('🔍 手動検索実行:', filter)
     searchTodos(filter)
   }
 
