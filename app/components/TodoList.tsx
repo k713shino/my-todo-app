@@ -473,28 +473,80 @@ export default function TodoList() {
       const now = new Date()
       
       if (filters.dateRange === 'overdue') {
+        // 期限切れ：期限が過去で未完了
         filtered = filtered.filter(todo => 
           todo.dueDate && new Date(todo.dueDate) < now && !todo.completed
         )
       } else if (filters.dateRange === 'today') {
-        const today = new Date()
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+        // 今日：今日が期限
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
         
         filtered = filtered.filter(todo => {
           if (!todo.dueDate) return false
           const dueDate = new Date(todo.dueDate)
           return dueDate >= todayStart && dueDate < todayEnd
         })
-      } else if (filters.dateRange === 'this_week') {
-        const weekEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+      } else if (filters.dateRange === 'tomorrow') {
+        // 明日：明日が期限
+        const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+        const tomorrowEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2)
         
         filtered = filtered.filter(todo => {
           if (!todo.dueDate) return false
           const dueDate = new Date(todo.dueDate)
-          return dueDate >= now && dueDate <= weekEnd
+          return dueDate >= tomorrowStart && dueDate < tomorrowEnd
+        })
+      } else if (filters.dateRange === 'this_week') {
+        // 今週：今週中が期限
+        const weekStart = new Date(now)
+        weekStart.setDate(now.getDate() - now.getDay()) // 今週の日曜日
+        weekStart.setHours(0, 0, 0, 0)
+        
+        const weekEnd = new Date(weekStart)
+        weekEnd.setDate(weekStart.getDate() + 7) // 来週の日曜日
+        
+        filtered = filtered.filter(todo => {
+          if (!todo.dueDate) return false
+          const dueDate = new Date(todo.dueDate)
+          return dueDate >= weekStart && dueDate < weekEnd
+        })
+      } else if (filters.dateRange === 'next_week') {
+        // 来週：来週中が期限
+        const nextWeekStart = new Date(now)
+        nextWeekStart.setDate(now.getDate() - now.getDay() + 7) // 来週の日曜日
+        nextWeekStart.setHours(0, 0, 0, 0)
+        
+        const nextWeekEnd = new Date(nextWeekStart)
+        nextWeekEnd.setDate(nextWeekStart.getDate() + 7) // 再来週の日曜日
+        
+        filtered = filtered.filter(todo => {
+          if (!todo.dueDate) return false
+          const dueDate = new Date(todo.dueDate)
+          return dueDate >= nextWeekStart && dueDate < nextWeekEnd
+        })
+      } else if (filters.dateRange === 'this_month') {
+        // 今月：今月中が期限
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        
+        filtered = filtered.filter(todo => {
+          if (!todo.dueDate) return false
+          const dueDate = new Date(todo.dueDate)
+          return dueDate >= monthStart && dueDate < monthEnd
+        })
+      } else if (filters.dateRange === 'next_month') {
+        // 来月：来月中が期限
+        const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 1)
+        
+        filtered = filtered.filter(todo => {
+          if (!todo.dueDate) return false
+          const dueDate = new Date(todo.dueDate)
+          return dueDate >= nextMonthStart && dueDate < nextMonthEnd
         })
       } else if (filters.dateRange === 'no_due_date') {
+        // 期限なし：期限が設定されていない
         filtered = filtered.filter(todo => !todo.dueDate)
       }
       console.log(`📅 日付範囲 "${filters.dateRange}":`, filtered.length, '件')
