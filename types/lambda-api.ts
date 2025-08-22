@@ -128,9 +128,3 @@ export interface VercelAPIResponse<T = any> {
   timestamp: string;
 }
 
-// Component Props types
-export interface LambdaConnectionTestProps {
-  className?: string;
-  onSuccess?: (data: any) => void;
-  onError?: (error: Error) => void;
-}
