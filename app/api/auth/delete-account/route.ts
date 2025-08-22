@@ -1,9 +1,8 @@
 // app/api/auth/delete-account/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
-import { prisma } from '@/lib/prisma'
+import { lambdaAPI } from '@/lib/lambda-api'
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -34,55 +33,54 @@ export async function DELETE(request: NextRequest) {
 
     try {
       // Lambda API経由でアカウント削除を実行
-      console.log('🚀 Using Lambda API for account deletion...')
+      console.log('🚀 Calling Lambda API for account deletion...')
       
-      // 削除前のデータ統計（セッション情報から）
-      const deletionStats = {
-        userId: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        actualUserId: userId,
-        authMethod: session.user.hasPassword ? 'credentials' : 'oauth',
-        deletedAt: new Date().toISOString(),
-        reason: reason || 'Not specified'
-      }
-
-      console.log('🗑️ Account deletion initiated via Lambda API:', deletionStats)
-
-      // Lambda APIにアカウント削除リクエストを送信
-      // 現在Lambda APIに/delete-accountエンドポイントがないため、
-      // 一時的にローカルでの削除処理をシミュレート
-      
-      // GDPR準拠のログ記録
-      console.log('📋 GDPR compliant deletion logged:', {
-        type: 'account_deletion',
-        timestamp: deletionStats.deletedAt,
-        userId: deletionStats.userId,
-        email: deletionStats.email,
-        method: 'lambda_api_fallback'
+      const response = await lambdaAPI.post('/auth/delete-account', {
+        userId,
+        userEmail: session.user.email,
+        confirmationText,
+        password,
+        reason
       })
 
-      // セッション無効化（ブラウザ側で処理）
-      console.log('🔑 Session will be invalidated on client side')
+      console.log('Lambda delete account response:', response)
 
+      if (!response.success) {
+        console.error('Lambda account deletion failed:', response.error)
+        
+        // エラーメッセージから適切なステータスコードを判定
+        let statusCode = 500
+        if (response.error?.includes('Unauthorized')) {
+          statusCode = 401
+        } else if (response.error?.includes('not found')) {
+          statusCode = 404
+        } else if (response.error?.includes('confirmation') || response.error?.includes('password')) {
+          statusCode = 400
+        }
+        
+        return NextResponse.json({ 
+          error: response.error || 'Account deletion failed'
+        }, { status: statusCode })
+      }
+
+      // 削除が成功した場合の統計情報
+      const lambdaData = response.data as any
+      console.log('✅ Account deleted successfully via Lambda API:', lambdaData)
+      
       return NextResponse.json({ 
-        message: 'アカウント削除リクエストを受け付けました。Lambda API経由で処理されます。',
-        deletedAt: deletionStats.deletedAt,
-        requestId: `del_${userId}_${Date.now()}`,
+        message: 'アカウントが正常に削除されました',
+        deletedAt: lambdaData.stats?.deletedAt || new Date().toISOString(),
         stats: {
-          method: 'lambda_api',
-          authMethod: deletionStats.authMethod,
-          processedAt: deletionStats.deletedAt
-        },
-        // クライアント側でセッション無効化を指示
-        sessionInvalidation: true
+          todoCount: lambdaData.stats?.todoCount || 0,
+          authMethod: lambdaData.stats?.authMethod || 'unknown',
+          memberSince: lambdaData.stats?.memberSince
+        }
       })
 
     } catch (error) {
-      console.error('❌ Account deletion API error:', error)
+      console.error('❌ Lambda API error during account deletion:', error)
       return NextResponse.json({ 
-        error: 'アカウント削除処理中にエラーが発生しました。しばらく後に再試行してください。',
-        maintenanceMode: false
+        error: 'アカウント削除処理中にエラーが発生しました。しばらく後に再試行してください。'
       }, { status: 500 })
     }
 
