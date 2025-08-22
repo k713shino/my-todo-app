@@ -110,10 +110,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     if (enablePersistence) {
       persistFilters(newFilter)
     }
-    // 自動検索実行
-    if (onManualSearch) {
-      onManualSearch()
-    }
   }
 
   const handlePriorityFilter = (priority?: Priority) => {
@@ -121,10 +117,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
-    }
-    // 自動検索実行
-    if (onManualSearch) {
-      onManualSearch()
     }
   }
 
@@ -173,10 +165,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
-    }
-    // 自動検索実行
-    if (onManualSearch) {
-      onManualSearch()
     }
   }
 
@@ -262,6 +250,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   }
 
   const clearFilters = () => {
+    console.log('🧹 フィルタークリア')
     const emptyFilter = {}
     onFilterChange(emptyFilter)
     
@@ -273,13 +262,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     // 永続化データもクリア
     if (enablePersistence) {
       clearPersistedFilters()
-    }
-    
-    // フィルタークリア後に全データを再取得
-    if (onManualSearch) {
-      setTimeout(() => {
-        onManualSearch()
-      }, 100) // 状態更新後に実行
     }
   }
 

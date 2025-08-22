@@ -421,76 +421,87 @@ export default function TodoList() {
   }
 
   /**
-   * フィルター条件に基づいてTodoを検索
-   * 検索APIを使用して高度なフィルタリングを実行
+   * クライアントサイドフィルタリング - シンプルで確実な動作
    */
-  const searchTodos = async (filters: TodoFilters) => {
-    try {
-      console.log('🚀 searchTodos開始:', filters)
-      setIsLoading(true)
-      
-      // フィルター条件が空の場合は通常のTodo一覧を取得
-      const hasFilters = Object.keys(filters).some(key => 
-        filters[key as keyof TodoFilters] !== undefined && 
-        filters[key as keyof TodoFilters] !== '' &&
-        !(Array.isArray(filters[key as keyof TodoFilters]) && (filters[key as keyof TodoFilters] as any[]).length === 0)
+  const applyFilters = (allTodos: Todo[], filters: TodoFilters) => {
+    console.log('🔍 フィルター適用開始:', { 全件数: allTodos.length, フィルター: filters })
+    
+    let filtered = [...allTodos]
+    
+    // テキスト検索
+    if (filters.search && filters.search.trim()) {
+      const searchTerm = filters.search.toLowerCase().trim()
+      filtered = filtered.filter(todo => 
+        todo.title.toLowerCase().includes(searchTerm) ||
+        (todo.description && todo.description.toLowerCase().includes(searchTerm))
       )
-      
-      console.log('📊 hasFilters:', hasFilters)
-      
-      if (!hasFilters) {
-        console.log('📋 フィルター条件なし - 全Todoを取得')
-        await fetchTodos()
-        return
-      }
-
-      // 検索APIを呼び出し
-      const params = new URLSearchParams()
-      if (filters.search) params.append('q', filters.search)
-      if (filters.completed !== undefined) params.append('completed', filters.completed.toString())
-      if (filters.priority) params.append('priority', filters.priority)
-      if (filters.category) params.append('category', filters.category)
-      if (filters.tags && filters.tags.length > 0) {
-        params.append('tags', filters.tags.join(','))
-      }
-      if (filters.dateRange) params.append('dateRange', filters.dateRange)
-
-      const response = await retryWithBackoff(async () => {
-        return await fetch(`/api/todos/search?${params.toString()}`)
-      }, {
-        maxRetries: 2,
-        shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
-      })
-      
-      if (!response.ok) {
-        const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
-        errorWithStatus.status = response.status
-        errorWithStatus.statusText = response.statusText
-        throw errorWithStatus
-      }
-      
-      const data = await response.json()
-      console.log('📋 検索結果:', data.results?.length || 0, '件')
-      
-      // 検索結果が配列でない場合のエラーハンドリング
-      if (!Array.isArray(data.results)) {
-        console.error('❌ 無効な検索結果形式:', data)
-        throw new Error('Invalid search results format')
-      }
-      
-      const parsedResults = data.results.map((todo: any) => safeParseTodoDate(todo))
-      setTodos(parsedResults)
-      console.log('✅ setTodos完了 - 表示件数:', parsedResults.length)
-      
-    } catch (error) {
-      const errorWithStatus = error as ErrorWithStatus
-      logApiError(errorWithStatus, 'Todo検索')
-      
-      const friendlyMessage = getErrorMessage(errorWithStatus)
-      toast.error(`検索エラー: ${friendlyMessage}`)
-    } finally {
-      setIsLoading(false)
+      console.log(`📝 テキスト検索 "${searchTerm}":`, filtered.length, '件')
     }
+    
+    // 完了状態フィルター
+    if (filters.completed !== undefined) {
+      filtered = filtered.filter(todo => todo.completed === filters.completed)
+      console.log(`✅ 完了状態 "${filters.completed}":`, filtered.length, '件')
+    }
+    
+    // 優先度フィルター
+    if (filters.priority) {
+      filtered = filtered.filter(todo => todo.priority === filters.priority)
+      console.log(`⚡ 優先度 "${filters.priority}":`, filtered.length, '件')
+    }
+    
+    // カテゴリフィルター
+    if (filters.category && filters.category.trim()) {
+      const categoryTerm = filters.category.toLowerCase().trim()
+      filtered = filtered.filter(todo => 
+        todo.category && todo.category.toLowerCase().includes(categoryTerm)
+      )
+      console.log(`📂 カテゴリ "${filters.category}":`, filtered.length, '件')
+    }
+    
+    // タグフィルター
+    if (filters.tags && filters.tags.length > 0) {
+      filtered = filtered.filter(todo => {
+        const todoTags = todo.tags || []
+        return filters.tags!.some(tag => todoTags.includes(tag))
+      })
+      console.log(`🏷️ タグ "${filters.tags.join(',')}":`, filtered.length, '件')
+    }
+    
+    // 日付範囲フィルター
+    if (filters.dateRange) {
+      const now = new Date()
+      
+      if (filters.dateRange === 'overdue') {
+        filtered = filtered.filter(todo => 
+          todo.dueDate && new Date(todo.dueDate) < now && !todo.completed
+        )
+      } else if (filters.dateRange === 'today') {
+        const today = new Date()
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+        
+        filtered = filtered.filter(todo => {
+          if (!todo.dueDate) return false
+          const dueDate = new Date(todo.dueDate)
+          return dueDate >= todayStart && dueDate < todayEnd
+        })
+      } else if (filters.dateRange === 'this_week') {
+        const weekEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+        
+        filtered = filtered.filter(todo => {
+          if (!todo.dueDate) return false
+          const dueDate = new Date(todo.dueDate)
+          return dueDate >= now && dueDate <= weekEnd
+        })
+      } else if (filters.dateRange === 'no_due_date') {
+        filtered = filtered.filter(todo => !todo.dueDate)
+      }
+      console.log(`📅 日付範囲 "${filters.dateRange}":`, filtered.length, '件')
+    }
+    
+    console.log('✅ フィルター適用完了:', filtered.length, '件')
+    return filtered
   }
 
   /**
@@ -498,15 +509,18 @@ export default function TodoList() {
    */
   const handleManualSearch = () => {
     console.log('🔍 手動検索実行:', filter)
-    searchTodos(filter)
+    const filtered = applyFilters(todos, filter)
+    setFilteredTodos(filtered)
   }
 
   /**
    * 基本的なクライアントサイドフィルタリング（検索結果の表示用）
    */
   useEffect(() => {
-    setFilteredTodos(todos)
-  }, [todos])
+    console.log('📊 todos または filter 変更検知')
+    const filtered = applyFilters(todos, filter)
+    setFilteredTodos(filtered)
+  }, [todos, filter])
 
   /**
    * Todoの統計情報を計算
@@ -607,20 +621,8 @@ export default function TodoList() {
       <div className="flex justify-center">
         <button
           onClick={() => {
-            // フィルターが適用されている場合は検索を再実行、そうでなければ全データ取得
-            const hasFilters = Object.keys(filter).some(key => 
-              filter[key as keyof TodoFilters] !== undefined && 
-              filter[key as keyof TodoFilters] !== '' &&
-              !(Array.isArray(filter[key as keyof TodoFilters]) && (filter[key as keyof TodoFilters] as any[]).length === 0)
-            )
-            
-            if (hasFilters) {
-              console.log('🔄 フィルター適用中のため検索を再実行')
-              searchTodos(filter)
-            } else {
-              console.log('🔄 全データを最新取得')
-              fetchTodos(true)
-            }
+            console.log('🔄 最新データを取得')
+            fetchTodos(true)
           }}
           disabled={isLoading}
           className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
