@@ -110,6 +110,10 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     if (enablePersistence) {
       persistFilters(newFilter)
     }
+    // 自動検索実行
+    if (onManualSearch) {
+      onManualSearch()
+    }
   }
 
   const handlePriorityFilter = (priority?: Priority) => {
@@ -117,6 +121,10 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
+    }
+    // 自動検索実行
+    if (onManualSearch) {
+      onManualSearch()
     }
   }
 
@@ -165,6 +173,10 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
+    }
+    // 自動検索実行
+    if (onManualSearch) {
+      onManualSearch()
     }
   }
 
