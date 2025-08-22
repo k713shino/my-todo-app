@@ -1,32 +1,31 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x", "linux-musl", "debian-openssl-3.0.x"]
   output        = "../node_modules/.prisma/client"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "linux-musl", "debian-openssl-3.0.x"]
   engineType    = "binary"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  // Lambda/Serverless最適化設定
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
-  relationMode = "foreignKeys"
+  relationMode      = "foreignKeys"
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String          @id @default(cuid())
   name          String?
-  email         String    @unique
+  email         String          @unique
   password      String?
   emailVerified DateTime?
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
   accounts      Account[]
-  sessions      Session[]
-  todos         Todo[]
   savedSearches SavedSearch[]
   searchHistory SearchHistory[]
+  sessions      Session[]
+  todos         Todo[]
 
   @@map("users")
 }
@@ -80,10 +79,8 @@ model Todo {
   dueDate     DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-
   category    String?
   tags        String[]
-
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -94,11 +91,10 @@ model Todo {
   @@map("todos")
 }
 
-
 model SavedSearch {
   id        String   @id @default(cuid())
   name      String
-  filters   String   // JSON string of TodoFilters
+  filters   String
   createdAt DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -110,7 +106,7 @@ model SavedSearch {
 model SearchHistory {
   id        String   @id @default(cuid())
   query     String
-  filters   String   // JSON string of TodoFilters
+  filters   String
   timestamp DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

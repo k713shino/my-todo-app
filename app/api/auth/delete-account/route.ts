@@ -32,48 +32,20 @@ export async function DELETE(request: NextRequest) {
       name: session.user.name 
     })
 
-    // RDS接続チェック（フォールバック対応）
-    let isDatabaseAvailable = false
+    // データベース接続テスト（必須）
     try {
       console.log('⏳ Testing database connection...')
       const connectionTest = await prisma.$queryRaw`SELECT 1 as test, NOW() as server_time`
       console.log('✅ Database connection successful:', connectionTest)
-      isDatabaseAvailable = true
     } catch (connectionError) {
       console.error('❌ Database connection failed:', connectionError)
-      console.log('🔄 Proceeding with graceful degradation mode')
-      isDatabaseAvailable = false
-    }
-
-    if (!isDatabaseAvailable) {
-      // データベース接続失敗時の処理
-      console.log('📝 Database unavailable - simulating account deletion')
-      
-      // GDPR準拠ログ（外部システム）
-      const deletionRequest = {
-        userId,
-        userEmail: session.user.email,
-        userName: session.user.name,
-        timestamp: new Date().toISOString(),
-        confirmationText,
-        reason: reason || 'Not specified',
-        status: 'pending_database_recovery'
-      }
-      
-      console.log('📋 Logging deletion request for later processing:', deletionRequest)
-      
-      // 実際の運用では外部キューや管理システムに送信
-      // await sendToExternalQueue(deletionRequest)
-      
       return NextResponse.json({ 
-        message: 'アカウント削除リクエストを受け付けました。データベースメンテナンス中のため、24時間以内に処理を完了いたします。',
-        requestId: `del_${userId}_${Date.now()}`,
-        status: 'accepted',
-        estimatedProcessingTime: '24時間以内'
-      })
+        error: 'データベース接続に失敗しました。しばらく後に再試行してください。',
+        maintenanceMode: true
+      }, { status: 503 })
     }
 
-    // データベース利用可能時の通常処理
+    // ユーザー情報取得
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
@@ -132,23 +104,39 @@ export async function DELETE(request: NextRequest) {
       }
     })
 
-    // トランザクションでデータ削除
+    // トランザクションでデータ削除（必ず実行）
     await prisma.$transaction(async (tx) => {
+      // 1. Todoの削除
       const deletedTodos = await tx.todo.deleteMany({
         where: { userId: session.user.id }
       })
       console.log(`📝 Deleted ${deletedTodos.count} todos`)
 
+      // 2. セッションの削除
       const deletedSessions = await tx.session.deleteMany({
         where: { userId: session.user.id }
       })
       console.log(`🔑 Deleted ${deletedSessions.count} sessions`)
 
+      // 3. OAuth アカウントの削除
       const deletedAccounts = await tx.account.deleteMany({
         where: { userId: session.user.id }
       })
       console.log(`🔗 Deleted ${deletedAccounts.count} OAuth accounts`)
 
+      // 4. 保存済み検索の削除
+      const deletedSavedSearches = await tx.savedSearch.deleteMany({
+        where: { userId: session.user.id }
+      })
+      console.log(`🔍 Deleted ${deletedSavedSearches.count} saved searches`)
+
+      // 5. 検索履歴の削除
+      const deletedSearchHistory = await tx.searchHistory.deleteMany({
+        where: { userId: session.user.id }
+      })
+      console.log(`📊 Deleted ${deletedSearchHistory.count} search history entries`)
+
+      // 6. ユーザーアカウントの削除（最後）
       await tx.user.delete({
         where: { id: session.user.id }
       })
@@ -158,7 +146,26 @@ export async function DELETE(request: NextRequest) {
       maxWait: 5000,
     })
 
+    // 削除ログ記録（監査用）
     console.log('✅ Account deletion completed:', JSON.stringify(deletionStats, null, 2))
+
+    // GDPR準拠のログ（外部webhook送信）
+    if (process.env.GDPR_AUDIT_WEBHOOK) {
+      try {
+        await fetch(process.env.GDPR_AUDIT_WEBHOOK, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'account_deletion',
+            timestamp: deletionStats.deletedAt,
+            ...deletionStats
+          })
+        })
+        console.log('📋 GDPR audit log sent')
+      } catch (error) {
+        console.error('GDPR audit log failed:', error)
+      }
+    }
 
     return NextResponse.json({ 
       message: 'アカウントが正常に削除されました',
