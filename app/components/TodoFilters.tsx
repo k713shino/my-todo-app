@@ -28,6 +28,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   const [showAdvanced, setShowAdvanced] = useState(false)
   // uncontrolled inputのref
   const uncontrolledTagInputRef = useRef<HTMLInputElement>(null)
+  // 検索入力のref（フォーカス保持用）
+  const searchInputRef = useRef<HTMLInputElement>(null)
   // IME入力中かどうかのフラグ
   const [isComposing, setIsComposing] = useState(false)
   // debounce用のタイマー
@@ -120,13 +122,13 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }
 
-  const handleSearchChange = (search: string) => {
+  const handleSearchChange = useCallback((search: string) => {
     const newFilter = { ...filter, search: search || undefined }
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
     }
-  }
+  }, [filter, onFilterChange, enablePersistence, persistFilters])
 
   const handleCategoryChange = (category: string) => {
     const newFilter = { ...filter, category: category || undefined }
@@ -170,6 +172,16 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
 
   const saveCurrentSearch = async () => {
     if (!saveSearchName.trim()) return
+
+    // 同名の検索条件が既に存在するかチェック
+    const existingSearch = savedSearches.find(search => 
+      search.name.toLowerCase() === saveSearchName.trim().toLowerCase()
+    )
+    
+    if (existingSearch) {
+      alert(`「${saveSearchName.trim()}」という名前の検索条件は既に存在しています。別の名前を使用してください。`)
+      return
+    }
 
     try {
       if (process.env.NODE_ENV === 'development') {
@@ -241,6 +253,9 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     // 楽観的UI更新：即座にUIから削除
     setSavedSearches(prev => prev.filter(search => search.id !== id))
 
+    // 検索条件削除後、フィルターをクリア状態にする
+    clearFilters()
+
     // バックグラウンドで削除API呼び出し（UIはすでに更新済み）
     fetch(`/api/todos/saved-searches/${id}`, { method: 'DELETE' })
       .catch(() => {
@@ -309,9 +324,18 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
         </label>
         <div className="flex gap-2">
           <input
+            ref={searchInputRef}
             type="text"
             value={filter.search || ''}
-            onChange={(e) => handleSearchChange(e.target.value)}
+            onChange={(e) => {
+              // スクロール位置を保持
+              const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+              handleSearchChange(e.target.value)
+              // DOM更新後にスクロール位置を復元
+              requestAnimationFrame(() => {
+                window.scrollTo(0, scrollTop)
+              })
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && onManualSearch) {
                 onManualSearch()
@@ -413,7 +437,15 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
               <input
                 type="text"
                 value={filter.category || ''}
-                onChange={(e) => handleCategoryChange(e.target.value)}
+                onChange={(e) => {
+                  // スクロール位置を保持
+                  const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+                  handleCategoryChange(e.target.value)
+                  // DOM更新後にスクロール位置を復元
+                  requestAnimationFrame(() => {
+                    window.scrollTo(0, scrollTop)
+                  })
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && onManualSearch) {
                     onManualSearch()
