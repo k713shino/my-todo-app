@@ -5,6 +5,7 @@ import { Priority } from '@prisma/client'
 import type { TodoFilters, SavedSearch } from '@/types/todo'
 import { dateRangeLabels, DateRangePreset } from '@/lib/date-utils'
 import { useFilterPersistence } from '../hooks/useFilterPersistence'
+import { withScrollPreservation } from '../hooks/useScrollPreservation'
 
 interface TodoFiltersProps {
   filter: TodoFilters
@@ -118,29 +119,31 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }
 
-  const handleCompletedFilter = (completed?: boolean) => {
+  const handleCompletedFilter = withScrollPreservation((completed?: boolean) => {
     const newFilter = { ...filter, completed }
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
     }
-  }
+  })
 
-  const handlePriorityFilter = (priority?: Priority) => {
+  const handlePriorityFilter = withScrollPreservation((priority?: Priority) => {
     const newFilter = { ...filter, priority }
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
     }
-  }
+  })
 
-  // 即座に実行する検索変更ハンドラー
+  // 即座に実行する検索変更ハンドラー（スクロール位置保持付き）
   const handleSearchChangeImmediate = useCallback((search: string) => {
-    const newFilter = { ...filter, search: search || undefined }
-    onFilterChange(newFilter)
-    if (enablePersistence) {
-      persistFilters(newFilter)
-    }
+    withScrollPreservation(() => {
+      const newFilter = { ...filter, search: search || undefined }
+      onFilterChange(newFilter)
+      if (enablePersistence) {
+        persistFilters(newFilter)
+      }
+    })()
   }, [filter, onFilterChange, enablePersistence, persistFilters])
 
   // debounce版の検索変更ハンドラー
@@ -157,22 +160,16 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   }, [handleSearchChangeImmediate])
 
   const handleCategoryChange = useCallback((category: string) => {
-    // スクロール位置を事前に保存
-    const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop
-    
-    const newFilter = { ...filter, category: category || undefined }
-    onFilterChange(newFilter)
-    if (enablePersistence) {
-      persistFilters(newFilter)
-    }
-    
-    // スクロール位置を即座に復元
-    setTimeout(() => {
-      window.scrollTo(0, currentScrollTop)
-    }, 0)
+    withScrollPreservation(() => {
+      const newFilter = { ...filter, category: category || undefined }
+      onFilterChange(newFilter)
+      if (enablePersistence) {
+        persistFilters(newFilter)
+      }
+    })()
   }, [filter, onFilterChange, enablePersistence, persistFilters])
 
-  const handleTagsChange = (tagsString: string) => {
+  const handleTagsChange = withScrollPreservation((tagsString: string) => {
     // カンマを含む文字列の処理
     const tags = tagsString.trim() ? 
       tagsString.split(',').map(tag => tag.trim()).filter(Boolean) : 
@@ -182,7 +179,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     if (enablePersistence) {
       persistFilters(newFilter)
     }
-  }
+  })
 
   // debounce版のタグ更新関数（直接入力用）
   const debouncedHandleTagsChange = (tagsString: string) => {
@@ -196,13 +193,13 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   }
 
 
-  const handleDateRangeChange = (dateRange?: DateRangePreset) => {
+  const handleDateRangeChange = withScrollPreservation((dateRange?: DateRangePreset) => {
     const newFilter = { ...filter, dateRange }
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
     }
-  }
+  })
 
   const saveCurrentSearch = async () => {
     if (!saveSearchName.trim()) return
