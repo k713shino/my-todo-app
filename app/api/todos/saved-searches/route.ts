@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { prisma } from '@/lib/prisma'
+import { lambdaAPI } from '@/lib/lambda-api'
 
 // GET: 保存済み検索一覧の取得
 export async function GET(request: NextRequest) {
@@ -15,35 +15,22 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ API: 認証成功', session.user.id)
 
-    // テーブルが存在するかチェック
-    const tableExists = await prisma.$queryRaw`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'saved_searches'
-      );
-    `
+    const lambdaResponse = await lambdaAPI.get(`/saved-searches/user/${encodeURIComponent(session.user.id)}`)
     
-    console.log('🏗️ API: テーブル存在チェック:', (tableExists as any[])[0]?.exists)
-    
-    if (!(tableExists as any[])[0]?.exists) {
-      console.log('❌ API: saved_searchesテーブルが存在しません')
-      return NextResponse.json([])
-    }
-
-    const savedSearches = await prisma.savedSearch.findMany({
-      where: {
-        userId: session.user.id,
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
+    console.log('📡 Lambda API レスポンス:', {
+      success: lambdaResponse.success,
+      hasData: !!lambdaResponse.data,
+      dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0,
+      error: lambdaResponse.error
     })
 
-    console.log('📋 API: 取得した保存済み検索数:', savedSearches.length)
-    console.log('📝 API: 詳細:', savedSearches.map(s => ({ id: s.id, name: s.name })))
+    if (lambdaResponse.success && Array.isArray(lambdaResponse.data)) {
+      console.log('📋 API: 取得した保存済み検索数:', lambdaResponse.data.length)
+      return NextResponse.json(lambdaResponse.data)
+    }
 
-    return NextResponse.json(savedSearches)
+    console.log('⚠️ Lambda API 失敗:', lambdaResponse.error)
+    return NextResponse.json([])
   } catch (error) {
     console.error('Error fetching saved searches:', error)
     return NextResponse.json([])
@@ -70,32 +57,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Search name is required' }, { status: 400 })
     }
 
-    // テーブルが存在するかチェック
-    const tableExists = await prisma.$queryRaw`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'saved_searches'
-      );
-    `
-    
-    console.log('🏗️ API: テーブル存在チェック:', (tableExists as any[])[0]?.exists)
-    
-    if (!(tableExists as any[])[0]?.exists) {
-      console.log('❌ API: saved_searchesテーブルが存在しません')
-      return NextResponse.json({ error: 'SavedSearch table does not exist' }, { status: 500 })
-    }
-
-    const savedSearch = await prisma.savedSearch.create({
-      data: {
-        name: name.trim(),
-        filters: typeof filters === 'string' ? filters : JSON.stringify(filters),
-        userId: session.user.id,
-      }
+    const lambdaResponse = await lambdaAPI.post('/saved-searches', {
+      name: name.trim(),
+      filters: typeof filters === 'string' ? filters : JSON.stringify(filters),
+      userId: session.user.id,
     })
 
-    console.log('✅ API: 保存成功:', savedSearch.id, savedSearch.name)
-    return NextResponse.json(savedSearch, { status: 201 })
+    console.log('📡 Lambda API 作成レスポンス:', {
+      success: lambdaResponse.success,
+      hasData: !!lambdaResponse.data,
+      error: lambdaResponse.error
+    })
+
+    if (lambdaResponse.success && lambdaResponse.data) {
+      console.log('✅ API: 保存成功:', lambdaResponse.data.id, lambdaResponse.data.name)
+      return NextResponse.json(lambdaResponse.data, { status: 201 })
+    }
+
+    console.log('❌ Lambda API 作成失敗:', lambdaResponse.error)
+    return NextResponse.json({ 
+      error: lambdaResponse.error || 'Failed to create saved search' 
+    }, { status: 500 })
   } catch (error) {
     console.error('Error creating saved search:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

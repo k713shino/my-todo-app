@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { prisma } from '@/lib/prisma'
+import { lambdaAPI } from '@/lib/lambda-api'
 
 // DELETE: 保存済み検索の削除
 export async function DELETE(
@@ -16,36 +16,16 @@ export async function DELETE(
 
     const { id } = await params
 
-    // テーブルが存在するかチェック
-    const tableExists = await prisma.$queryRaw`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'saved_searches'
-      );
-    `
-    
-    if (!(tableExists as any[])[0]?.exists) {
-      return NextResponse.json({ error: 'SavedSearch table does not exist' }, { status: 500 })
+    const lambdaResponse = await lambdaAPI.delete(`/saved-searches/${id}`)
+
+    if (lambdaResponse.success) {
+      return NextResponse.json({ message: 'Saved search deleted successfully' })
     }
 
-    // 所有者確認
-    const existingSavedSearch = await prisma.savedSearch.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    })
-
-    if (!existingSavedSearch) {
-      return NextResponse.json({ error: 'Saved search not found' }, { status: 404 })
-    }
-
-    await prisma.savedSearch.delete({
-      where: { id },
-    })
-
-    return NextResponse.json({ message: 'Saved search deleted successfully' })
+    const status = lambdaResponse.error?.includes('not found') ? 404 : 500
+    return NextResponse.json({ 
+      error: lambdaResponse.error || 'Failed to delete saved search' 
+    }, { status })
   } catch (error) {
     console.error('Error deleting saved search:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
@@ -72,27 +52,19 @@ export async function PUT(
       return NextResponse.json({ error: 'Search name is required' }, { status: 400 })
     }
 
-    // 所有者確認
-    const existingSavedSearch = await prisma.savedSearch.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
+    const lambdaResponse = await lambdaAPI.put(`/saved-searches/${id}`, {
+      name: name.trim(),
+      filters: typeof filters === 'string' ? filters : JSON.stringify(filters),
     })
 
-    if (!existingSavedSearch) {
-      return NextResponse.json({ error: 'Saved search not found' }, { status: 404 })
+    if (lambdaResponse.success && lambdaResponse.data) {
+      return NextResponse.json(lambdaResponse.data)
     }
 
-    const updatedSavedSearch = await prisma.savedSearch.update({
-      where: { id },
-      data: {
-        name: name.trim(),
-        filters: JSON.stringify(filters),
-      }
-    })
-
-    return NextResponse.json(updatedSavedSearch)
+    const status = lambdaResponse.error?.includes('not found') ? 404 : 500
+    return NextResponse.json({ 
+      error: lambdaResponse.error || 'Failed to update saved search' 
+    }, { status })
   } catch (error) {
     console.error('Error updating saved search:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

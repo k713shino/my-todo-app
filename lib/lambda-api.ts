@@ -12,6 +12,8 @@ import type {
   UpdateUserRequest,
   RegisterUserResponse,
   LoginUserResponse,
+  SavedSearch,
+  CreateSavedSearchRequest,
 } from '../types/lambda-api';
 
 export class LambdaAPI {
@@ -312,6 +314,43 @@ export class LambdaAPI {
   }
 
   /**
+   * ユーザーの保存済み検索一覧を取得
+   */
+  async getUserSavedSearches(userId: string): Promise<SavedSearch[]> {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    return await this.request<SavedSearch[]>(`/saved-searches/user/${encodeURIComponent(userId)}`, { 
+      method: 'GET' 
+    });
+  }
+
+  /**
+   * 新しい保存済み検索を作成
+   */
+  async createSavedSearch(savedSearchData: CreateSavedSearchRequest): Promise<SavedSearch> {
+    if (!savedSearchData.name || !savedSearchData.userId) {
+      throw new Error('Name and userId are required');
+    }
+    return await this.request<SavedSearch>('/saved-searches', {
+      method: 'POST',
+      body: JSON.stringify(savedSearchData),
+    });
+  }
+
+  /**
+   * 保存済み検索を削除
+   */
+  async deleteSavedSearch(id: string): Promise<{ success: boolean; message: string }> {
+    if (!id) {
+      throw new Error('SavedSearch ID is required');
+    }
+    return await this.request(`/saved-searches/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
    * 汎用GETリクエスト（VercelAPIResponse形式の戻り値用）
    */
   async get<T = any>(endpoint: string): Promise<LambdaAPIResponse<T>> {
@@ -485,6 +524,66 @@ export class LambdaAPI {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'User fetch failed',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * ユーザーの保存済み検索一覧を取得（Wrapped）
+   */
+  async getUserSavedSearchesWrapped(userId: string): Promise<LambdaAPIResponse<SavedSearch[]>> {
+    try {
+      const response = await this.getUserSavedSearches(userId);
+      return {
+        success: true,
+        data: response,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch saved searches',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * 保存済み検索作成（Wrapped）
+   */
+  async createSavedSearchWrapped(savedSearchData: CreateSavedSearchRequest): Promise<LambdaAPIResponse<SavedSearch>> {
+    try {
+      const response = await this.createSavedSearch(savedSearchData);
+      return {
+        success: true,
+        data: response,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create saved search',
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * 保存済み検索削除（Wrapped）
+   */
+  async deleteSavedSearchWrapped(id: string): Promise<LambdaAPIResponse<{ success: boolean; message: string }>> {
+    try {
+      const response = await this.deleteSavedSearch(id);
+      return {
+        success: true,
+        data: response,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete saved search',
         timestamp: new Date().toISOString()
       };
     }
