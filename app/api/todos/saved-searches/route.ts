@@ -15,24 +15,16 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ API: 認証成功', (session as any).user.id)
 
-    const lambdaResponse = await lambdaAPI.getUserSavedSearchesWrapped((session as any).user.id)
-    
-    console.log('📡 Lambda API レスポンス:', {
-      success: lambdaResponse.success,
-      hasData: !!lambdaResponse.data,
-      dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0,
-      error: lambdaResponse.error
-    })
-
-    if (lambdaResponse.success && Array.isArray(lambdaResponse.data)) {
-      console.log('📋 API: 取得した保存済み検索数:', lambdaResponse.data.length)
-      return NextResponse.json(lambdaResponse.data)
+    try {
+      const savedSearches = await lambdaAPI.getUserSavedSearches((session as any).user.id)
+      console.log('📋 API: 取得した保存済み検索数:', savedSearches.length)
+      return NextResponse.json(savedSearches)
+    } catch (error) {
+      console.error('Error fetching saved searches:', error)
+      return NextResponse.json([])
     }
-
-    console.log('⚠️ Lambda API 失敗:', lambdaResponse.error)
-    return NextResponse.json([])
   } catch (error) {
-    console.error('Error fetching saved searches:', error)
+    console.error('Error in saved searches API:', error)
     return NextResponse.json([])
   }
 }
@@ -42,14 +34,24 @@ export async function POST(request: NextRequest) {
   try {
     console.log('💾 API: 保存済み検索作成開始')
     
-    // セッション取得のエラーハンドリングを追加
+    // セッション取得の詳細なエラーハンドリングを追加
     let session
     try {
+      console.log('🔐 セッション取得開始...')
       session = await getAuthSession()
-      console.log('🔐 セッション取得成功:', session ? 'あり' : 'なし')
+      console.log('🔐 セッション取得完了:', {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        userId: session?.user?.id,
+        userEmail: session?.user?.email
+      })
     } catch (sessionError) {
-      console.error('❌ セッション取得エラー:', sessionError)
-      return NextResponse.json({ error: 'Session error' }, { status: 500 })
+      console.error('❌ セッション取得エラー:', {
+        error: sessionError,
+        message: sessionError instanceof Error ? sessionError.message : 'Unknown',
+        stack: sessionError instanceof Error ? sessionError.stack : 'No stack'
+      })
+      return NextResponse.json({ error: 'Session error', details: sessionError instanceof Error ? sessionError.message : 'Unknown' }, { status: 500 })
     }
     
     if (!isAuthenticated(session)) {
@@ -84,28 +86,16 @@ export async function POST(request: NextRequest) {
     }
     console.log('🚀 Lambda API呼び出し開始:', requestData)
 
-    let lambdaResponse
     try {
-      lambdaResponse = await lambdaAPI.createSavedSearchWrapped(requestData)
-      console.log('📡 Lambda API 作成レスポンス受信:', {
-        success: lambdaResponse.success,
-        hasData: !!lambdaResponse.data,
-        error: lambdaResponse.error
-      })
+      const savedSearch = await lambdaAPI.createSavedSearch(requestData)
+      console.log('✅ API: 保存成功:', savedSearch)
+      return NextResponse.json(savedSearch, { status: 201 })
     } catch (lambdaError) {
       console.error('❌ Lambda API呼び出しエラー:', lambdaError)
-      return NextResponse.json({ error: 'Lambda API call failed' }, { status: 500 })
+      return NextResponse.json({ 
+        error: lambdaError instanceof Error ? lambdaError.message : 'Lambda API call failed' 
+      }, { status: 500 })
     }
-
-    if (lambdaResponse.success && lambdaResponse.data) {
-      console.log('✅ API: 保存成功:', lambdaResponse.data.id, lambdaResponse.data.name)
-      return NextResponse.json(lambdaResponse.data, { status: 201 })
-    }
-
-    console.log('❌ Lambda API 作成失敗:', lambdaResponse.error)
-    return NextResponse.json({ 
-      error: lambdaResponse.error || 'Failed to create saved search'
-    }, { status: 500 })
   } catch (error) {
     console.error('💥 予期しないエラー:', {
       message: error instanceof Error ? error.message : 'Unknown error',

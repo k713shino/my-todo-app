@@ -16,16 +16,16 @@ export async function DELETE(
 
     const { id } = await params
 
-    const lambdaResponse = await lambdaAPI.deleteSavedSearchWrapped(id)
-
-    if (lambdaResponse.success) {
+    try {
+      const result = await lambdaAPI.deleteSavedSearch(id)
       return NextResponse.json({ message: 'Saved search deleted successfully' })
+    } catch (deleteError) {
+      console.error('Delete error:', deleteError)
+      const status = deleteError instanceof Error && deleteError.message.includes('not found') ? 404 : 500
+      return NextResponse.json({ 
+        error: deleteError instanceof Error ? deleteError.message : 'Failed to delete saved search' 
+      }, { status })
     }
-
-    const status = lambdaResponse.error?.includes('not found') ? 404 : 500
-    return NextResponse.json({ 
-      error: lambdaResponse.error || 'Failed to delete saved search' 
-    }, { status })
   } catch (error) {
     console.error('Error deleting saved search:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
