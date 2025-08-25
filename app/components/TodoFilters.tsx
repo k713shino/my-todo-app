@@ -26,6 +26,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveSearchName, setSaveSearchName] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  // 検索入力フィールドのローカル状態
+  const [searchInputValue, setSearchInputValue] = useState(filter.search || '')
   // uncontrolled inputのref
   const uncontrolledTagInputRef = useRef<HTMLInputElement>(null)
   // 検索入力のref（フォーカス保持用）
@@ -34,6 +36,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   const [isComposing, setIsComposing] = useState(false)
   // debounce用のタイマー
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  // 検索用debounceタイマー
+  const searchDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // フィルター永続化フック
   const { persistFilters, loadPersistedFilters, clearPersistedFilters } = useFilterPersistence()
@@ -86,11 +90,19 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }, [loadSavedSearches, enablePersistence, loadPersistedFilters, onFilterChange])
 
+  // 検索入力値をフィルター変更に同期
+  useEffect(() => {
+    setSearchInputValue(filter.search || '')
+  }, [filter.search])
+
   // コンポーネントアンマウント時のクリーンアップ
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
+      }
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current)
       }
     }
   }, [])
@@ -122,7 +134,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }
 
-  const handleSearchChange = useCallback((search: string) => {
+  // 即座に実行する検索変更ハンドラー
+  const handleSearchChangeImmediate = useCallback((search: string) => {
     const newFilter = { ...filter, search: search || undefined }
     onFilterChange(newFilter)
     if (enablePersistence) {
@@ -130,13 +143,34 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }, [filter, onFilterChange, enablePersistence, persistFilters])
 
-  const handleCategoryChange = (category: string) => {
+  // debounce版の検索変更ハンドラー
+  const handleSearchChange = useCallback((search: string) => {
+    // 既存のタイマーをクリア
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current)
+    }
+    
+    // 200msのdebounceでフィルター更新を遅延
+    searchDebounceTimerRef.current = setTimeout(() => {
+      handleSearchChangeImmediate(search)
+    }, 200)
+  }, [handleSearchChangeImmediate])
+
+  const handleCategoryChange = useCallback((category: string) => {
+    // スクロール位置を事前に保存
+    const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop
+    
     const newFilter = { ...filter, category: category || undefined }
     onFilterChange(newFilter)
     if (enablePersistence) {
       persistFilters(newFilter)
     }
-  }
+    
+    // スクロール位置を即座に復元
+    setTimeout(() => {
+      window.scrollTo(0, currentScrollTop)
+    }, 0)
+  }, [filter, onFilterChange, enablePersistence, persistFilters])
 
   const handleTagsChange = (tagsString: string) => {
     // カンマを含む文字列の処理
@@ -326,19 +360,22 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
           <input
             ref={searchInputRef}
             type="text"
-            value={filter.search || ''}
+            value={searchInputValue}
             onChange={(e) => {
-              // スクロール位置を保持
-              const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-              handleSearchChange(e.target.value)
-              // DOM更新後にスクロール位置を復元
-              requestAnimationFrame(() => {
-                window.scrollTo(0, scrollTop)
-              })
+              const newValue = e.target.value
+              setSearchInputValue(newValue)
+              handleSearchChange(newValue)
             }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && onManualSearch) {
-                onManualSearch()
+              if (e.key === 'Enter') {
+                // Enterキーで即座にフィルターを適用
+                if (searchDebounceTimerRef.current) {
+                  clearTimeout(searchDebounceTimerRef.current)
+                }
+                handleSearchChangeImmediate(searchInputValue)
+                if (onManualSearch) {
+                  onManualSearch()
+                }
               }
             }}
             placeholder="タイトル・説明・カテゴリで検索..."
@@ -437,15 +474,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
               <input
                 type="text"
                 value={filter.category || ''}
-                onChange={(e) => {
-                  // スクロール位置を保持
-                  const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-                  handleCategoryChange(e.target.value)
-                  // DOM更新後にスクロール位置を復元
-                  requestAnimationFrame(() => {
-                    window.scrollTo(0, scrollTop)
-                  })
-                }}
+                onChange={(e) => handleCategoryChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && onManualSearch) {
                     onManualSearch()
