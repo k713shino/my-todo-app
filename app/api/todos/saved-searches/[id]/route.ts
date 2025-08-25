@@ -16,7 +16,7 @@ export async function DELETE(
 
     const { id } = await params
 
-    const lambdaResponse = await lambdaAPI.delete(`/saved-searches/${id}`)
+    const lambdaResponse = await lambdaAPI.deleteSavedSearchWrapped(id)
 
     if (lambdaResponse.success) {
       return NextResponse.json({ message: 'Saved search deleted successfully' })
