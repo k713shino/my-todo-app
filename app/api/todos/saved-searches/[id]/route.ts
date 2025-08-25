@@ -17,7 +17,10 @@ export async function DELETE(
     const { id } = await params
 
     try {
-      const result = await lambdaAPI.deleteSavedSearch(id)
+      // ユーザーIDをパラメータとして渡すために、直接requestメソッドを使用
+      const result = await lambdaAPI.request(`/saved-searches/${id}?userId=${encodeURIComponent((session as any).user.id)}`, {
+        method: 'DELETE',
+      })
       return NextResponse.json({ message: 'Saved search deleted successfully' })
     } catch (deleteError) {
       console.error('Delete error:', deleteError)
