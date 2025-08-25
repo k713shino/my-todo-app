@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import { useSession } from 'next-auth/react'
-import toast from 'react-hot-toast'
 import { getAuthMethodFromUserId } from '@/lib/user-id-utils'
+import PasswordStrengthIndicator from './PasswordStrengthIndicator'
+import PasswordChangeModal from './PasswordChangeModal'
+import { validatePassword } from '@/lib/password-validation'
 
 export default function PasswordChangeForm() {
   const { data: session } = useSession()
@@ -12,6 +14,11 @@ export default function PasswordChangeForm() {
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
+  })
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    success: false,
+    message: ''
   })
 
   // クレデンシャル認証でない場合は表示しない
@@ -26,12 +33,21 @@ export default function PasswordChangeForm() {
     e.preventDefault()
 
     if (formData.newPassword !== formData.confirmPassword) {
-      toast.error('新しいパスワードが一致しません')
+      setModalState({
+        isOpen: true,
+        success: false,
+        message: '新しいパスワードが一致しません。もう一度確認してください。'
+      })
       return
     }
 
-    if (formData.newPassword.length < 8) {
-      toast.error('パスワードは8文字以上で入力してください')
+    const passwordValidation = validatePassword(formData.newPassword)
+    if (!passwordValidation.isValid) {
+      setModalState({
+        isOpen: true,
+        success: false,
+        message: 'パスワードが要件を満たしていません。\n' + passwordValidation.feedback.join('\n')
+      })
       return
     }
 
@@ -58,10 +74,18 @@ export default function PasswordChangeForm() {
         newPassword: '',
         confirmPassword: ''
       })
-      toast.success('パスワードを変更しました')
+      setModalState({
+        isOpen: true,
+        success: true,
+        message: 'パスワードが正常に変更されました。次回ログイン時から新しいパスワードをご利用ください。'
+      })
     } catch (error) {
       console.error('Password change error:', error)
-      toast.error(error instanceof Error ? error.message : 'パスワードの変更に失敗しました')
+      setModalState({
+        isOpen: true,
+        success: false,
+        message: error instanceof Error ? error.message : 'パスワードの変更に失敗しました。しばらく時間を置いてから再度お試しください。'
+      })
     } finally {
       setIsLoading(false)
     }
@@ -99,9 +123,12 @@ export default function PasswordChangeForm() {
             minLength={8}
             required
           />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            8文字以上で入力してください
-          </p>
+          {formData.newPassword && (
+            <PasswordStrengthIndicator 
+              password={formData.newPassword}
+              showRequirements={true}
+            />
+          )}
         </div>
 
         <div>
@@ -119,12 +146,19 @@ export default function PasswordChangeForm() {
 
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || !validatePassword(formData.newPassword).isValid}
           className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? '変更中...' : 'パスワードを変更'}
         </button>
       </form>
+      
+      <PasswordChangeModal 
+        isOpen={modalState.isOpen}
+        onClose={() => setModalState({ isOpen: false, success: false, message: '' })}
+        success={modalState.success}
+        message={modalState.message}
+      />
     </div>
   )
 }

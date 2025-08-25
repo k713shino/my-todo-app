@@ -2,6 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
+import { getAuthMethodFromUserId } from '@/lib/user-id-utils'
 
 interface AuthMethod {
   provider: string
@@ -21,17 +22,31 @@ export default function AuthMethodDisplay({ className = '' }: AuthMethodDisplayP
     const fetchAuthMethods = async () => {
       if (!session?.user?.id) return
 
+      // ユーザーIDから認証方法を判定
+      const authMethod = getAuthMethodFromUserId(session.user.id)
+      
+      // 認証方法に基づいてデータを設定
+      const detectedAuthMethod: AuthMethod = {
+        provider: authMethod === 'unknown' ? 'credentials' : authMethod,
+        providerAccountId: authMethod === 'email' ? 'email' : session.user.id.split('_')[1] || 'unknown'
+      }
+
       try {
         const response = await fetch('/api/user/auth-methods')
         if (response.ok) {
           const data = await response.json()
           console.log('認証方法データ:', data)
-          setAuthMethods(data.authMethods || [])
+          // APIからデータが取得できた場合はそちらを使用、できない場合は検出した認証方法を使用
+          setAuthMethods(data.authMethods && data.authMethods.length > 0 ? data.authMethods : [detectedAuthMethod])
         } else {
           console.error('認証方法取得エラー:', response.status, response.statusText)
+          // エラーの場合は検出した認証方法を使用
+          setAuthMethods([detectedAuthMethod])
         }
       } catch (error) {
         console.error('Failed to fetch auth methods:', error)
+        // エラーの場合は検出した認証方法を使用
+        setAuthMethods([detectedAuthMethod])
       } finally {
         setIsLoading(false)
       }
@@ -75,9 +90,14 @@ export default function AuthMethodDisplay({ className = '' }: AuthMethodDisplayP
   }
 
   if (authMethods.length === 0) {
+    // セッションから認証方法を推定
+    const authMethod = session?.user?.id ? getAuthMethodFromUserId(session.user.id) : 'email'
+    const providerName = getProviderName(authMethod === 'unknown' ? 'credentials' : authMethod)
+    const providerIcon = getProviderIcon(authMethod === 'unknown' ? 'credentials' : authMethod)
+    
     return (
       <div className={`text-sm text-gray-600 dark:text-gray-400 ${className}`}>
-        📧 メールアドレス認証
+        {providerIcon} {providerName}
       </div>
     )
   }
