@@ -59,13 +59,15 @@ export function validatePassword(password: string): PasswordStrength {
     feedback.push('特殊文字を含む必要があります')
   }
 
-  const isValid = Object.values(requirements).every(req => req)
+  // 5つの要件のうち3つ以上満たされていればOK
+  const fulfilledCount = Object.values(requirements).filter(req => req).length
+  const isValid = fulfilledCount >= 3
 
   return {
     isValid,
     score,
     requirements,
-    feedback: isValid ? ['パスワード強度: 良好'] : feedback
+    feedback: isValid ? [`パスワード強度: 良好 (${fulfilledCount}/5条件達成)`] : [`${fulfilledCount}/5条件達成 (3つ以上必要)`]
   }
 }
 

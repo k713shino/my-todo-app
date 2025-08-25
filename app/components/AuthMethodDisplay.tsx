@@ -25,31 +25,19 @@ export default function AuthMethodDisplay({ className = '' }: AuthMethodDisplayP
       // ユーザーIDから認証方法を判定
       const authMethod = getAuthMethodFromUserId(session.user.id)
       
+      // NextAuthのセッションから追加情報を取得
+      console.log('セッション情報:', session)
+      console.log('検出された認証方法:', authMethod)
+      
       // 認証方法に基づいてデータを設定
       const detectedAuthMethod: AuthMethod = {
         provider: authMethod === 'unknown' ? 'credentials' : authMethod,
         providerAccountId: authMethod === 'email' ? 'email' : session.user.id.split('_')[1] || 'unknown'
       }
 
-      try {
-        const response = await fetch('/api/user/auth-methods')
-        if (response.ok) {
-          const data = await response.json()
-          console.log('認証方法データ:', data)
-          // APIからデータが取得できた場合はそちらを使用、できない場合は検出した認証方法を使用
-          setAuthMethods(data.authMethods && data.authMethods.length > 0 ? data.authMethods : [detectedAuthMethod])
-        } else {
-          console.error('認証方法取得エラー:', response.status, response.statusText)
-          // エラーの場合は検出した認証方法を使用
-          setAuthMethods([detectedAuthMethod])
-        }
-      } catch (error) {
-        console.error('Failed to fetch auth methods:', error)
-        // エラーの場合は検出した認証方法を使用
-        setAuthMethods([detectedAuthMethod])
-      } finally {
-        setIsLoading(false)
-      }
+      // セッション情報から直接認証方法を判定して設定
+      setAuthMethods([detectedAuthMethod])
+      setIsLoading(false)
     }
 
     fetchAuthMethods()

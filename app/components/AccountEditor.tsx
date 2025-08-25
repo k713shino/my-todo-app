@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
+import { getAuthMethodFromUserId } from '@/lib/user-id-utils'
 
 interface AccountEditorProps {
   className?: string
@@ -17,6 +18,10 @@ export default function AccountEditor({ className = '' }: AccountEditorProps) {
     name: session?.user?.name || '',
     image: session?.user?.image || ''
   })
+
+  // OAuth認証かどうかを判定
+  const authMethod = session?.user?.id ? getAuthMethodFromUserId(session.user.id) : 'email'
+  const isOAuthUser = authMethod === 'google' || authMethod === 'github'
 
   // フォームデータをセッション変更時に同期
   useEffect(() => {
@@ -161,7 +166,12 @@ export default function AccountEditor({ className = '' }: AccountEditorProps) {
       </div>
 
       <div className="flex items-center space-x-3">
-        {isEditing ? (
+        {isOAuthUser ? (
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            <p>🔒 OAuth認証のため編集できません</p>
+            <p className="text-xs mt-1">プロフィール情報は連携サービスから自動取得されます</p>
+          </div>
+        ) : isEditing ? (
           <>
             <button
               onClick={handleSave}
