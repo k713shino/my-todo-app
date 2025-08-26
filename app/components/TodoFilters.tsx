@@ -45,9 +45,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   const { persistFilters, loadPersistedFilters, clearPersistedFilters } = useFilterPersistence()
   
   // デバッグフック（開発環境でのみ有効）
-  if (process.env.NODE_ENV === 'development') {
-    usePageMovementDebugger()
-  }
+  // 注意: 条件付きhook呼び出しは避け、hooks内で条件分岐させる
+  usePageMovementDebugger()
 
   // 保存済み検索の状態変更をデバッグ（最適化）
   useEffect(() => {
@@ -357,94 +356,83 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
               </button>
             </>
           )}
+
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="px-2 py-1 text-xs sm:text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 transition-colors bg-gray-50 dark:bg-gray-700 rounded"
+            className="px-2 py-1 text-xs sm:text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors bg-gray-100 dark:bg-gray-700 rounded"
           >
-            {showAdvanced ? '📝 簡単' : '🔧 詳細'}
+            ⚙️ {showAdvanced ? '簡易' : '詳細'}
           </button>
         </div>
       </div>
 
-      {/* 検索バー - モバイル最適化 */}
-      <div className="mb-3 sm:mb-4">
-        <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">
-          🔍 キーワード検索
-        </label>
-        <div className="flex gap-2">
+      {/* 検索バー */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex-1">
           <input
             ref={searchInputRef}
             type="text"
             value={searchInputValue}
             onChange={(e) => {
               const newValue = e.target.value
-              console.log('🔎 検索入力onChange:', {
-                newValue,
-                scrollBefore: {
-                  top: window.pageYOffset || document.documentElement.scrollTop,
-                  left: window.pageXOffset || document.documentElement.scrollLeft
-                },
-                timestamp: new Date().toISOString()
-              })
-              
               setSearchInputValue(newValue)
-              handleSearchChange(newValue)
+              console.log('🔤 検索入力onChange:', newValue)
               
-              // 処理後のスクロール位置もログ
-              setTimeout(() => {
-                console.log('🔎 検索入力onChange後:', {
-                  scrollAfter: {
-                    top: window.pageYOffset || document.documentElement.scrollTop,
-                    left: window.pageXOffset || document.documentElement.scrollLeft
-                  }
-                })
-              }, 0)
+              // IME入力中でなければ即座にdebounce検索を開始
+              if (!isComposing) {
+                handleSearchChange(newValue)
+              }
+            }}
+            onCompositionStart={() => {
+              console.log('🌏 IME入力開始')
+              setIsComposing(true)
+            }}
+            onCompositionEnd={(e) => {
+              console.log('🌏 IME入力終了:', e.currentTarget.value)
+              setIsComposing(false)
+              // IME入力が確定したら検索実行
+              handleSearchChange(e.currentTarget.value)
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault() // フォーム送信によるページリロードを防止
-                // Enterキーで即座にフィルターを適用
-                if (searchDebounceTimerRef.current) {
-                  clearTimeout(searchDebounceTimerRef.current)
-                }
-                handleSearchChangeImmediate(searchInputValue)
+                console.log('⚡ Enter押下 - 手動検索実行:', searchInputValue)
+                handleSearchChangeImmediate(searchInputValue) // Enter時は即座に検索実行
                 if (onManualSearch) {
                   onManualSearch()
                 }
               }
             }}
-            placeholder="タイトル・説明・カテゴリで検索..."
-            className="flex-1 px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
+            placeholder="キーワード検索（タイトル・説明）"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm transition-colors"
           />
-          {onManualSearch && (
-            <button
-              onClick={onManualSearch}
-              className="px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition-colors flex items-center min-w-[44px] justify-center"
-              title="検索実行 (Enter)"
-            >
-              <span className="text-base sm:text-lg">🔍</span>
-            </button>
-          )}
         </div>
+        <button
+          onClick={() => {
+            console.log('🔍 手動検索ボタンクリック:', searchInputValue)
+            handleSearchChangeImmediate(searchInputValue) // 手動検索ボタンは即座に実行
+            if (onManualSearch) {
+              onManualSearch()
+            }
+          }}
+          className="px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm whitespace-nowrap dark:bg-purple-500 dark:hover:bg-purple-600"
+        >
+          🔍 検索
+        </button>
       </div>
 
-      {/* 基本フィルター - モバイル対応 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-
+      {/* 基本フィルター */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* 完了状態 */}
         <div>
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            📋 完了状態
-          </label>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">完了状態</label>
           <select
             value={filter.completed === undefined ? '' : filter.completed.toString()}
             onChange={(e) => {
-              const value = e.target.value
-              handleCompletedFilter(
-                value === '' ? undefined : value === 'true'
-              )
+              const value = e.target.value === '' ? undefined : e.target.value === 'true'
+              handleCompletedFilter(value)
             }}
-            className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
             <option value="">すべて</option>
             <option value="false">未完了</option>
@@ -454,144 +442,99 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
 
         {/* 優先度 */}
         <div>
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            ⚡ 優先度
-          </label>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">優先度</label>
           <select
             value={filter.priority || ''}
             onChange={(e) => {
-              const value = e.target.value
-              handlePriorityFilter(value === '' ? undefined : value as Priority)
+              const value = e.target.value as Priority || undefined
+              handlePriorityFilter(value)
             }}
-            className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
             <option value="">すべて</option>
-            {Object.entries(priorityLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
+            <option value="URGENT">🔥 緊急</option>
+            <option value="HIGH">🔴 高</option>
+            <option value="MEDIUM">🟡 中</option>
+            <option value="LOW">🔵 低</option>
           </select>
         </div>
 
         {/* 日付範囲 */}
         <div>
-          <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            📅 期限
-          </label>
+          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">期限</label>
           <select
             value={filter.dateRange || ''}
             onChange={(e) => {
-              const value = e.target.value
-              handleDateRangeChange(value === '' ? undefined : value as DateRangePreset)
+              const value = e.target.value as DateRangePreset || undefined
+              handleDateRangeChange(value)
             }}
-            className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
+            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
             <option value="">すべて</option>
-            {Object.entries(dateRangeLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
+            <option value="overdue">📅 期限切れ</option>
+            <option value="today">📅 今日</option>
+            <option value="tomorrow">📅 明日</option>
+            <option value="this_week">📅 今週</option>
+            <option value="next_week">📅 来週</option>
+            <option value="this_month">📅 今月</option>
+            <option value="next_month">📅 来月</option>
+            <option value="no_due_date">📅 期限なし</option>
           </select>
         </div>
+
+        {/* カテゴリ（詳細表示時のみ） */}
+        {showAdvanced && (
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">カテゴリ</label>
+            <input
+              type="text"
+              value={filter.category || ''}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              placeholder="カテゴリ名"
+              className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+        )}
       </div>
 
-      {/* 詳細フィルター - モバイル対応 */}
+      {/* 詳細フィルター（展開時のみ表示） */}
       {showAdvanced && (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-3 sm:pt-4 space-y-3 sm:space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            {/* カテゴリ */}
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">
-                📂 カテゴリ
-              </label>
-              <input
-                type="text"
-                value={filter.category || ''}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && onManualSearch) {
-                    e.preventDefault() // フォーム送信によるページリロードを防止
-                    onManualSearch()
-                  }
-                }}
-                placeholder="カテゴリで絞り込み"
-                className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
-              />
-            </div>
-
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
+          <div className="grid grid-cols-1 gap-3">
             {/* タグ */}
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">
-                🏷️ タグ
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                タグ（カンマ区切り）
               </label>
               <input
                 ref={uncontrolledTagInputRef}
                 type="text"
                 defaultValue={filter.tags?.join(', ') || ''}
-                onChange={(e) => {
-                  // IME入力中は即座に更新、直接入力はdebounce
-                  if (isComposing) {
-                    // IME入力中は何もしない（onCompositionEndで処理）
-                    return
-                  } else {
-                    // 直接入力時はdebounce処理
-                    debouncedHandleTagsChange(e.target.value)
-                  }
-                }}
-                onCompositionStart={() => {
-                  setIsComposing(true)
-                }}
-                onCompositionEnd={(e) => {
-                  setIsComposing(false)
-                  // IME入力完了時は即座に更新
-                  handleTagsChange((e.target as HTMLInputElement).value)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && onManualSearch && !isComposing) {
-                    e.preventDefault()
-                    onManualSearch()
-                  }
-                }}
-                placeholder="タグをカンマ区切りで入力"
-                className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
-                autoComplete="off"
-                spellCheck="false"
+                onChange={(e) => debouncedHandleTagsChange(e.target.value)}
+                placeholder="重要, 仕事, プライベート"
+                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* 保存済み検索 - モバイル対応 */}
-      {savedSearches.length > 0 ? (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-3 sm:pt-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 sm:mb-3">
-            <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-              💾 保存済み検索 ({savedSearches.length}件)
-            </h4>
-            <button
-              onClick={loadSavedSearches}
-              className="self-start sm:self-auto px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors bg-gray-50 dark:bg-gray-700 rounded min-w-[44px]"
-              title="再読み込み"
-            >
-              🔄 更新
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {savedSearches.map((savedSearch) => (
-              <div key={savedSearch.id} className="flex items-center space-x-1">
+      {/* 保存済み検索 */}
+      {savedSearches.length > 0 && (
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
+          <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">💾 保存済み検索</h4>
+          <div className="flex flex-wrap gap-1">
+            {savedSearches.map(savedSearch => (
+              <div key={savedSearch.id} className="flex items-center">
                 <button
                   onClick={() => loadSavedSearch(savedSearch)}
-                  className="px-3 py-2 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-l hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
                   {savedSearch.name}
                 </button>
                 <button
                   onClick={() => deleteSavedSearch(savedSearch.id, savedSearch.name)}
-                  className="w-6 h-6 sm:w-4 sm:h-4 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center justify-center min-w-[44px] min-h-[44px] sm:min-w-[auto] sm:min-h-[auto]"
-                  title="削除"
+                  className="px-1 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-r hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
                 >
                   ×
                 </button>
@@ -599,46 +542,35 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
             ))}
           </div>
         </div>
-      ) : (
-        // 開発用デバッグ表示
-        process.env.NODE_ENV === 'development' && (
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-3 sm:pt-4">
-            <div className="text-xs text-gray-400">
-              💭 保存済み検索: {savedSearches.length}件（非表示）
-            </div>
-          </div>
-        )
       )}
 
-      {/* 検索保存ダイアログ - モバイル対応 */}
+      {/* 検索保存ダイアログ */}
       {showSaveDialog && (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-3 sm:pt-4">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               value={saveSearchName}
               onChange={(e) => setSaveSearchName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault() // フォーム送信によるページリロードを防止
-                  saveCurrentSearch() // Enterキーで保存実行
-                }
-              }}
-              placeholder="検索名を入力"
-              className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
+              placeholder="検索条件の名前"
+              className="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <div className="flex gap-2 sm:gap-0 sm:space-x-2">
+            <div className="flex gap-2">
               <button
                 onClick={saveCurrentSearch}
-                className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white text-sm sm:text-base rounded-lg hover:bg-blue-700 transition-colors min-w-[44px] min-h-[44px]"
+                disabled={!saveSearchName.trim()}
+                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                💾 保存
+                保存
               </button>
               <button
-                onClick={() => setShowSaveDialog(false)}
-                className="flex-1 sm:flex-none px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm sm:text-base rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors min-w-[44px] min-h-[44px]"
+                onClick={() => {
+                  setShowSaveDialog(false)
+                  setSaveSearchName('')
+                }}
+                className="px-3 py-1.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
               >
-                ❌ キャンセル
+                キャンセル
               </button>
             </div>
           </div>

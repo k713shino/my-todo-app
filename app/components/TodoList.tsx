@@ -660,11 +660,30 @@ export default function TodoList() {
         }}
       />
 
-      {/* Todo統計パネル */}
-      <TodoStats stats={stats} />
+      {/* Todo統計表示 */}
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+          <div>
+            <div className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
+            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">合計</div>
+          </div>
+          <div>
+            <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{stats.completed}</div>
+            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">完了</div>
+          </div>
+          <div>
+            <div className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.active}</div>
+            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">未完了</div>
+          </div>
+          <div>
+            <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{stats.overdue}</div>
+            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">期限切れ</div>
+          </div>
+        </div>
+      </div>
 
       {/* Todoフィルター（検索・フィルター機能） */}
-      <TodoFilters 
+      <TodoFiltersComponent 
         filter={filter}
         onFilterChange={setFilter}
         onManualSearch={handleManualSearch}
@@ -674,21 +693,19 @@ export default function TodoList() {
       {editingTodo ? (
         <TodoForm
           onSubmit={handleEditSubmit}
-          isSubmitting={isSubmitting}
+          isLoading={isSubmitting}
           initialData={{
             title: editingTodo.title,
             description: editingTodo.description || '',
             priority: editingTodo.priority,
-            dueDate: editingTodo.dueDate ? formatDateForInput(editingTodo.dueDate) : '',
+            dueDate: editingTodo.dueDate,
           }}
-          submitButtonText="💾 更新"
           onCancel={() => setEditingTodo(null)}
         />
       ) : (
         <TodoForm
           onSubmit={handleCreateTodo}
-          isSubmitting={isSubmitting}
-          submitButtonText="📝 作成"
+          isLoading={isSubmitting}
         />
       )}
 
@@ -732,75 +749,6 @@ export default function TodoList() {
               />
             ))}
           </>
-        )}
-      </div>
-    </div>
-  )
-}
-      />
-
-      {/* パフォーマンス状態表示 */}
-      {lambdaWarmedUp && (
-        <div className="hidden sm:block text-xs text-green-600 dark:text-green-400 text-center">
-          🚀 高速モード有効
-        </div>
-      )}
-
-      {/* 統計表示 */}
-      <TodoStatsDisplay stats={stats} />
-
-      {/* Todoフォーム */}
-      <TodoForm
-        onSubmit={editingTodo ? handleEditSubmit : handleCreateTodo}
-        onCancel={editingTodo ? () => setEditingTodo(null) : undefined}
-        initialData={editingTodo || undefined}
-        isLoading={isSubmitting}
-      />
-
-      {/* フィルター */}
-      <TodoFiltersComponent 
-        filter={filter} 
-        onFilterChange={setFilter}
-        onManualSearch={handleManualSearch}
-        enablePersistence={true}
-      />
-
-      {/* 手動更新ボタン */}
-      <div className="flex justify-center">
-        <button
-          onClick={() => {
-            console.log('🔄 最新データを取得')
-            fetchTodos(true)
-          }}
-          disabled={isLoading}
-          className="px-4 py-2 bg-purple-600 dark:bg-purple-500 text-white rounded-lg hover:bg-purple-700 dark:hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors"
-        >
-          <span className={isLoading ? 'animate-spin' : ''}>🔄</span>
-          <span>{isLoading ? '更新中...' : '最新データを取得'}</span>
-        </button>
-      </div>
-
-      {/* Todoリスト */}
-      <div className="space-y-4">
-        {filteredTodos.length > 0 ? (
-          filteredTodos.map(todo => (
-            <TodoItem
-              key={todo.id}
-              todo={todo}
-              onUpdate={handleUpdateTodo}
-              onEdit={setEditingTodo}
-              onDelete={handleDeleteTodo}
-              isLoading={isSubmitting}
-            />
-          ))
-        ) : (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            {filter.completed !== undefined || filter.priority || filter.search ? (
-              <p>🔍 条件に一致するTodoがありません</p>
-            ) : (
-              <p>📝 まだTodoがありません。最初のTodoを作成しましょう！</p>
-            )}
-          </div>
         )}
       </div>
     </div>

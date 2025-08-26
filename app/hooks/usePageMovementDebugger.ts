@@ -8,6 +8,11 @@ import { useEffect } from 'react'
  */
 export function usePageMovementDebugger() {
   useEffect(() => {
+    // 開発環境でのみデバッグ機能を有効化
+    if (process.env.NODE_ENV !== 'development') {
+      return
+    }
+
     console.log('🔍 ページ移動デバッガー開始')
     
     // 1. ページリロード検出
