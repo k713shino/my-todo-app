@@ -96,8 +96,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         category: modalSearchValues.category || '',
         tags: modalSearchValues.tags.length > 0 ? modalSearchValues.tags : undefined,
         completed: modalSearchValues.completed,
-        priority: modalSearchValues.priority || undefined,
-        dateRange: modalSearchValues.dateRange || undefined
+        priority: modalSearchValues.priority as Priority | undefined,
+        dateRange: (modalSearchValues.dateRange as TodoFilters['dateRange']) || undefined
       }
       
       // 空の値は除去
