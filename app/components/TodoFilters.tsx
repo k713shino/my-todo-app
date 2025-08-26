@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, startTransition } from 'react'
 import { Priority } from '@prisma/client'
 import type { TodoFilters, SavedSearch } from '@/types/todo'
 import { dateRangeLabels, DateRangePreset } from '@/lib/date-utils'
@@ -120,29 +120,35 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   }
 
   const handleCompletedFilter = withScrollPreservation((completed?: boolean) => {
-    const newFilter = { ...filter, completed }
-    onFilterChange(newFilter)
-    if (enablePersistence) {
-      persistFilters(newFilter)
-    }
+    startTransition(() => {
+      const newFilter = { ...filter, completed }
+      onFilterChange(newFilter)
+      if (enablePersistence) {
+        persistFilters(newFilter)
+      }
+    })
   })
 
   const handlePriorityFilter = withScrollPreservation((priority?: Priority) => {
-    const newFilter = { ...filter, priority }
-    onFilterChange(newFilter)
-    if (enablePersistence) {
-      persistFilters(newFilter)
-    }
+    startTransition(() => {
+      const newFilter = { ...filter, priority }
+      onFilterChange(newFilter)
+      if (enablePersistence) {
+        persistFilters(newFilter)
+      }
+    })
   })
 
   // 即座に実行する検索変更ハンドラー（スクロール位置保持付き）
   const handleSearchChangeImmediate = useCallback((search: string) => {
     withScrollPreservation(() => {
-      const newFilter = { ...filter, search: search || undefined }
-      onFilterChange(newFilter)
-      if (enablePersistence) {
-        persistFilters(newFilter)
-      }
+      startTransition(() => {
+        const newFilter = { ...filter, search: search || undefined }
+        onFilterChange(newFilter)
+        if (enablePersistence) {
+          persistFilters(newFilter)
+        }
+      })
     })()
   }, [filter, onFilterChange, enablePersistence, persistFilters])
 
@@ -161,24 +167,28 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
 
   const handleCategoryChange = useCallback((category: string) => {
     withScrollPreservation(() => {
-      const newFilter = { ...filter, category: category || undefined }
-      onFilterChange(newFilter)
-      if (enablePersistence) {
-        persistFilters(newFilter)
-      }
+      startTransition(() => {
+        const newFilter = { ...filter, category: category || undefined }
+        onFilterChange(newFilter)
+        if (enablePersistence) {
+          persistFilters(newFilter)
+        }
+      })
     })()
   }, [filter, onFilterChange, enablePersistence, persistFilters])
 
   const handleTagsChange = withScrollPreservation((tagsString: string) => {
-    // カンマを含む文字列の処理
-    const tags = tagsString.trim() ? 
-      tagsString.split(',').map(tag => tag.trim()).filter(Boolean) : 
-      undefined
-    const newFilter = { ...filter, tags }
-    onFilterChange(newFilter)
-    if (enablePersistence) {
-      persistFilters(newFilter)
-    }
+    startTransition(() => {
+      // カンマを含む文字列の処理
+      const tags = tagsString.trim() ? 
+        tagsString.split(',').map(tag => tag.trim()).filter(Boolean) : 
+        undefined
+      const newFilter = { ...filter, tags }
+      onFilterChange(newFilter)
+      if (enablePersistence) {
+        persistFilters(newFilter)
+      }
+    })
   })
 
   // debounce版のタグ更新関数（直接入力用）
@@ -194,11 +204,13 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
 
 
   const handleDateRangeChange = withScrollPreservation((dateRange?: DateRangePreset) => {
-    const newFilter = { ...filter, dateRange }
-    onFilterChange(newFilter)
-    if (enablePersistence) {
-      persistFilters(newFilter)
-    }
+    startTransition(() => {
+      const newFilter = { ...filter, dateRange }
+      onFilterChange(newFilter)
+      if (enablePersistence) {
+        persistFilters(newFilter)
+      }
+    })
   })
 
   const saveCurrentSearch = async () => {
@@ -365,6 +377,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                e.preventDefault() // フォーム送信によるページリロードを防止
                 // Enterキーで即座にフィルターを適用
                 if (searchDebounceTimerRef.current) {
                   clearTimeout(searchDebounceTimerRef.current)
@@ -474,6 +487,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
                 onChange={(e) => handleCategoryChange(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && onManualSearch) {
+                    e.preventDefault() // フォーム送信によるページリロードを防止
                     onManualSearch()
                   }
                 }}
@@ -579,6 +593,12 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
               type="text"
               value={saveSearchName}
               onChange={(e) => setSaveSearchName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault() // フォーム送信によるページリロードを防止
+                  saveCurrentSearch() // Enterキーで保存実行
+                }
+              }}
               placeholder="検索名を入力"
               className="flex-1 px-3 sm:px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-400 focus:border-transparent"
             />
