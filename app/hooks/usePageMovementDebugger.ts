@@ -95,31 +95,36 @@ export function usePageMovementDebugger() {
       console.log('🧭 NAVIGATION - popState:', e.state)
     }
     
-    // 6. 入力フィールド関連イベント
+    // 6. 入力フィールド関連イベント（検索フォームは除外）
     const handleInput = (e: Event) => {
       const target = e.target as HTMLInputElement
+      
+      // 検索フォームの入力は除外（パフォーマンス最適化）
+      if (target.placeholder?.includes('検索') || target.placeholder?.includes('キーワード')) {
+        return
+      }
+      
       if (target.type === 'text' || target.tagName === 'TEXTAREA') {
+        // 入力イベントのログ頻度を制限（デバウンス）
+        const now = Date.now()
+        const lastInputTime = (target as any).lastDebugTime || 0
+        
+        if (now - lastInputTime < 500) { // 500ms以内の連続入力は無視
+          return
+        }
+        (target as any).lastDebugTime = now
+        
         console.log('⌨️ INPUT EVENT:', {
           tagName: target.tagName,
           type: target.type,
-          value: target.value,
+          valueLength: target.value.length, // 値の長さのみ記録（プライバシー考慮）
           id: target.id,
-          className: target.className,
+          className: target.className?.substring(0, 50), // クラス名は最初の50文字のみ
           scrollBefore: {
             top: window.pageYOffset || document.documentElement.scrollTop,
             left: window.pageXOffset || document.documentElement.scrollLeft
           }
         })
-        
-        // 入力後の状態も監視
-        setTimeout(() => {
-          console.log('⌨️ INPUT AFTER:', {
-            scrollAfter: {
-              top: window.pageYOffset || document.documentElement.scrollTop,
-              left: window.pageXOffset || document.documentElement.scrollLeft
-            }
-          })
-        }, 0)
       }
     }
     

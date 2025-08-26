@@ -28,8 +28,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveSearchName, setSaveSearchName] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  // 検索入力フィールドのローカル状態
-  const [searchInputValue, setSearchInputValue] = useState(filter.search || '')
   // uncontrolled inputのref
   const uncontrolledTagInputRef = useRef<HTMLInputElement>(null)
   // 検索入力のref（フォーカス保持用）
@@ -38,8 +36,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   const [isComposing, setIsComposing] = useState(false)
   // debounce用のタイマー
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
-  // 検索用debounceタイマー
-  const searchDebounceTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // フィルター永続化フック
   const { persistFilters, loadPersistedFilters, clearPersistedFilters } = useFilterPersistence()
@@ -96,19 +92,11 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }, [loadSavedSearches, enablePersistence, loadPersistedFilters, onFilterChange])
 
-  // 検索入力値をフィルター変更に同期
-  useEffect(() => {
-    setSearchInputValue(filter.search || '')
-  }, [filter.search])
-
   // コンポーネントアンマウント時のクリーンアップ
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
-      }
-      if (searchDebounceTimerRef.current) {
-        clearTimeout(searchDebounceTimerRef.current)
       }
     }
   }, [])
@@ -157,18 +145,16 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     })()
   }, [filter, onFilterChange, enablePersistence, persistFilters])
 
-  // debounce版の検索変更ハンドラー
+  // シンプル化された検索変更ハンドラー（debounce削除）
   const handleSearchChange = useCallback((search: string) => {
-    // 既存のタイマーをクリア
-    if (searchDebounceTimerRef.current) {
-      clearTimeout(searchDebounceTimerRef.current)
+    // IME入力中は処理を遅延
+    if (isComposing) {
+      return
     }
     
-    // 200msのdebounceでフィルター更新を遅延
-    searchDebounceTimerRef.current = setTimeout(() => {
-      handleSearchChangeImmediate(search)
-    }, 200)
-  }, [handleSearchChangeImmediate])
+    // 即座にフィルターを更新
+    handleSearchChangeImmediate(search)
+  }, [handleSearchChangeImmediate, isComposing])
 
   const handleCategoryChange = useCallback((category: string) => {
     withScrollPreservation(() => {
@@ -206,7 +192,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
       handleTagsChange(tagsString)
     }, 300) // 300ms待機
   }
-
 
   const handleDateRangeChange = withScrollPreservation((dateRange?: DateRangePreset) => {
     startTransition(() => {
@@ -260,8 +245,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
           }
           return updated
         })
-        
-        // 楽観的更新で即座に反映済みなので、再読み込みは不要
         
         setShowSaveDialog(false)
         setSaveSearchName('')
@@ -356,100 +339,88 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
               </button>
             </>
           )}
-
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="px-2 py-1 text-xs sm:text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition-colors bg-gray-100 dark:bg-gray-700 rounded"
+            className="px-2 py-1 text-xs sm:text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 transition-colors bg-gray-50 dark:bg-gray-900/20 rounded"
           >
-            ⚙️ {showAdvanced ? '簡易' : '詳細'}
+            {showAdvanced ? '📋 基本' : '🔧 詳細'}
           </button>
         </div>
       </div>
 
-      {/* 検索バー */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="flex-1">
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchInputValue}
-            onChange={(e) => {
-              const newValue = e.target.value
-              setSearchInputValue(newValue)
-              console.log('🔤 検索入力onChange:', newValue)
-              
-              // IME入力中でなければ即座にdebounce検索を開始
-              if (!isComposing) {
+      {/* メイン検索フィールド - 修正済み */}
+      <div className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            📝 キーワード検索
+          </label>
+          <div className="flex gap-2">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={filter.search || ''}
+              onChange={(e) => {
+                const newValue = e.target.value
+                // 即座に親コンポーネントに通知
                 handleSearchChange(newValue)
-              }
-            }}
-            onCompositionStart={() => {
-              console.log('🌏 IME入力開始')
-              setIsComposing(true)
-            }}
-            onCompositionEnd={(e) => {
-              console.log('🌏 IME入力終了:', e.currentTarget.value)
-              setIsComposing(false)
-              // IME入力が確定したら検索実行
-              handleSearchChange(e.currentTarget.value)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault() // フォーム送信によるページリロードを防止
-                console.log('⚡ Enter押下 - 手動検索実行:', searchInputValue)
-                handleSearchChangeImmediate(searchInputValue) // Enter時は即座に検索実行
-                if (onManualSearch) {
-                  onManualSearch()
+              }}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={(e) => {
+                setIsComposing(false)
+                // IME確定後も検索を実行
+                handleSearchChangeImmediate(e.currentTarget.value)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !isComposing) {
+                  handleSearchChangeImmediate(filter.search || '') // Enter時は即座に検索実行
+                  onManualSearch?.()
                 }
-              }
-            }}
-            placeholder="キーワード検索（タイトル・説明）"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm transition-colors"
-          />
+              }}
+              placeholder="タイトルや説明文で検索..."
+              className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-100"
+            />
+            <button
+              onClick={() => {
+                handleSearchChangeImmediate(filter.search || '') // 手動検索ボタンは即座に実行
+                onManualSearch?.()
+              }}
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              🔍 検索
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => {
-            console.log('🔍 手動検索ボタンクリック:', searchInputValue)
-            handleSearchChangeImmediate(searchInputValue) // 手動検索ボタンは即座に実行
-            if (onManualSearch) {
-              onManualSearch()
-            }
-          }}
-          className="px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm whitespace-nowrap dark:bg-purple-500 dark:hover:bg-purple-600"
-        >
-          🔍 検索
-        </button>
       </div>
 
       {/* 基本フィルター */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* 完了状態 */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">完了状態</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">✅ 完了状態</label>
           <select
             value={filter.completed === undefined ? '' : filter.completed.toString()}
             onChange={(e) => {
               const value = e.target.value === '' ? undefined : e.target.value === 'true'
               handleCompletedFilter(value)
             }}
-            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           >
             <option value="">すべて</option>
-            <option value="false">未完了</option>
-            <option value="true">完了済み</option>
+            <option value="false">未完了のみ</option>
+            <option value="true">完了済みのみ</option>
           </select>
         </div>
 
         {/* 優先度 */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">優先度</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">⚡ 優先度</label>
           <select
             value={filter.priority || ''}
             onChange={(e) => {
               const value = e.target.value as Priority || undefined
               handlePriorityFilter(value)
             }}
-            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           >
             <option value="">すべて</option>
             <option value="URGENT">🔥 緊急</option>
@@ -461,14 +432,14 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
 
         {/* 日付範囲 */}
         <div>
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">期限</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">📅 期限</label>
           <select
             value={filter.dateRange || ''}
             onChange={(e) => {
               const value = e.target.value as DateRangePreset || undefined
               handleDateRangeChange(value)
             }}
-            className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           >
             <option value="">すべて</option>
             <option value="overdue">📅 期限切れ</option>
@@ -481,38 +452,36 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
             <option value="no_due_date">📅 期限なし</option>
           </select>
         </div>
-
-        {/* カテゴリ（詳細表示時のみ） */}
-        {showAdvanced && (
-          <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">カテゴリ</label>
-            <input
-              type="text"
-              value={filter.category || ''}
-              onChange={(e) => handleCategoryChange(e.target.value)}
-              placeholder="カテゴリ名"
-              className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-        )}
       </div>
 
       {/* 詳細フィルター（展開時のみ表示） */}
       {showAdvanced && (
-        <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
-          <div className="grid grid-cols-1 gap-3">
+        <div className="pt-3 border-t border-gray-200 dark:border-gray-600 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* カテゴリ */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">📂 カテゴリ</label>
+              <input
+                type="text"
+                value={filter.category || ''}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                placeholder="仕事、プライベートなど"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+
             {/* タグ */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                タグ（カンマ区切り）
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                🏷️ タグ（カンマ区切り）
               </label>
               <input
                 ref={uncontrolledTagInputRef}
                 type="text"
                 defaultValue={filter.tags?.join(', ') || ''}
                 onChange={(e) => debouncedHandleTagsChange(e.target.value)}
-                placeholder="重要, 仕事, プライベート"
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="重要, 会議, レビューなど"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
             </div>
           </div>
@@ -521,20 +490,21 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
 
       {/* 保存済み検索 */}
       {savedSearches.length > 0 && (
-        <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
-          <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">💾 保存済み検索</h4>
-          <div className="flex flex-wrap gap-1">
+        <div className="pt-3 border-t border-gray-200 dark:border-gray-600">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">💾 保存済み検索</h4>
+          <div className="flex flex-wrap gap-2">
             {savedSearches.map(savedSearch => (
-              <div key={savedSearch.id} className="flex items-center">
+              <div key={savedSearch.id} className="flex items-center bg-gray-100 dark:bg-gray-700 rounded">
                 <button
                   onClick={() => loadSavedSearch(savedSearch)}
-                  className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-l hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="px-3 py-1 text-sm text-gray-700 dark:text-gray-300 rounded-l hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
                   {savedSearch.name}
                 </button>
                 <button
                   onClick={() => deleteSavedSearch(savedSearch.id, savedSearch.name)}
-                  className="px-1 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-r hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                  className="px-2 py-1 text-sm text-red-600 dark:text-red-400 rounded-r hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                  title="削除"
                 >
                   ×
                 </button>
@@ -546,20 +516,28 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
 
       {/* 検索保存ダイアログ */}
       {showSaveDialog && (
-        <div className="pt-2 border-t border-gray-200 dark:border-gray-600">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              value={saveSearchName}
-              onChange={(e) => setSaveSearchName(e.target.value)}
-              placeholder="検索条件の名前"
-              className="flex-1 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+        <div className="pt-3 border-t border-gray-200 dark:border-gray-600">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              💾 検索条件を保存
+            </label>
             <div className="flex gap-2">
+              <input
+                type="text"
+                value={saveSearchName}
+                onChange={(e) => setSaveSearchName(e.target.value)}
+                placeholder="検索条件の名前を入力"
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && saveSearchName.trim()) {
+                    saveCurrentSearch()
+                  }
+                }}
+              />
               <button
                 onClick={saveCurrentSearch}
                 disabled={!saveSearchName.trim()}
-                className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 保存
               </button>
@@ -568,7 +546,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
                   setShowSaveDialog(false)
                   setSaveSearchName('')
                 }}
-                className="px-3 py-1.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                className="px-4 py-2 text-sm bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
               >
                 キャンセル
               </button>
