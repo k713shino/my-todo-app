@@ -30,8 +30,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   const [showAdvanced, setShowAdvanced] = useState(false)
   // uncontrolled inputのref
   const uncontrolledTagInputRef = useRef<HTMLInputElement>(null)
-  // 検索入力のref（フォーカス保持用）
-  const searchInputRef = useRef<HTMLInputElement>(null)
+  const uncontrolledSearchInputRef = useRef<HTMLInputElement>(null)
+  const uncontrolledCategoryInputRef = useRef<HTMLInputElement>(null)
   // IME入力中かどうかのフラグ
   const [isComposing, setIsComposing] = useState(false)
   // debounce用のタイマー
@@ -54,43 +54,68 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }, [savedSearches.length]) // lengthのみ監視してオブジェクト全体の監視を避ける
 
-  const loadSavedSearches = useCallback(async () => {
-    try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 保存済み検索を読み込み中...')
-      }
-      const response = await fetch('/api/todos/saved-searches')
-      if (response.ok) {
-        const data = await response.json()
-        if (process.env.NODE_ENV === 'development') {
-          console.log('📋 読み込まれた保存済み検索:', data.length, '件')
-        }
-        setSavedSearches(data)
-      } else {
-        console.error('保存済み検索の読み込みに失敗:', response.status)
-      }
-    } catch (error) {
-      console.error('Failed to load saved searches:', error)
-    }
-  }, [])
 
+  // 初期化処理（一度のみ実行）
   useEffect(() => {
-    loadSavedSearches()
-    loadSearchHistory()
-    
-    // 永続化されたフィルターを読み込み（初回のみ）
-    if (enablePersistence) {
-      const persistedFilters = loadPersistedFilters()
-      if (Object.keys(persistedFilters).length > 0) {
-        onFilterChange(persistedFilters)
-        
-        // uncontrolled inputの値も更新
-        if (uncontrolledTagInputRef.current && persistedFilters.tags) {
-          uncontrolledTagInputRef.current.value = persistedFilters.tags.join(', ')
+    // 保存済み検索を読み込み
+    const initSavedSearches = async () => {
+      try {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 保存済み検索を初期化中...')
+        }
+        const response = await fetch('/api/todos/saved-searches')
+        if (response.ok) {
+          const data = await response.json()
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📋 保存済み検索初期化完了:', data.length, '件')
+          }
+          setSavedSearches(data)
+        }
+      } catch (error) {
+        console.error('保存済み検索の初期化に失敗:', error)
+      }
+    }
+
+    // 検索履歴を読み込み
+    const initSearchHistory = async () => {
+      try {
+        const response = await fetch('/api/todos/search-history?limit=10')
+        if (response.ok) {
+          setSearchHistory(await response.json())
+        }
+      } catch (error) {
+        console.error('検索履歴の初期化に失敗:', error)
+      }
+    }
+
+    // 永続化されたフィルターを読み込み
+    const initPersistedFilters = () => {
+      if (enablePersistence) {
+        const persistedFilters = loadPersistedFilters()
+        if (Object.keys(persistedFilters).length > 0) {
+          onFilterChange(persistedFilters)
+          
+          // uncontrolled inputの値も更新
+          setTimeout(() => {
+            if (uncontrolledTagInputRef.current && persistedFilters.tags) {
+              uncontrolledTagInputRef.current.value = persistedFilters.tags.join(', ')
+            }
+            if (uncontrolledSearchInputRef.current && persistedFilters.search) {
+              uncontrolledSearchInputRef.current.value = persistedFilters.search
+            }
+            if (uncontrolledCategoryInputRef.current && persistedFilters.category) {
+              uncontrolledCategoryInputRef.current.value = persistedFilters.category
+            }
+          }, 0)
         }
       }
     }
-  }, [loadSavedSearches, enablePersistence, loadPersistedFilters, onFilterChange])
+
+    // 初期化処理を実行
+    initSavedSearches()
+    initSearchHistory()
+    initPersistedFilters()
+  }, []) // 依存配列を空にして初回のみ実行
 
   // コンポーネントアンマウント時のクリーンアップ
   useEffect(() => {
@@ -101,16 +126,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }, [])
 
-  const loadSearchHistory = async () => {
-    try {
-      const response = await fetch('/api/todos/search-history?limit=10')
-      if (response.ok) {
-        setSearchHistory(await response.json())
-      }
-    } catch (error) {
-      console.error('Failed to load search history:', error)
-    }
-  }
 
   const handleCompletedFilter = withScrollPreservation((completed?: boolean) => {
     startTransition(() => {
@@ -145,18 +160,18 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     })()
   }, [filter, onFilterChange, enablePersistence, persistFilters])
 
-  // シンプル化された検索変更ハンドラー（debounce削除）
-  const handleSearchChange = useCallback((search: string) => {
-    // IME入力中は処理を遅延
-    if (isComposing) {
-      return
+  // debounce版の検索変更ハンドラー（uncontrolled input用）
+  const debouncedHandleSearchChange = (search: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
     }
     
-    // 即座にフィルターを更新
-    handleSearchChangeImmediate(search)
-  }, [handleSearchChangeImmediate, isComposing])
+    debounceTimerRef.current = setTimeout(() => {
+      handleSearchChangeImmediate(search)
+    }, 300) // 300ms待機
+  }
 
-  const handleCategoryChange = useCallback((category: string) => {
+  const handleCategoryChangeImmediate = useCallback((category: string) => {
     withScrollPreservation(() => {
       startTransition(() => {
         const newFilter = { ...filter, category: category || undefined }
@@ -167,6 +182,17 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
       })
     })()
   }, [filter, onFilterChange, enablePersistence, persistFilters])
+
+  // debounce版のカテゴリ更新関数（uncontrolled input用）
+  const debouncedHandleCategoryChange = (category: string) => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    
+    debounceTimerRef.current = setTimeout(() => {
+      handleCategoryChangeImmediate(category)
+    }, 300) // 300ms待機
+  }
 
   const handleTagsChange = withScrollPreservation((tagsString: string) => {
     startTransition(() => {
@@ -268,8 +294,13 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     
     // uncontrolled inputの値を手動更新
     if (uncontrolledTagInputRef.current) {
-      const newValue = filters.tags?.join(', ') || ''
-      uncontrolledTagInputRef.current.value = newValue
+      uncontrolledTagInputRef.current.value = filters.tags?.join(', ') || ''
+    }
+    if (uncontrolledSearchInputRef.current) {
+      uncontrolledSearchInputRef.current.value = filters.search || ''
+    }
+    if (uncontrolledCategoryInputRef.current) {
+      uncontrolledCategoryInputRef.current.value = filters.category || ''
     }
     
     // 自動検索は実行せず、フィルター条件のみ読み込み
@@ -303,6 +334,12 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     // uncontrolled inputもクリア
     if (uncontrolledTagInputRef.current) {
       uncontrolledTagInputRef.current.value = ''
+    }
+    if (uncontrolledSearchInputRef.current) {
+      uncontrolledSearchInputRef.current.value = ''
+    }
+    if (uncontrolledCategoryInputRef.current) {
+      uncontrolledCategoryInputRef.current.value = ''
     }
     
     // 永続化データもクリア
@@ -356,23 +393,15 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
           </label>
           <div className="flex gap-2">
             <input
-              ref={searchInputRef}
+              ref={uncontrolledSearchInputRef}
               type="text"
-              value={filter.search || ''}
+              defaultValue={filter.search || ''}
               onChange={(e) => {
-                const newValue = e.target.value
-                // 即座に親コンポーネントに通知
-                handleSearchChange(newValue)
-              }}
-              onCompositionStart={() => setIsComposing(true)}
-              onCompositionEnd={(e) => {
-                setIsComposing(false)
-                // IME確定後も検索を実行
-                handleSearchChangeImmediate(e.currentTarget.value)
+                debouncedHandleSearchChange(e.target.value)
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isComposing) {
-                  handleSearchChangeImmediate(filter.search || '') // Enter時は即座に検索実行
+                if (e.key === 'Enter') {
+                  handleSearchChangeImmediate(e.currentTarget.value) // Enter時は即座に検索実行
                   onManualSearch?.()
                 }
               }}
@@ -381,7 +410,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
             />
             <button
               onClick={() => {
-                handleSearchChangeImmediate(filter.search || '') // 手動検索ボタンは即座に実行
+                const currentValue = uncontrolledSearchInputRef.current?.value || ''
+                handleSearchChangeImmediate(currentValue) // 手動検索ボタンは即座に実行
                 onManualSearch?.()
               }}
               className="px-3 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -462,9 +492,10 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">📂 カテゴリ</label>
               <input
+                ref={uncontrolledCategoryInputRef}
                 type="text"
-                value={filter.category || ''}
-                onChange={(e) => handleCategoryChange(e.target.value)}
+                defaultValue={filter.category || ''}
+                onChange={(e) => debouncedHandleCategoryChange(e.target.value)}
                 placeholder="仕事、プライベートなど"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />

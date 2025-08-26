@@ -6,7 +6,6 @@ import { Priority } from '@prisma/client'
 import type { Todo, CreateTodoData, TodoStats, TodoFilters } from '@/types/todo'
 import TodoForm from './TodoForm'
 import TodoItem from './TodoItem'
-import TodoFiltersComponent from './TodoFilters'
 import TodoStatsDisplay from './TodoStatsDisplay'
 // import RealtimeUpdates from './RealtimeUpdates'
 import { Toaster, toast } from 'react-hot-toast'
@@ -61,7 +60,18 @@ interface UpdateTodoData {
 // デバッグ用ページ移動監視フック
 import { usePageMovementDebugger } from '@/app/hooks/usePageMovementDebugger'
 
-export default function TodoList() {
+interface TodoListProps {
+  modalSearchValues?: {
+    keyword: string
+    category: string
+    tags: string[]
+    completed?: boolean
+    priority?: string
+    dateRange?: string
+  }
+}
+
+export default function TodoList({ modalSearchValues }: TodoListProps) {
   // ページ移動デバッグ開始
   usePageMovementDebugger()
 
@@ -77,6 +87,31 @@ export default function TodoList() {
     setFilterInternal(newFilter)
   })
   const [lambdaWarmedUp, setLambdaWarmedUp] = useState(false)
+
+  // モーダルからの検索値をフィルターに反映
+  useEffect(() => {
+    if (modalSearchValues) {
+      const newFilter: TodoFilters = {
+        search: modalSearchValues.keyword || '',
+        category: modalSearchValues.category || '',
+        tags: modalSearchValues.tags.length > 0 ? modalSearchValues.tags : undefined,
+        completed: modalSearchValues.completed,
+        priority: modalSearchValues.priority || undefined,
+        dateRange: modalSearchValues.dateRange || undefined
+      }
+      
+      // 空の値は除去
+      Object.keys(newFilter).forEach(key => {
+        const value = (newFilter as any)[key]
+        if (!value || (Array.isArray(value) && value.length === 0) || value === '') {
+          delete (newFilter as any)[key]
+        }
+      })
+      
+      console.log('🔍 モーダル検索値をフィルターに反映:', newFilter)
+      setFilter(newFilter)
+    }
+  }, [modalSearchValues])
 
   /**
    * Lambda関数ウォームアップ機能
@@ -437,7 +472,9 @@ export default function TodoList() {
    * クライアントサイドフィルタリング - シンプルで確実な動作
    */
   const applyFilters = (allTodos: Todo[], filters: TodoFilters) => {
-    console.log('🔍 フィルター適用開始:', { 全件数: allTodos.length, フィルター: filters })
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 フィルター適用開始:', { 全件数: allTodos.length, フィルター: filters })
+    }
     
     let filtered = [...allTodos]
     
@@ -448,7 +485,9 @@ export default function TodoList() {
         todo.title.toLowerCase().includes(searchTerm) ||
         (todo.description && todo.description.toLowerCase().includes(searchTerm))
       )
-      console.log(`📝 テキスト検索 "${searchTerm}":`, filtered.length, '件')
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`📝 テキスト検索 "${searchTerm}":`, filtered.length, '件')
+      }
     }
     
     // 完了状態フィルター
@@ -565,7 +604,9 @@ export default function TodoList() {
       console.log(`📅 日付範囲 "${filters.dateRange}":`, filtered.length, '件')
     }
     
-    console.log('✅ フィルター適用完了:', filtered.length, '件')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ フィルター適用完了:', filtered.length, '件')
+    }
     return filtered
   }
 
@@ -585,9 +626,13 @@ export default function TodoList() {
    * useMemoを使用して不要な再計算とDOM操作を防止
    */
   const filteredTodos = useMemo(() => {
-    console.log('📊 todos または filter 変更検知 (useMemo)')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 todos または filter 変更検知 (useMemo)')
+    }
     const filtered = applyFilters(todos, filter)
-    console.log('🔄 フィルター結果:', { 入力件数: todos.length, 出力件数: filtered.length })
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 フィルター結果:', { 入力件数: todos.length, 出力件数: filtered.length })
+    }
     return filtered
   }, [todos, filter])
 
@@ -619,7 +664,7 @@ export default function TodoList() {
     
     // バックグラウンドでLambda関数をウォームアップ
     warmupLambda()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   if (isLoading) {
     return (
@@ -682,13 +727,6 @@ export default function TodoList() {
         </div>
       </div>
 
-      {/* Todoフィルター（検索・フィルター機能） */}
-      <TodoFiltersComponent 
-        filter={filter}
-        onFilterChange={setFilter}
-        onManualSearch={handleManualSearch}
-      />
-
       {/* TodoフォームとTodoリスト */}
       {editingTodo ? (
         <TodoForm
@@ -708,6 +746,7 @@ export default function TodoList() {
           isLoading={isSubmitting}
         />
       )}
+
 
       {/* フィルター済みTodoリスト表示 */}
       <div className="space-y-3">

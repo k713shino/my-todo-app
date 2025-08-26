@@ -21,21 +21,30 @@ export function usePageMovementDebugger() {
       console.trace('リロード発生箇所')
     }
     
-    // 2. スクロール位置変更検出
+    // 2. スクロール位置変更検出（debounce付き）
     let lastScrollTop = window.pageYOffset || document.documentElement.scrollTop
     let lastScrollLeft = window.pageXOffset || document.documentElement.scrollLeft
+    let scrollLogTimer: NodeJS.Timeout | null = null
     
     const handleScroll = () => {
       const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop
       const currentScrollLeft = window.pageXOffset || document.documentElement.scrollLeft
       
       if (currentScrollTop !== lastScrollTop || currentScrollLeft !== lastScrollLeft) {
-        console.log('📜 SCROLL DETECTED:', {
-          from: { top: lastScrollTop, left: lastScrollLeft },
-          to: { top: currentScrollTop, left: currentScrollLeft },
-          timestamp: new Date().toISOString()
-        })
-        console.trace('スクロール発生箇所')
+        // スクロールログのdebounce（連続スクロール時は最後のみログ）
+        if (scrollLogTimer) clearTimeout(scrollLogTimer)
+        
+        const fromTop = lastScrollTop
+        const fromLeft = lastScrollLeft
+        
+        scrollLogTimer = setTimeout(() => {
+          console.log('📜 SCROLL DETECTED:', {
+            from: { top: fromTop, left: fromLeft },
+            to: { top: currentScrollTop, left: currentScrollLeft },
+            distance: Math.abs(currentScrollTop - fromTop),
+            timestamp: new Date().toISOString()
+          })
+        }, 200) // 200ms後にログ出力
         
         lastScrollTop = currentScrollTop
         lastScrollLeft = currentScrollLeft
@@ -61,18 +70,29 @@ export function usePageMovementDebugger() {
       })
     }
     
-    // 4. DOM変更検出
+    // 4. DOM変更検出（重要な変更のみ）
     const domObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          console.log('🔧 DOM CHANGE DETECTED:', {
-            type: mutation.type,
-            addedNodes: mutation.addedNodes.length,
-            target: mutation.target,
-            timestamp: new Date().toISOString()
-          })
-        }
-      })
+      // DOM変更の頻度を制限
+      const now = Date.now()
+      if (now - (domObserver as any).lastLogTime < 1000) return // 1秒以内は無視
+      (domObserver as any).lastLogTime = now
+
+      const significantChanges = mutations.filter(mutation => 
+        mutation.type === 'childList' && 
+        mutation.addedNodes.length > 0 &&
+        Array.from(mutation.addedNodes).some(node => 
+          node.nodeType === Node.ELEMENT_NODE &&
+          !(node as Element).className?.includes('toast') // トースト通知は除外
+        )
+      )
+      
+      if (significantChanges.length > 0) {
+        console.log('🔧 DOM CHANGE DETECTED:', {
+          type: 'significant_changes',
+          count: significantChanges.length,
+          timestamp: new Date().toISOString()
+        })
+      }
     })
     
     // 5. 履歴変更検出（SPA ナビゲーション）
