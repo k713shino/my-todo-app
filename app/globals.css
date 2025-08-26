@@ -8,6 +8,11 @@
   --foreground: #0f0f0f;
 }
 
+/* スクロール動作の最適化 - 自動スムーススクロールを無効化 */
+html {
+  scroll-behavior: auto !important;
+}
+
 .dark {
   --background: #0f0f0f;
   --foreground: #ededed;
