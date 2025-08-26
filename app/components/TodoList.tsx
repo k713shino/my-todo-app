@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { Priority } from '@prisma/client'
 import type { Todo, CreateTodoData, TodoStats, TodoFilters } from '@/types/todo'
 import TodoForm from './TodoForm'
@@ -17,6 +18,7 @@ import {
   logApiError,
   type ErrorWithStatus 
 } from '@/lib/error-utils'
+import { withScrollPreservation } from '../hooks/useScrollPreservation'
 
 
 /**
@@ -56,13 +58,24 @@ interface UpdateTodoData {
  * - リアルタイム更新
  * - Todo統計情報の表示
  */
+// デバッグ用ページ移動監視フック
+import { usePageMovementDebugger } from '@/app/hooks/usePageMovementDebugger'
+
 export default function TodoList() {
+  // ページ移動デバッグ開始
+  usePageMovementDebugger()
+
   const [todos, setTodos] = useState<Todo[]>([])
-  const [filteredTodos, setFilteredTodos] = useState<Todo[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
-  const [filter, setFilter] = useState<TodoFilters>({})
+  const [filter, setFilterInternal] = useState<TodoFilters>({})
+  
+  // スクロール位置保持機能付きのsetFilter
+  const setFilter = withScrollPreservation((newFilter: TodoFilters) => {
+    console.log('🎯 setFilter実行 (スクロール保持付き):', newFilter)
+    setFilterInternal(newFilter)
+  })
   const [lambdaWarmedUp, setLambdaWarmedUp] = useState(false)
 
   /**
@@ -558,20 +571,24 @@ export default function TodoList() {
 
   /**
    * 手動検索関数（即座に実行）
+   * 現在はuseMemoで自動的にフィルタリングされるため、フォーカスのみ制御
    */
   const handleManualSearch = () => {
     console.log('🔍 手動検索実行:', filter)
-    const filtered = applyFilters(todos, filter)
-    setFilteredTodos(filtered)
+    console.log('🔄 現在のフィルター済みTodos:', filteredTodos.length, '件')
+    // フィルタリングはuseMemoで自動実行されるため、UI更新は不要
+    // 必要に応じてフォーカス制御などのUI操作のみ実行
   }
 
   /**
    * 基本的なクライアントサイドフィルタリング（検索結果の表示用）
+   * useMemoを使用して不要な再計算とDOM操作を防止
    */
-  useEffect(() => {
-    console.log('📊 todos または filter 変更検知')
+  const filteredTodos = useMemo(() => {
+    console.log('📊 todos または filter 変更検知 (useMemo)')
     const filtered = applyFilters(todos, filter)
-    setFilteredTodos(filtered)
+    console.log('🔄 フィルター結果:', { 入力件数: todos.length, 出力件数: filtered.length })
+    return filtered
   }, [todos, filter])
 
   /**
@@ -641,6 +658,85 @@ export default function TodoList() {
             },
           },
         }}
+      />
+
+      {/* Todo統計パネル */}
+      <TodoStats stats={stats} />
+
+      {/* Todoフィルター（検索・フィルター機能） */}
+      <TodoFilters 
+        filter={filter}
+        onFilterChange={setFilter}
+        onManualSearch={handleManualSearch}
+      />
+
+      {/* TodoフォームとTodoリスト */}
+      {editingTodo ? (
+        <TodoForm
+          onSubmit={handleEditSubmit}
+          isSubmitting={isSubmitting}
+          initialData={{
+            title: editingTodo.title,
+            description: editingTodo.description || '',
+            priority: editingTodo.priority,
+            dueDate: editingTodo.dueDate ? formatDateForInput(editingTodo.dueDate) : '',
+          }}
+          submitButtonText="💾 更新"
+          onCancel={() => setEditingTodo(null)}
+        />
+      ) : (
+        <TodoForm
+          onSubmit={handleCreateTodo}
+          isSubmitting={isSubmitting}
+          submitButtonText="📝 作成"
+        />
+      )}
+
+      {/* フィルター済みTodoリスト表示 */}
+      <div className="space-y-3">
+        {filteredTodos.length === 0 ? (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+            {todos.length === 0 ? (
+              <div className="space-y-2">
+                <div className="text-4xl">📝</div>
+                <div>まだTodoがありません。最初のTodoを作成してみましょう！</div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-4xl">🔍</div>
+                <div>検索条件に一致するTodoが見つかりませんでした。</div>
+                <div className="text-sm">フィルター条件を変更してみてください。</div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {todos.length}件中 {filteredTodos.length}件を表示
+              </p>
+              {/* <button 
+                onClick={() => fetchTodos(true)}
+                className="text-xs px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+              >
+                🔄 再読み込み
+              </button> */}
+            </div>
+            {filteredTodos.map((todo) => (
+              <TodoItem
+                key={todo.id}
+                todo={todo}
+                onUpdate={handleUpdateTodo}
+                onDelete={handleDeleteTodo}
+                onEdit={setEditingTodo}
+              />
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
       />
 
       {/* パフォーマンス状態表示 */}

@@ -6,6 +6,7 @@ import type { TodoFilters, SavedSearch } from '@/types/todo'
 import { dateRangeLabels, DateRangePreset } from '@/lib/date-utils'
 import { useFilterPersistence } from '../hooks/useFilterPersistence'
 import { withScrollPreservation } from '../hooks/useScrollPreservation'
+import { usePageMovementDebugger } from '../hooks/usePageMovementDebugger'
 
 interface TodoFiltersProps {
   filter: TodoFilters
@@ -42,6 +43,11 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   
   // フィルター永続化フック
   const { persistFilters, loadPersistedFilters, clearPersistedFilters } = useFilterPersistence()
+  
+  // デバッグフック（開発環境でのみ有効）
+  if (process.env.NODE_ENV === 'development') {
+    usePageMovementDebugger()
+  }
 
   // 保存済み検索の状態変更をデバッグ（最適化）
   useEffect(() => {
@@ -372,8 +378,27 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
             value={searchInputValue}
             onChange={(e) => {
               const newValue = e.target.value
+              console.log('🔎 検索入力onChange:', {
+                newValue,
+                scrollBefore: {
+                  top: window.pageYOffset || document.documentElement.scrollTop,
+                  left: window.pageXOffset || document.documentElement.scrollLeft
+                },
+                timestamp: new Date().toISOString()
+              })
+              
               setSearchInputValue(newValue)
               handleSearchChange(newValue)
+              
+              // 処理後のスクロール位置もログ
+              setTimeout(() => {
+                console.log('🔎 検索入力onChange後:', {
+                  scrollAfter: {
+                    top: window.pageYOffset || document.documentElement.scrollTop,
+                    left: window.pageXOffset || document.documentElement.scrollLeft
+                  }
+                })
+              }, 0)
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
