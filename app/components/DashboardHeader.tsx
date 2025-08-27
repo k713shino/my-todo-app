@@ -162,6 +162,10 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
     setCompleted(searchFilters.completed === undefined ? '' : searchFilters.completed.toString())
     setPriority(searchFilters.priority || '')
     setDateRange(searchFilters.dateRange || '')
+    
+    // 検索条件を読み込んだ後、自動的に検索を実行
+    onSearch(searchFilters)
+    onClose()
   }
 
   const handleDeleteSearch = (searchId: string) => {
