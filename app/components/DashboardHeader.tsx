@@ -3,7 +3,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState } from 'react'
+import React, { useState } from 'react'
 
 // 拡張された検索モーダルコンポーネント
 interface SearchModalProps {
@@ -27,6 +27,24 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
   const [completed, setCompleted] = useState<string>('')
   const [priority, setPriority] = useState<string>('')
   const [dateRange, setDateRange] = useState<string>('')
+  
+  // コンポーネントマウント時に保存された検索条件を読み込み
+  React.useEffect(() => {
+    const savedFilters = localStorage.getItem('todoSearchFilters')
+    if (savedFilters) {
+      try {
+        const filters = JSON.parse(savedFilters)
+        setKeyword(filters.keyword || '')
+        setCategory(filters.category || '')
+        setTags(filters.tags ? filters.tags.join(', ') : '')
+        setCompleted(filters.completed === undefined ? '' : filters.completed.toString())
+        setPriority(filters.priority || '')
+        setDateRange(filters.dateRange || '')
+      } catch (error) {
+        console.error('保存された検索条件の読み込みに失敗:', error)
+      }
+    }
+  }, [isOpen])
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -68,8 +86,30 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
   }
   
   const handleSave = () => {
-    // TODO: 検索条件の保存機能を実装
-    console.log('検索条件を保存')
+    if (!isAuthenticated) return
+    
+    const tagArray = tags.split(',').map(t => t.trim()).filter(t => t)
+    const completedValue = completed === '' ? undefined : completed === 'true'
+    const priorityValue = priority === '' ? undefined : priority
+    const dateRangeValue = dateRange === '' ? undefined : dateRange
+    
+    const filtersToSave = {
+      keyword,
+      category,
+      tags: tagArray,
+      completed: completedValue,
+      priority: priorityValue,
+      dateRange: dateRangeValue
+    }
+    
+    try {
+      localStorage.setItem('todoSearchFilters', JSON.stringify(filtersToSave))
+      // 成功メッセージを表示
+      alert('🎉 検索条件を保存しました！次回検索画面を開いた時に自動で読み込まれます。')
+    } catch (error) {
+      console.error('検索条件の保存に失敗:', error)
+      alert('❌ 検索条件の保存に失敗しました。')
+    }
   }
   
   if (!isOpen) return null
@@ -128,7 +168,7 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
               
               {/* キーワード検索 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                   📝 キーワード検索
                 </label>
                 <input
@@ -142,7 +182,7 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
 
               {/* 完了状態 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                   ✅ 完了状態
                 </label>
                 <select
@@ -158,7 +198,7 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
 
               {/* 優先度 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                   ⚡ 優先度
                 </label>
                 <select
@@ -176,7 +216,7 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
 
               {/* 期限 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                   📅 期限
                 </label>
                 <select
@@ -198,7 +238,7 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
 
               {/* カテゴリー */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                   📂 カテゴリ
                 </label>
                 <input
@@ -212,7 +252,7 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
 
               {/* タグ */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                   🏷️ タグ（カンマ区切り）
                 </label>
                 <input
