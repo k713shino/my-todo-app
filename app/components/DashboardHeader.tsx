@@ -267,12 +267,64 @@ export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps)
 
   return (
     <>
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center min-w-0 flex-1">
               <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
                 ✨ <span className="hidden sm:inline">{isAuthenticated ? `${session.user?.name}専用` : ''}</span>Todo<span className="hidden xs:inline">アプリ</span>
+              </h1>
+            </div>
+
+            {/* 検索ボタンとプロファイル情報 */}
+            <div className="flex items-center gap-2 sm:gap-4">
+              {isAuthenticated && (
+                <button 
+                  onClick={() => setIsSearchModalOpen(true)}
+                  className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  title="Todo検索"
+                >
+                  <Search className="h-5 w-5" />
+                </button>
+              )}
+              
+              {session?.user && (
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {session.user.image && (
+                    <Image
+                      src={session.user.image}
+                      alt="Profile"
+                      width={28}
+                      height={28}
+                      className="w-7 h-7 rounded-full"
+                    />
+                  )}
+                  <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-300 font-medium">
+                    {session.user.name}
+                  </span>
+                  <button
+                    onClick={() => signOut()}
+                    className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  >
+                    ログアウト
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* 検索モーダル */}
+      {isSearchModalOpen && (
+        <SearchModal 
+          onClose={() => setIsSearchModalOpen(false)}
+          onSearch={handleSearch}
+        />
+      )}
+    </>
+  )
+}</span>Todo<span className="hidden xs:inline">アプリ</span>
               </h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 ml-2">

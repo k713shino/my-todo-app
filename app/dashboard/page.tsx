@@ -59,8 +59,8 @@ export default function Dashboard() {
       {/* ヘッダー */}
       <DashboardHeader onModalSearch={handleModalSearch} />
 
-      {/* メインコンテンツ */}
-      <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
+      {/* メインコンテンツ - 固定ヘッダー分の上余白を追加 */}
+      <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pt-20 sm:pt-24">
         <div className="max-w-7xl mx-auto">
 
           {/* 既存のTodoリスト */}
