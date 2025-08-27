@@ -81,6 +81,10 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [filter, setFilterInternal] = useState<TodoFilters>({})
   
+  // ソート機能のstate
+  const [sortBy, setSortBy] = useState<'createdAt' | 'dueDate' | 'priority'>('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc') // 新しい順がデフォルト
+  
   // スクロール位置保持機能付きのsetFilter
   const setFilter = withScrollPreservation((newFilter: TodoFilters) => {
     console.log('🎯 setFilter実行 (スクロール保持付き):', newFilter)
@@ -622,19 +626,50 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   }
 
   /**
+   * ソート機能
+   */
+  const sortTodos = (todosToSort: Todo[]) => {
+    const sorted = [...todosToSort].sort((a, b) => {
+      let comparison = 0
+
+      switch (sortBy) {
+        case 'createdAt':
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          break
+        case 'dueDate':
+          // 期限なしのTodoは最後に表示
+          if (!a.dueDate && !b.dueDate) return 0
+          if (!a.dueDate) return 1
+          if (!b.dueDate) return -1
+          comparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+          break
+        case 'priority':
+          const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 }
+          comparison = priorityOrder[a.priority] - priorityOrder[b.priority]
+          break
+      }
+
+      return sortOrder === 'desc' ? -comparison : comparison
+    })
+
+    return sorted
+  }
+
+  /**
    * 基本的なクライアントサイドフィルタリング（検索結果の表示用）
    * useMemoを使用して不要な再計算とDOM操作を防止
    */
   const filteredTodos = useMemo(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('📊 todos または filter 変更検知 (useMemo)')
+      console.log('📊 todos, filter, または sort設定 変更検知 (useMemo)')
     }
     const filtered = applyFilters(todos, filter)
+    const sorted = sortTodos(filtered)
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 フィルター結果:', { 入力件数: todos.length, 出力件数: filtered.length })
+      console.log('🔄 フィルター・ソート結果:', { 入力件数: todos.length, 出力件数: sorted.length, ソート: `${sortBy} ${sortOrder}` })
     }
-    return filtered
-  }, [todos, filter])
+    return sorted
+  }, [todos, filter, sortBy, sortOrder])
 
   /**
    * Todoの統計情報を計算
@@ -724,6 +759,52 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
             <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{stats.overdue}</div>
             <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">期限切れ</div>
           </div>
+        </div>
+      </div>
+
+      {/* ソート機能 */}
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            📊 ソート・表示設定
+          </h3>
+          
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* ソート項目選択 */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-600 dark:text-gray-400">並び順:</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'createdAt' | 'dueDate' | 'priority')}
+                className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="createdAt">📅 作成日時</option>
+                <option value="dueDate">⏰ 期限日</option>
+                <option value="priority">⚡ 優先度</option>
+              </select>
+            </div>
+            
+            {/* 昇順/降順切り替え */}
+            <button
+              onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+              className="text-xs px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
+            >
+              {sortOrder === 'desc' ? (
+                <>🔽 新しい順</>
+              ) : (
+                <>🔼 古い順</>
+              )}
+            </button>
+          </div>
+        </div>
+        
+        {/* 現在のソート状況表示 */}
+        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {filteredTodos.length}件のTodoを
+          {sortBy === 'createdAt' && '作成日時'}
+          {sortBy === 'dueDate' && '期限日'}
+          {sortBy === 'priority' && '優先度'}
+          の{sortOrder === 'desc' ? '降順' : '昇順'}で表示
         </div>
       </div>
 
