@@ -1,10 +1,7 @@
 'use client'
 
-import { useSession } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
 import Image from 'next/image'
-import Link from 'next/link'
-import SignOutButton from './SignOutButton'
-import ThemeToggle from './ThemeToggle'
 import { useState } from 'react'
 
 // 拡張された検索モーダルコンポーネント
@@ -284,7 +281,7 @@ export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps)
                   className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                   title="Todo検索"
                 >
-                  <Search className="h-5 w-5" />
+                  🔍
                 </button>
               )}
               
@@ -318,70 +315,12 @@ export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps)
       {/* 検索モーダル */}
       {isSearchModalOpen && (
         <SearchModal 
+          isOpen={isSearchModalOpen}
           onClose={() => setIsSearchModalOpen(false)}
           onSearch={handleSearch}
+          isAuthenticated={isAuthenticated}
         />
       )}
-    </>
-  )
-}</span>Todo<span className="hidden xs:inline">アプリ</span>
-              </h1>
-            </div>
-            <div className="flex items-center space-x-2 sm:space-x-4 ml-2">
-              {isAuthenticated && (
-                <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 hidden md:block">
-                  こんにちは、{session.user?.name}さん 👋
-                </span>
-              )}
-              {/* 検索ボタン - 認証状態に関係なく表示 */}
-              <button
-                onClick={() => setIsSearchModalOpen(true)}
-                className={`transition-colors p-1 ${
-                  isAuthenticated 
-                    ? 'text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400' 
-                    : 'text-gray-400 dark:text-gray-600'
-                }`}
-                title={isAuthenticated ? 'Todo検索' : 'ログインが必要です'}
-              >
-                🔍
-              </button>
-              {isAuthenticated && session.user?.image && (
-                <Image
-                  src={session.user.image}
-                  alt="プロフィール"
-                  width={28}
-                  height={28}
-                  className="rounded-full sm:w-8 sm:h-8"
-                  unoptimized
-                />
-              )}
-              {/* テーマ切り替え */}
-              <ThemeToggle />
-              {isAuthenticated && (
-                <>
-                  {/* 設定リンク */}
-                  <Link
-                    href="/settings"
-                    className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors p-1"
-                    title="アカウント設定"
-                  >
-                    ⚙️
-                  </Link>
-                  <SignOutButton />
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-      
-      {/* 検索モーダル */}
-      <SearchModal
-        isOpen={isSearchModalOpen}
-        onClose={() => setIsSearchModalOpen(false)}
-        onSearch={handleSearch}
-        isAuthenticated={isAuthenticated}
-      />
     </>
   )
 }
