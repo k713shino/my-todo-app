@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useState } from 'react'
 
 // 拡張された検索モーダルコンポーネント
@@ -294,11 +295,19 @@ export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps)
                       width={28}
                       height={28}
                       className="w-7 h-7 rounded-full"
+                      unoptimized
                     />
                   )}
                   <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-300 font-medium">
                     {session.user.name}
                   </span>
+                  <Link
+                    href="/settings"
+                    className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-1"
+                    title="アカウント設定"
+                  >
+                    ⚙️
+                  </Link>
                   <button
                     onClick={() => signOut()}
                     className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
