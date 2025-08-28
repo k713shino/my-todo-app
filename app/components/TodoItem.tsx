@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { format, isAfter } from 'date-fns'
 import { ja } from 'date-fns/locale'
+import { Status } from '@prisma/client'
 import { Todo } from '@/types/todo'
 import { safeParseDate } from '@/lib/date-utils'
 
@@ -17,7 +18,7 @@ import { safeParseDate } from '@/lib/date-utils'
  */
 interface TodoItemProps {
   todo: Todo
-  onUpdate: (id: string, data: { completed?: boolean }) => void
+  onUpdate: (id: string, data: { status?: Status; completed?: boolean }) => void
   onEdit: (todo: Todo) => void
   onDelete: (id: string) => void
   isLoading?: boolean
@@ -57,6 +58,44 @@ const priorityIcons = {
 }
 
 /**
+ * ステータスの表示ラベル
+ */
+const statusLabels = {
+  TODO: '📝 未着手',
+  IN_PROGRESS: '🔄 作業中',
+  REVIEW: '👀 確認中',
+  DONE: '✅ 完了',
+}
+
+/**
+ * ステータスごとの表示色定義
+ */
+const statusColors = {
+  TODO: 'text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-700',
+  IN_PROGRESS: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30',
+  REVIEW: 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/30',
+  DONE: 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30',
+}
+
+/**
+ * ヘルパー関数：完了状態の判定
+ */
+const isCompleted = (status: Status): boolean => status === 'DONE'
+
+/**
+ * ヘルパー関数：次のステータスを取得
+ */
+const getNextStatus = (currentStatus: Status): Status => {
+  switch (currentStatus) {
+    case 'TODO': return 'IN_PROGRESS'
+    case 'IN_PROGRESS': return 'REVIEW'
+    case 'REVIEW': return 'DONE'
+    case 'DONE': return 'TODO'
+    default: return 'TODO'
+  }
+}
+
+/**
  * 個別のTodoアイテムを表示するコンポーネント
  *
  * 機能:
@@ -81,18 +120,17 @@ export default function TodoItem({
    * - 未完了のタスク
    * - 現在時刻が期限を超えている
    */
-  const isOverdue = todo.dueDate && !todo.completed &&
+  const isOverdue = todo.dueDate && !isCompleted(todo.status) &&
     isAfter(new Date(), todo.dueDate)
 
   /**
-   * 完了状態切り替えハンドラー
-   * - ローディング状態を制御
-   * - 完了状態を反転して更新
+   * ステータス変更ハンドラー（ドロップダウンでは直接onUpdateを呼ぶため不要だが、一応残しておく）
    */
-  const handleToggleComplete = async () => {
+  const handleStatusChange = async () => {
     setIsUpdating(true)
     try {
-      await onUpdate(todo.id, { completed: !todo.completed })
+      const nextStatus = getNextStatus(todo.status)
+      await onUpdate(todo.id, { status: nextStatus })
     } finally {
       setIsUpdating(false)
     }
@@ -111,29 +149,55 @@ export default function TodoItem({
 
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/20 p-3 sm:p-4 border-l-4 transition-all duration-200 ${
-      todo.completed 
+      isCompleted(todo.status)
         ? 'border-green-400 dark:border-green-500 opacity-75' 
         : isOverdue 
         ? 'border-red-400 dark:border-red-500' 
-        : 'border-purple-400 dark:border-purple-500'
+        : todo.status === 'IN_PROGRESS'
+        ? 'border-blue-400 dark:border-blue-500'
+        : todo.status === 'REVIEW'
+        ? 'border-yellow-400 dark:border-yellow-500'
+        : 'border-gray-400 dark:border-gray-500'
     } ${isUpdating ? 'opacity-50' : ''}`}>
       
       {/* ヘッダー */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
-          <input
-            type="checkbox"
-            checked={todo.completed}
-            onChange={handleToggleComplete}
-            disabled={isLoading || isUpdating}
-            className="w-5 h-5 sm:w-5 sm:h-5 text-purple-600 dark:text-purple-400 rounded focus:ring-purple-500 dark:focus:ring-purple-400 dark:bg-gray-700 dark:border-gray-600 flex-shrink-0"
-          />
-          <h3 className={`text-sm sm:text-lg font-medium break-words ${
-            todo.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'
-          }`}>
-            <span className="mr-1">{priorityIcons[todo.priority]}</span>
-            {todo.title}
-          </h3>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <h3 className={`text-sm sm:text-lg font-medium break-words ${
+                  isCompleted(todo.status) ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'
+                }`}>
+                  <span className="mr-1">{priorityIcons[todo.priority]}</span>
+                  {todo.title}
+                </h3>
+              </div>
+              
+              {/* ステータスドロップダウン */}
+              <div className="flex-shrink-0">
+                <select
+                  value={todo.status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value as Status
+                    if (newStatus !== todo.status) {
+                      onUpdate(todo.id, { status: newStatus })
+                    }
+                  }}
+                  disabled={isLoading || isUpdating}
+                  className={`text-xs px-2 py-1 rounded border focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 ${statusColors[todo.status]} ${
+                    isLoading || isUpdating ? 'cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
+                  {Object.entries(statusLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
         
         <div className="flex space-x-1 sm:space-x-2 flex-shrink-0 ml-2">
@@ -159,7 +223,7 @@ export default function TodoItem({
       {/* 説明 */}
       {todo.description && (
         <p className={`text-sm mb-3 break-words ${
-          todo.completed ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'
+          isCompleted(todo.status) ? 'text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'
         }`}>
           {todo.description}
         </p>
@@ -175,15 +239,15 @@ export default function TodoItem({
         {/* 期限 */}
         {todo.dueDate && (
           <span className={`text-xs break-words ${
-            isOverdue && !todo.completed 
+            isOverdue && !isCompleted(todo.status)
               ? 'text-red-600 dark:text-red-400 font-medium' 
-              : todo.completed 
+              : isCompleted(todo.status)
               ? 'text-gray-400 dark:text-gray-500' 
               : 'text-gray-600 dark:text-gray-300'
           }`}>
             📅 <span className="hidden sm:inline">{format(todo.dueDate, 'yyyy年M月d日 HH:mm', { locale: ja })}</span>
             <span className="sm:hidden">{format(todo.dueDate, 'M/d HH:mm', { locale: ja })}</span>
-            {isOverdue && !todo.completed && ' (期限切れ)'}
+            {isOverdue && !isCompleted(todo.status) && ' (期限切れ)'}
           </span>
         )}
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Priority } from '@prisma/client';
+import { Priority, Status } from '@prisma/client';
 import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils';
 import { getAuthenticatedUser, createAuthErrorResponse, createSecurityHeaders } from '@/lib/auth-utils';
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
         id: todo.id,
         title: todo.title,
         description: todo.description || null,
-        completed: Boolean(todo.completed),
+        status: todo.status || (todo.completed ? 'DONE' : 'TODO'), // statusを優先、後方互換性でcompletedも変換
         priority: todo.priority || 'MEDIUM',
         dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
         createdAt: new Date(todo.createdAt),
@@ -156,6 +156,7 @@ export async function POST(request: NextRequest) {
       userEmail: session.user.email || undefined,
       userName: session.user.name || undefined,
       priority: body.priority || 'MEDIUM',
+      status: body.status || 'TODO',
       dueDate: body.dueDate || undefined,
       category: body.category || undefined,
       tags: body.tags || undefined

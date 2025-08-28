@@ -119,7 +119,7 @@ export class CacheManager {
     const optimizedTodos = todos.map(todo => ({
       id: todo.id,
       title: todo.title,
-      completed: todo.completed,
+      status: todo.status,
       priority: todo.priority,
       dueDate: todo.dueDate,
       createdAt: todo.createdAt,

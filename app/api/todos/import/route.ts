@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { prisma } from '@/lib/prisma'
 import { optimizeForLambda, measureLambdaPerformance } from '@/lib/lambda-optimization'
-import { Priority } from '@prisma/client'
+import { Priority, Status } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +10,7 @@ interface ImportTodo {
   title: string
   description?: string
   completed?: boolean
+  status?: Status
   priority?: Priority
   dueDate?: string | Date | null
   category?: string | null
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
             data: {
               title: todo.title.trim(),
               description: todo.description?.trim() || null,
-              completed: todo.completed || false,
+              status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
               priority,
               dueDate,
               category: todo.category?.trim() || null,

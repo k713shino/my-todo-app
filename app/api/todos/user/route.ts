@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       id: todo.id,
       title: todo.title,
       description: todo.description || null,
-      completed: Boolean(todo.completed),
+      status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
       priority: todo.priority || 'MEDIUM',
       dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
       createdAt: new Date(todo.createdAt),

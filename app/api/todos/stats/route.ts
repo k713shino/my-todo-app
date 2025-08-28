@@ -31,6 +31,10 @@ export async function GET(request: NextRequest) {
       const [
         totalCount,
         completedCount,
+        todoCount,
+        inProgressCount,
+        reviewCount,
+        doneCount,
         urgentCount,
         highCount,
         mediumCount,
@@ -38,7 +42,11 @@ export async function GET(request: NextRequest) {
         overdueCount
       ] = await Promise.all([
         prisma.todo.count({ where: { userId: session.user.id } }),
-        prisma.todo.count({ where: { userId: session.user.id, completed: true } }),
+        prisma.todo.count({ where: { userId: session.user.id, status: 'DONE' } }),
+        prisma.todo.count({ where: { userId: session.user.id, status: 'TODO' } }),
+        prisma.todo.count({ where: { userId: session.user.id, status: 'IN_PROGRESS' } }),
+        prisma.todo.count({ where: { userId: session.user.id, status: 'REVIEW' } }),
+        prisma.todo.count({ where: { userId: session.user.id, status: 'DONE' } }),
         prisma.todo.count({ where: { userId: session.user.id, priority: 'URGENT' } }),
         prisma.todo.count({ where: { userId: session.user.id, priority: 'HIGH' } }),
         prisma.todo.count({ where: { userId: session.user.id, priority: 'MEDIUM' } }),
@@ -46,7 +54,7 @@ export async function GET(request: NextRequest) {
         prisma.todo.count({ 
           where: { 
             userId: session.user.id, 
-            completed: false,
+            status: { not: 'DONE' },
             dueDate: { lt: new Date() }
           } 
         })
@@ -54,15 +62,22 @@ export async function GET(request: NextRequest) {
 
       stats = {
         total: totalCount,
-        completed: completedCount,
-        active: totalCount - completedCount,
+        byStatus: {
+          todo: todoCount,
+          inProgress: inProgressCount,
+          review: reviewCount,
+          done: doneCount
+        },
         overdue: overdueCount,
         byPriority: {
           urgent: urgentCount,
           high: highCount,
           medium: mediumCount,
           low: lowCount
-        }
+        },
+        // 後方互換性
+        completed: completedCount,
+        active: totalCount - completedCount
       }
 
       // 統計をキャッシュ（30分間）

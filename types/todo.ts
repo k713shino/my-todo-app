@@ -1,10 +1,10 @@
-import { Priority } from '@prisma/client'
+import { Priority, Status } from '@prisma/client'
 
 export interface Todo {
   id: string
   title: string
   description?: string | null
-  completed: boolean
+  status: Status
   priority: Priority
   category?: string
   tags?: string[]
@@ -18,6 +18,7 @@ export interface CreateTodoData {
   title: string
   description?: string
   priority?: Priority
+  status?: Status
   dueDate?: Date
   category?: string
   tags?: string[]
@@ -26,7 +27,7 @@ export interface CreateTodoData {
 export interface UpdateTodoData {
   title?: string
   description?: string
-  completed?: boolean
+  status?: Status
   priority?: Priority
   dueDate?: Date | null
   category?: string
@@ -34,7 +35,7 @@ export interface UpdateTodoData {
 }
 
 export interface TodoFilters {
-  completed?: boolean
+  status?: Status | Status[]
   priority?: Priority
   dueBefore?: Date
   dueAfter?: Date
@@ -42,6 +43,8 @@ export interface TodoFilters {
   category?: string
   tags?: string[]
   dateRange?: 'today' | 'tomorrow' | 'this_week' | 'next_week' | 'this_month' | 'next_month' | 'overdue' | 'no_due_date'
+  // 後方互換性のため一時的にcompletedも残す
+  completed?: boolean
 }
 
 export interface SavedSearch {
@@ -62,8 +65,12 @@ export interface SearchHistory {
 
 export interface TodoStats {
   total: number
-  completed: number
-  active: number
+  byStatus: {
+    todo: number
+    inProgress: number
+    review: number
+    done: number
+  }
   overdue: number
   byPriority: {
     urgent: number
@@ -71,4 +78,7 @@ export interface TodoStats {
     medium: number
     low: number
   }
+  // 後方互換性のため
+  completed: number
+  active: number
 }

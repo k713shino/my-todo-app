@@ -300,7 +300,7 @@ export const dbAdapter = {
           todos: userData.todos,
           statistics: {
             totalTodos: userData.todos.length,
-            completedTodos: userData.todos.filter(t => t.completed).length
+            completedTodos: userData.todos.filter(t => t.status === 'DONE').length
           }
         }
 

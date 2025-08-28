@@ -74,7 +74,7 @@ model Todo {
   id          String    @id @default(cuid())
   title       String
   description String?
-  completed   Boolean   @default(false)
+  status      Status    @default(TODO)
   priority    Priority  @default(MEDIUM)
   dueDate     DateTime?
   createdAt   DateTime  @default(now())
@@ -85,7 +85,7 @@ model Todo {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([completed])
+  @@index([status])
   @@index([priority])
   @@index([dueDate])
   @@map("todos")
@@ -121,4 +121,11 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+enum Status {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
 }

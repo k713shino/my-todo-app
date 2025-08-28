@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Priority } from '@prisma/client'
+import { Priority, Status } from '@prisma/client'
 import { format } from 'date-fns'
 
 /**
@@ -17,6 +17,7 @@ interface TodoFormProps {
     title: string
     description?: string
     priority: Priority
+    status?: Status
     dueDate?: Date
     category?: string
     tags?: string[]
@@ -26,6 +27,7 @@ interface TodoFormProps {
     title?: string
     description?: string | null | undefined 
     priority?: Priority
+    status?: Status
     dueDate?: Date | null
     category?: string
     tags?: string[]
@@ -42,6 +44,16 @@ const priorityLabels = {
   MEDIUM: '中',
   HIGH: '高',
   URGENT: '緊急',
+}
+
+/**
+ * ステータスの表示ラベル
+ */
+const statusLabels = {
+  TODO: '📝 未着手',
+  IN_PROGRESS: '🔄 作業中',
+  REVIEW: '👀 確認中',
+  DONE: '✅ 完了',
 }
 
 /**
@@ -65,6 +77,7 @@ export default function TodoForm({
   const [category, setCategory] = useState('')
   const [tags, setTags] = useState('')
   const [priority, setPriority] = useState<Priority>('MEDIUM')
+  const [status, setStatus] = useState<Status>('TODO')
   const [dueDate, setDueDate] = useState('')
 
   useEffect(() => {
@@ -72,6 +85,7 @@ export default function TodoForm({
       setTitle(initialData.title || '')
       setDescription(initialData.description || '')
       setPriority(initialData.priority || 'MEDIUM')
+      setStatus(initialData.status || 'TODO')
       setDueDate(initialData.dueDate ? format(initialData.dueDate, 'yyyy-MM-dd\'T\'HH:mm') : '')
       setCategory(initialData.category || '')
       setTags(initialData.tags?.join(', ') || '')
@@ -79,6 +93,7 @@ export default function TodoForm({
       setTitle('')
       setDescription('')
       setPriority('MEDIUM')
+      setStatus('TODO')
       setDueDate('')
       setCategory('')
       setTags('')
@@ -105,6 +120,7 @@ export default function TodoForm({
       title: title.trim(),
       description: description.trim() || undefined,
       priority,
+      status, // 新規作成時・編集時ともにstatusを送信
       dueDate: dueDate ? new Date(dueDate) : undefined,
       category: category.trim() || undefined,
       tags: tags.trim() ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : undefined,
@@ -115,6 +131,7 @@ export default function TodoForm({
       setTitle('')
       setDescription('')
       setPriority('MEDIUM')
+      setStatus('TODO')
       setDueDate('')
       setCategory('')
       setTags('')
@@ -158,7 +175,7 @@ export default function TodoForm({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {/* 優先度 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -176,6 +193,33 @@ export default function TodoForm({
               </option>
             ))}
           </select>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            タスクの重要度を設定 (デフォルト: 中)
+          </p>
+        </div>
+
+        {/* ステータス */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            ステータス
+          </label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as Status)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            disabled={isLoading}
+          >
+            {Object.entries(statusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {initialData 
+              ? 'タスクのステータスを変更できます' 
+              : 'タスクの初期ステータスを設定 (デフォルト: 未着手)'}
+          </p>
         </div>
 
         {/* 期限 */}
@@ -190,6 +234,9 @@ export default function TodoForm({
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             disabled={isLoading}
           />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            タスクの完了予定日時を設定 (任意)
+          </p>
         </div>
       </div>
 
