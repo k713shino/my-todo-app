@@ -818,6 +818,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
             description: editingTodo.description || '',
             priority: editingTodo.priority,
             dueDate: editingTodo.dueDate,
+            category: editingTodo.category,
+            tags: editingTodo.tags,
           }}
           onCancel={() => setEditingTodo(null)}
         />
