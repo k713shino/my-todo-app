@@ -633,6 +633,14 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
    */
   const sortTodos = (todosToSort: Todo[]) => {
     const sorted = [...todosToSort].sort((a, b) => {
+      // 「すべて」タブでは未完了を優先表示
+      if (activeView === 'all') {
+        // 完了状態が異なる場合は未完了を先に
+        if (a.completed !== b.completed) {
+          return a.completed ? 1 : -1
+        }
+      }
+
       let comparison = 0
 
       switch (sortBy) {
@@ -669,10 +677,10 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
     const filtered = applyFilters(todos, filter)
     const sorted = sortTodos(filtered)
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 フィルター・ソート結果:', { 入力件数: todos.length, 出力件数: sorted.length, ソート: `${sortBy} ${sortOrder}` })
+      console.log('🔄 フィルター・ソート結果:', { 入力件数: todos.length, 出力件数: sorted.length, ソート: `${sortBy} ${sortOrder}`, activeView })
     }
     return sorted
-  }, [todos, filter, sortBy, sortOrder])
+  }, [todos, filter, sortBy, sortOrder, activeView])
 
   /**
    * Todoの統計情報を計算
@@ -1135,15 +1143,53 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                   🔄 再読み込み
                 </button> */}
               </div>
-              {filteredTodos.map((todo) => (
-                <TodoItem
-                  key={todo.id}
-                  todo={todo}
-                  onUpdate={handleUpdateTodo}
-                  onDelete={handleDeleteTodo}
-                  onEdit={setEditingTodo}
-                />
-              ))}
+{(() => {
+                const incompleteTodos = filteredTodos.filter(todo => !todo.completed)
+                const completedTodos = filteredTodos.filter(todo => todo.completed)
+                
+                return (
+                  <>
+                    {/* 未完了タスク */}
+                    {incompleteTodos.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                          <span>未完了のタスク ({incompleteTodos.length}件)</span>
+                        </div>
+                        {incompleteTodos.map((todo) => (
+                          <TodoItem
+                            key={todo.id}
+                            todo={todo}
+                            onUpdate={handleUpdateTodo}
+                            onDelete={handleDeleteTodo}
+                            onEdit={setEditingTodo}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* 完了タスク */}
+                    {completedTodos.length > 0 && (
+                      <div className="space-y-3 mt-6">
+                        <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span>完了したタスク ({completedTodos.length}件)</span>
+                          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700 ml-4"></div>
+                        </div>
+                        {completedTodos.map((todo) => (
+                          <TodoItem
+                            key={todo.id}
+                            todo={todo}
+                            onUpdate={handleUpdateTodo}
+                            onDelete={handleDeleteTodo}
+                            onEdit={setEditingTodo}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </>
           )}
         </div>
