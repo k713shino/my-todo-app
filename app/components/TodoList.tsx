@@ -85,6 +85,9 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   const [sortBy, setSortBy] = useState<'createdAt' | 'dueDate' | 'priority'>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc') // 新しい順がデフォルト
   
+  // タブビューのstate
+  const [activeView, setActiveView] = useState<'all' | 'status' | 'calendar' | 'kanban'>('all')
+  
   // スクロール位置保持機能付きのsetFilter
   const setFilter = withScrollPreservation((newFilter: TodoFilters) => {
     console.log('🎯 setFilter実行 (スクロール保持付き):', newFilter)
@@ -762,49 +765,319 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         </div>
       </div>
 
-      {/* ソート機能 */}
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-            📊 ソート・表示設定
-          </h3>
-          
-          <div className="flex flex-col sm:flex-row gap-3">
-            {/* ソート項目選択 */}
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-600 dark:text-gray-400">並び順:</label>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'createdAt' | 'dueDate' | 'priority')}
-                className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="createdAt">📅 作成日時</option>
-                <option value="dueDate">⏰ 期限日</option>
-                <option value="priority">⚡ 優先度</option>
-              </select>
-            </div>
-            
-            {/* 昇順/降順切り替え */}
+      {/* Notionライクなタブビュー */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+        {/* タブヘッダー */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700">
+          {[
+            { id: 'all', label: '📋 すべて', icon: '📋' },
+            { id: 'status', label: '📊 ステータス別', icon: '📊' },
+            { id: 'calendar', label: '📅 カレンダー', icon: '📅' },
+            { id: 'kanban', label: '🗂️ かんばん', icon: '🗂️' },
+          ].map((view) => (
             <button
-              onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-              className="text-xs px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
+              key={view.id}
+              onClick={() => setActiveView(view.id as typeof activeView)}
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors relative ${
+                activeView === view.id
+                  ? 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
             >
-              {sortOrder === 'desc' ? (
-                <>🔽 新しい順</>
-              ) : (
-                <>🔼 古い順</>
+              <span className="flex items-center justify-center gap-2">
+                <span className="text-base">{view.icon}</span>
+                <span className="hidden sm:inline">{view.label.split(' ')[1]}</span>
+              </span>
+              {activeView === view.id && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400"></div>
               )}
             </button>
-          </div>
+          ))}
         </div>
-        
-        {/* 現在のソート状況表示 */}
-        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          {filteredTodos.length}件のTodoを
-          {sortBy === 'createdAt' && '作成日時'}
-          {sortBy === 'dueDate' && '期限日'}
-          {sortBy === 'priority' && '優先度'}
-          の{sortOrder === 'desc' ? '降順' : '昇順'}で表示
+
+        {/* タブコンテンツ */}
+        <div className="p-4">
+          {activeView === 'all' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  📋 全てのタスク
+                </h3>
+                
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {/* ソート項目選択 */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-600 dark:text-gray-400">並び順:</label>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as 'createdAt' | 'dueDate' | 'priority')}
+                      className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                    >
+                      <option value="createdAt">📅 作成日時</option>
+                      <option value="dueDate">⏰ 期限日</option>
+                      <option value="priority">⚡ 優先度</option>
+                    </select>
+                  </div>
+                  
+                  {/* 昇順/降順切り替え */}
+                  <button
+                    onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    className="text-xs px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
+                  >
+                    {sortOrder === 'desc' ? (
+                      <>🔽 新しい順</>
+                    ) : (
+                      <>🔼 古い順</>
+                    )}
+                  </button>
+                </div>
+              </div>
+              
+              {/* 現在のソート状況表示 */}
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {filteredTodos.length}件のTodoを
+                {sortBy === 'createdAt' && '作成日時'}
+                {sortBy === 'dueDate' && '期限日'}
+                {sortBy === 'priority' && '優先度'}
+                の{sortOrder === 'desc' ? '降順' : '昇順'}で表示
+              </div>
+            </div>
+          )}
+
+          {activeView === 'status' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                📊 ステータス別表示
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 未完了タスク */}
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4">
+                  <h4 className="font-medium text-yellow-800 dark:text-yellow-200 mb-3 flex items-center gap-2">
+                    ⏳ 未完了 ({filteredTodos.filter(t => !t.completed).length}件)
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {filteredTodos.filter(t => !t.completed).slice(0, 5).map(todo => (
+                      <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-yellow-200 dark:border-yellow-700">
+                        <div className="font-medium">{todo.title}</div>
+                        {todo.dueDate && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            期限: {new Date(todo.dueDate).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {filteredTodos.filter(t => !t.completed).length > 5 && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                        ...他{filteredTodos.filter(t => !t.completed).length - 5}件
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 完了タスク */}
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                  <h4 className="font-medium text-green-800 dark:text-green-200 mb-3 flex items-center gap-2">
+                    ✅ 完了 ({filteredTodos.filter(t => t.completed).length}件)
+                  </h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {filteredTodos.filter(t => t.completed).slice(0, 5).map(todo => (
+                      <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-green-200 dark:border-green-700">
+                        <div className="font-medium line-through opacity-75">{todo.title}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          完了日: {new Date(todo.updatedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    ))}
+                    {filteredTodos.filter(t => t.completed).length > 5 && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                        ...他{filteredTodos.filter(t => t.completed).length - 5}件
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeView === 'calendar' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                📅 カレンダー表示
+              </h3>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* 今日 */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                  <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-3">
+                    📅 今日
+                  </h4>
+                  <div className="space-y-2">
+                    {filteredTodos
+                      .filter(todo => {
+                        if (!todo.dueDate) return false
+                        const today = new Date()
+                        const dueDate = new Date(todo.dueDate)
+                        return dueDate.toDateString() === today.toDateString()
+                      })
+                      .map(todo => (
+                        <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-blue-200 dark:border-blue-700">
+                          <div className={`font-medium ${todo.completed ? 'line-through opacity-75' : ''}`}>
+                            {todo.title}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            優先度: {todo.priority}
+                          </div>
+                        </div>
+                      ))
+                    }
+                    {filteredTodos.filter(todo => {
+                      if (!todo.dueDate) return false
+                      const today = new Date()
+                      const dueDate = new Date(todo.dueDate)
+                      return dueDate.toDateString() === today.toDateString()
+                    }).length === 0 && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        今日のタスクはありません
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 明日 */}
+                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
+                  <h4 className="font-medium text-orange-800 dark:text-orange-200 mb-3">
+                    📅 明日
+                  </h4>
+                  <div className="space-y-2">
+                    {filteredTodos
+                      .filter(todo => {
+                        if (!todo.dueDate) return false
+                        const tomorrow = new Date()
+                        tomorrow.setDate(tomorrow.getDate() + 1)
+                        const dueDate = new Date(todo.dueDate)
+                        return dueDate.toDateString() === tomorrow.toDateString()
+                      })
+                      .map(todo => (
+                        <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-orange-200 dark:border-orange-700">
+                          <div className={`font-medium ${todo.completed ? 'line-through opacity-75' : ''}`}>
+                            {todo.title}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            優先度: {todo.priority}
+                          </div>
+                        </div>
+                      ))
+                    }
+                    {filteredTodos.filter(todo => {
+                      if (!todo.dueDate) return false
+                      const tomorrow = new Date()
+                      tomorrow.setDate(tomorrow.getDate() + 1)
+                      const dueDate = new Date(todo.dueDate)
+                      return dueDate.toDateString() === tomorrow.toDateString()
+                    }).length === 0 && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        明日のタスクはありません
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 期限切れ */}
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
+                  <h4 className="font-medium text-red-800 dark:text-red-200 mb-3">
+                    ⚠️ 期限切れ
+                  </h4>
+                  <div className="space-y-2">
+                    {filteredTodos
+                      .filter(todo => {
+                        if (!todo.dueDate || todo.completed) return false
+                        const now = new Date()
+                        const dueDate = new Date(todo.dueDate)
+                        return dueDate < now
+                      })
+                      .map(todo => (
+                        <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-red-200 dark:border-red-700">
+                          <div className="font-medium text-red-600 dark:text-red-400">
+                            {todo.title}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            期限: {new Date(todo.dueDate!).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))
+                    }
+                    {filteredTodos.filter(todo => {
+                      if (!todo.dueDate || todo.completed) return false
+                      const now = new Date()
+                      const dueDate = new Date(todo.dueDate)
+                      return dueDate < now
+                    }).length === 0 && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        期限切れのタスクはありません
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeView === 'kanban' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                🗂️ かんばんボード
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* 優先度別かんばん */}
+                {[
+                  { priority: 'URGENT', label: '🚨 緊急', color: 'red' },
+                  { priority: 'HIGH', label: '🔥 高', color: 'orange' },
+                  { priority: 'MEDIUM', label: '⚡ 中', color: 'yellow' },
+                  { priority: 'LOW', label: '📝 低', color: 'green' },
+                ].map(({ priority, label, color }) => (
+                  <div key={priority} className={`bg-${color}-50 dark:bg-${color}-900/20 rounded-lg p-4`}>
+                    <h4 className={`font-medium text-${color}-800 dark:text-${color}-200 mb-3 flex items-center gap-2`}>
+                      {label} ({filteredTodos.filter(t => t.priority === priority).length})
+                    </h4>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {filteredTodos
+                        .filter(t => t.priority === priority)
+                        .map(todo => (
+                          <div 
+                            key={todo.id} 
+                            className={`text-sm p-3 bg-white dark:bg-gray-800 rounded-md border border-${color}-200 dark:border-${color}-700 cursor-pointer hover:shadow-sm transition-shadow`}
+                            onClick={() => setEditingTodo(todo)}
+                          >
+                            <div className={`font-medium ${todo.completed ? 'line-through opacity-75' : ''}`}>
+                              {todo.title}
+                            </div>
+                            {todo.description && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                                {todo.description}
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between mt-2">
+                              <div className={`text-xs px-2 py-1 rounded-full ${
+                                todo.completed 
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                              }`}>
+                                {todo.completed ? '✅ 完了' : '⏳ 作業中'}
+                              </div>
+                              {todo.dueDate && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {new Date(todo.dueDate).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -831,48 +1104,50 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       )}
 
 
-      {/* フィルター済みTodoリスト表示 */}
-      <div className="space-y-3">
-        {filteredTodos.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            {todos.length === 0 ? (
-              <div className="space-y-2">
-                <div className="text-4xl">📝</div>
-                <div>まだTodoがありません。最初のTodoを作成してみましょう！</div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-4xl">🔍</div>
-                <div>検索条件に一致するTodoが見つかりませんでした。</div>
-                <div className="text-sm">フィルター条件を変更してみてください。</div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {todos.length}件中 {filteredTodos.length}件を表示
-              </p>
-              {/* <button 
-                onClick={() => fetchTodos(true)}
-                className="text-xs px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
-              >
-                🔄 再読み込み
-              </button> */}
+      {/* フィルター済みTodoリスト表示（「すべて」タブでのみ表示） */}
+      {activeView === 'all' && (
+        <div className="space-y-3">
+          {filteredTodos.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              {todos.length === 0 ? (
+                <div className="space-y-2">
+                  <div className="text-4xl">📝</div>
+                  <div>まだTodoがありません。最初のTodoを作成してみましょう！</div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-4xl">🔍</div>
+                  <div>検索条件に一致するTodoが見つかりませんでした。</div>
+                  <div className="text-sm">フィルター条件を変更してみてください。</div>
+                </div>
+              )}
             </div>
-            {filteredTodos.map((todo) => (
-              <TodoItem
-                key={todo.id}
-                todo={todo}
-                onUpdate={handleUpdateTodo}
-                onDelete={handleDeleteTodo}
-                onEdit={setEditingTodo}
-              />
-            ))}
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {todos.length}件中 {filteredTodos.length}件を表示
+                </p>
+                {/* <button 
+                  onClick={() => fetchTodos(true)}
+                  className="text-xs px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+                >
+                  🔄 再読み込み
+                </button> */}
+              </div>
+              {filteredTodos.map((todo) => (
+                <TodoItem
+                  key={todo.id}
+                  todo={todo}
+                  onUpdate={handleUpdateTodo}
+                  onDelete={handleDeleteTodo}
+                  onEdit={setEditingTodo}
+                />
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
