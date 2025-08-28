@@ -87,6 +87,43 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   
   // タブビューのstate
   const [activeView, setActiveView] = useState<'all' | 'status' | 'calendar' | 'kanban'>('all')
+  const [currentDate, setCurrentDate] = useState(new Date())
+  
+  // カレンダー用ヘルパー関数
+  const getCalendarDays = (date: Date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    
+    // 月の最初の日と最後の日を取得
+    const firstDayOfMonth = new Date(year, month, 1)
+    const lastDayOfMonth = new Date(year, month + 1, 0)
+    
+    // カレンダー表示用の開始日（前月の日曜日から）
+    const startDate = new Date(firstDayOfMonth)
+    startDate.setDate(firstDayOfMonth.getDate() - firstDayOfMonth.getDay())
+    
+    // カレンダー表示用の終了日（翌月の土曜日まで）
+    const endDate = new Date(lastDayOfMonth)
+    endDate.setDate(lastDayOfMonth.getDate() + (6 - lastDayOfMonth.getDay()))
+    
+    const days = []
+    const currentDateLoop = new Date(startDate)
+    
+    while (currentDateLoop <= endDate) {
+      days.push(new Date(currentDateLoop))
+      currentDateLoop.setDate(currentDateLoop.getDate() + 1)
+    }
+    
+    return days
+  }
+  
+  const getTodosForDate = (date: Date) => {
+    return filteredTodos.filter(todo => {
+      if (!todo.dueDate) return false
+      const todoDate = new Date(todo.dueDate)
+      return todoDate.toDateString() === date.toDateString()
+    })
+  }
   
   // スクロール位置保持機能付きのsetFilter
   const setFilter = withScrollPreservation((newFilter: TodoFilters) => {
@@ -865,13 +902,41 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                   </h4>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {filteredTodos.filter(t => !t.completed).slice(0, 5).map(todo => (
-                      <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-yellow-200 dark:border-yellow-700">
-                        <div className="font-medium">{todo.title}</div>
-                        {todo.dueDate && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            期限: {new Date(todo.dueDate).toLocaleDateString()}
+                      <div key={todo.id} className="text-sm p-3 bg-white dark:bg-gray-800 rounded border border-yellow-200 dark:border-yellow-700 hover:shadow-sm transition-shadow">
+                        <div className="flex items-start gap-3">
+                          <button
+                            onClick={() => handleUpdateTodo(todo.id, { completed: true })}
+                            className="mt-0.5 w-4 h-4 border-2 border-yellow-400 rounded hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors flex items-center justify-center"
+                          >
+                            {todo.completed && <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div 
+                              className="font-medium cursor-pointer hover:text-purple-600 dark:hover:text-purple-400"
+                              onClick={() => setEditingTodo(todo)}
+                            >
+                              {todo.title}
+                            </div>
+                            {todo.description && (
+                              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
+                                {todo.description}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                              {todo.dueDate && (
+                                <span>期限: {new Date(todo.dueDate).toLocaleDateString()}</span>
+                              )}
+                              <span className={`px-2 py-1 rounded-full text-xs ${
+                                todo.priority === 'URGENT' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200' :
+                                todo.priority === 'HIGH' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200' :
+                                todo.priority === 'MEDIUM' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200' :
+                                'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                              }`}>
+                                {todo.priority}
+                              </span>
+                            </div>
                           </div>
-                        )}
+                        </div>
                       </div>
                     ))}
                     {filteredTodos.filter(t => !t.completed).length > 5 && (
@@ -889,10 +954,38 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                   </h4>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {filteredTodos.filter(t => t.completed).slice(0, 5).map(todo => (
-                      <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-green-200 dark:border-green-700">
-                        <div className="font-medium line-through opacity-75">{todo.title}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          完了日: {new Date(todo.updatedAt).toLocaleDateString()}
+                      <div key={todo.id} className="text-sm p-3 bg-white dark:bg-gray-800 rounded border border-green-200 dark:border-green-700 hover:shadow-sm transition-shadow">
+                        <div className="flex items-start gap-3">
+                          <button
+                            onClick={() => handleUpdateTodo(todo.id, { completed: false })}
+                            className="mt-0.5 w-4 h-4 border-2 border-green-400 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors flex items-center justify-center bg-green-500"
+                          >
+                            <div className="w-2 h-2 bg-white rounded-full"></div>
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div 
+                              className="font-medium line-through opacity-75 cursor-pointer hover:text-purple-600 dark:hover:text-purple-400"
+                              onClick={() => setEditingTodo(todo)}
+                            >
+                              {todo.title}
+                            </div>
+                            {todo.description && (
+                              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate line-through opacity-75">
+                                {todo.description}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                              <span>完了日: {new Date(todo.updatedAt).toLocaleDateString()}</span>
+                              <span className={`px-2 py-1 rounded-full text-xs opacity-75 ${
+                                todo.priority === 'URGENT' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200' :
+                                todo.priority === 'HIGH' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200' :
+                                todo.priority === 'MEDIUM' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200' :
+                                'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                              }`}>
+                                {todo.priority}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -909,121 +1002,121 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
 
           {activeView === 'calendar' && (
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                📅 カレンダー表示
-              </h3>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* 今日 */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                  <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-3">
-                    📅 今日
-                  </h4>
-                  <div className="space-y-2">
-                    {filteredTodos
-                      .filter(todo => {
-                        if (!todo.dueDate) return false
-                        const today = new Date()
-                        const dueDate = new Date(todo.dueDate)
-                        return dueDate.toDateString() === today.toDateString()
-                      })
-                      .map(todo => (
-                        <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-blue-200 dark:border-blue-700">
-                          <div className={`font-medium ${todo.completed ? 'line-through opacity-75' : ''}`}>
-                            {todo.title}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            優先度: {todo.priority}
-                          </div>
-                        </div>
-                      ))
-                    }
-                    {filteredTodos.filter(todo => {
-                      if (!todo.dueDate) return false
-                      const today = new Date()
-                      const dueDate = new Date(todo.dueDate)
-                      return dueDate.toDateString() === today.toDateString()
-                    }).length === 0 && (
-                      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                        今日のタスクはありません
-                      </div>
-                    )}
-                  </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  📅 カレンダー表示
+                </h3>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    ←
+                  </button>
+                  <span className="text-lg font-semibold text-gray-900 dark:text-white min-w-[120px] text-center">
+                    {currentDate.getFullYear()}年 {currentDate.getMonth() + 1}月
+                  </span>
+                  <button
+                    onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                    className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              {/* カレンダーグリッド */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {/* 曜日ヘッダー */}
+                <div className="grid grid-cols-7 bg-gray-50 dark:bg-gray-700">
+                  {['日', '月', '火', '水', '木', '金', '土'].map((day, index) => (
+                    <div 
+                      key={day} 
+                      className={`p-3 text-center text-sm font-medium ${
+                        index === 0 ? 'text-red-600 dark:text-red-400' : 
+                        index === 6 ? 'text-blue-600 dark:text-blue-400' : 
+                        'text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {day}
+                    </div>
+                  ))}
                 </div>
 
-                {/* 明日 */}
-                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
-                  <h4 className="font-medium text-orange-800 dark:text-orange-200 mb-3">
-                    📅 明日
-                  </h4>
-                  <div className="space-y-2">
-                    {filteredTodos
-                      .filter(todo => {
-                        if (!todo.dueDate) return false
-                        const tomorrow = new Date()
-                        tomorrow.setDate(tomorrow.getDate() + 1)
-                        const dueDate = new Date(todo.dueDate)
-                        return dueDate.toDateString() === tomorrow.toDateString()
-                      })
-                      .map(todo => (
-                        <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-orange-200 dark:border-orange-700">
-                          <div className={`font-medium ${todo.completed ? 'line-through opacity-75' : ''}`}>
-                            {todo.title}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            優先度: {todo.priority}
-                          </div>
+                {/* カレンダー日付 */}
+                <div className="grid grid-cols-7">
+                  {getCalendarDays(currentDate).map((date, index) => {
+                    const todosForDate = getTodosForDate(date)
+                    const isCurrentMonth = date.getMonth() === currentDate.getMonth()
+                    const isToday = date.toDateString() === new Date().toDateString()
+                    const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                    
+                    return (
+                      <div
+                        key={index}
+                        className={`min-h-[120px] p-2 border-r border-b border-gray-200 dark:border-gray-700 ${
+                          !isCurrentMonth ? 'bg-gray-50 dark:bg-gray-800' : 'bg-white dark:bg-gray-900'
+                        } ${
+                          isToday ? 'ring-2 ring-purple-500 ring-inset' : ''
+                        }`}
+                      >
+                        <div className={`text-sm font-medium mb-1 ${
+                          !isCurrentMonth ? 'text-gray-400 dark:text-gray-600' :
+                          isToday ? 'text-purple-600 dark:text-purple-400' :
+                          isWeekend ? 'text-red-600 dark:text-red-400' :
+                          'text-gray-900 dark:text-gray-100'
+                        }`}>
+                          {date.getDate()}
                         </div>
-                      ))
-                    }
-                    {filteredTodos.filter(todo => {
-                      if (!todo.dueDate) return false
-                      const tomorrow = new Date()
-                      tomorrow.setDate(tomorrow.getDate() + 1)
-                      const dueDate = new Date(todo.dueDate)
-                      return dueDate.toDateString() === tomorrow.toDateString()
-                    }).length === 0 && (
-                      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                        明日のタスクはありません
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 期限切れ */}
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-4">
-                  <h4 className="font-medium text-red-800 dark:text-red-200 mb-3">
-                    ⚠️ 期限切れ
-                  </h4>
-                  <div className="space-y-2">
-                    {filteredTodos
-                      .filter(todo => {
-                        if (!todo.dueDate || todo.completed) return false
-                        const now = new Date()
-                        const dueDate = new Date(todo.dueDate)
-                        return dueDate < now
-                      })
-                      .map(todo => (
-                        <div key={todo.id} className="text-sm p-2 bg-white dark:bg-gray-800 rounded border border-red-200 dark:border-red-700">
-                          <div className="font-medium text-red-600 dark:text-red-400">
-                            {todo.title}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            期限: {new Date(todo.dueDate!).toLocaleDateString()}
-                          </div>
+                        
+                        {/* その日のTodo */}
+                        <div className="space-y-1">
+                          {todosForDate.slice(0, 3).map((todo) => (
+                            <div
+                              key={todo.id}
+                              className={`text-xs p-1 rounded cursor-pointer hover:shadow-sm transition-shadow ${
+                                todo.completed
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 line-through opacity-75'
+                                  : todo.priority === 'URGENT'
+                                  ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+                                  : todo.priority === 'HIGH'
+                                  ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200'
+                                  : 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
+                              }`}
+                              onClick={() => setEditingTodo(todo)}
+                              title={todo.description || todo.title}
+                            >
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleUpdateTodo(todo.id, { completed: !todo.completed })
+                                  }}
+                                  className={`w-3 h-3 border rounded-sm flex items-center justify-center ${
+                                    todo.completed 
+                                      ? 'bg-green-500 border-green-500' 
+                                      : 'border-gray-300 hover:border-gray-400'
+                                  }`}
+                                >
+                                  {todo.completed && (
+                                    <div className="w-1 h-1 bg-white rounded-full"></div>
+                                  )}
+                                </button>
+                                <span className="truncate flex-1">
+                                  {todo.title}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          {todosForDate.length > 3 && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                              +{todosForDate.length - 3}件
+                            </div>
+                          )}
                         </div>
-                      ))
-                    }
-                    {filteredTodos.filter(todo => {
-                      if (!todo.dueDate || todo.completed) return false
-                      const now = new Date()
-                      const dueDate = new Date(todo.dueDate)
-                      return dueDate < now
-                    }).length === 0 && (
-                      <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                        期限切れのタスクはありません
                       </div>
-                    )}
-                  </div>
+                    )
+                  })}
                 </div>
               </div>
             </div>
