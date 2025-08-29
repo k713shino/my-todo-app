@@ -511,24 +511,58 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
    * ドラッグ&ドロップハンドラー
    */
   const handleDragStart = (e: React.DragEvent, todo: Todo) => {
-    setDraggedTodo(todo)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', todo.id)
-    
-    // ドラッグ開始時の視覚的フィードバック
-    e.currentTarget.classList.add('opacity-50')
+    try {
+      setDraggedTodo(todo)
+      
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', todo.id)
+      }
+      
+      // ドラッグ開始時の視覚的フィードバック
+      const target = e.currentTarget as HTMLElement
+      if (target) {
+        target.classList.add('opacity-50')
+      }
+      
+      console.log('🎨 ドラッグ開始:', { todoId: todo.id, title: todo.title })
+    } catch (error) {
+      console.error('❌ ドラッグスタートエラー:', error)
+    }
   }
 
   const handleDragEnd = (e: React.DragEvent) => {
-    setDraggedTodo(null)
-    setDragOverColumn(null)
-    e.currentTarget.classList.remove('opacity-50')
+    try {
+      setDraggedTodo(null)
+      setDragOverColumn(null)
+      
+      const target = e.currentTarget as HTMLElement
+      if (target) {
+        target.classList.remove('opacity-50')
+      }
+      
+      console.log('🏁 ドラッグ終了')
+    } catch (error) {
+      console.error('❌ ドラッグエンドエラー:', error)
+      // エラー時も状態をリセット
+      setDraggedTodo(null)
+      setDragOverColumn(null)
+    }
   }
 
   const handleDragOver = (e: React.DragEvent, status: Status) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverColumn(status)
+    try {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move'
+      }
+      
+      setDragOverColumn(status)
+    } catch (error) {
+      console.error('❌ ドラッグオーバーエラー:', error)
+    }
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -540,25 +574,38 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   }
 
   const handleDrop = (e: React.DragEvent, targetStatus: Status) => {
-    e.preventDefault()
-    setDragOverColumn(null)
-    
-    if (!draggedTodo) return
-    
-    // 同じステータスの場合は何もしない
-    if (draggedTodo.status === targetStatus) {
-      return
+    try {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      setDragOverColumn(null)
+      
+      if (!draggedTodo) {
+        console.warn('⚠️ ドラッグ中のTodoが見つかりません')
+        return
+      }
+      
+      // 同じステータスの場合は何もしない
+      if (draggedTodo.status === targetStatus) {
+        console.log('🚀 同じステータスのためスキップ:', targetStatus)
+        return
+      }
+
+      console.log('🎯 ドラッグ&ドロップ:', {
+        todoId: draggedTodo.id,
+        from: draggedTodo.status,
+        to: targetStatus
+      })
+
+      // ステータスを更新
+      handleUpdateTodo(draggedTodo.id, { status: targetStatus })
+      setDraggedTodo(null)
+      
+    } catch (error) {
+      console.error('❌ ドラッグ&ドロップエラー:', error)
+      setDraggedTodo(null)
+      setDragOverColumn(null)
     }
-
-    console.log('🎯 ドラッグ&ドロップ:', {
-      todoId: draggedTodo.id,
-      from: draggedTodo.status,
-      to: targetStatus
-    })
-
-    // ステータスを更新
-    handleUpdateTodo(draggedTodo.id, { status: targetStatus })
-    setDraggedTodo(null)
   }
 
   /**
@@ -1289,9 +1336,21 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                           : `border-${color}-200 dark:border-${color}-700`
                       }`}
                       data-drop-zone="true"
-                      onDragOver={(e) => handleDragOver(e, status)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, status)}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleDragOver(e, status)
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation() 
+                        handleDragLeave(e)
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleDrop(e, status)
+                      }}
                     >
                       <div className="sticky top-0 bg-inherit z-10 pb-3 mb-3 border-b border-current border-opacity-20">
                         <h4 className={`font-semibold text-${color}-800 dark:text-${color}-200 flex items-center justify-between`}>
@@ -1333,8 +1392,14 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                               <div 
                                 key={todo.id} 
                                 draggable
-                                onDragStart={(e) => handleDragStart(e, todo)}
-                                onDragEnd={handleDragEnd}
+                                onDragStart={(e) => {
+                                  e.stopPropagation()
+                                  handleDragStart(e, todo)
+                                }}
+                                onDragEnd={(e) => {
+                                  e.stopPropagation()
+                                  handleDragEnd(e)
+                                }}
                                 className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm border-l-4 p-4 hover:shadow-md transition-all group cursor-grab active:cursor-grabbing select-none ${
                                   isOverdue ? 'border-l-red-500 bg-red-50 dark:bg-red-900/10' :
                                   `border-l-${priorityColor}-400`
