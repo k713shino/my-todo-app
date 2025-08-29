@@ -24,7 +24,7 @@ export async function PUT(
 
     console.log('🔄 Lambda API経由でTodo更新を試行:', id);
     
-    // Lambda API経由でTodoを更新（4ステータス対応）
+    // Lambda API経由でTodoを更新（4ステータス専用）
     const updateData = {
       ...(body.title !== undefined && { title: body.title.trim() }),
       ...(body.description !== undefined && { description: body.description?.trim() || null }),
@@ -39,19 +39,12 @@ export async function PUT(
       userId: extractUserIdFromPrefixed(session.user.id) // 必須: ユーザー認証用（実際のユーザーID）
     }
     
-    // 4ステータス直接対応: Lambda関数がstatusフィールドをサポート
+    // 4ステータス専用対応: statusフィールドのみサポート
     if (body.status !== undefined) {
       (updateData as any).status = body.status
-      console.log('📊 4ステータス直接更新:', { 
+      console.log('📊 4ステータス更新:', { 
         todoId: id,
         status: body.status
-      })
-    } else if (body.completed !== undefined) {
-      // 後方互換性: completedから statusに変換
-      (updateData as any).status = body.completed ? 'DONE' : 'TODO'
-      console.log('🔄 completed から status に変換:', { 
-        completed: body.completed, 
-        status: (updateData as any).status 
       })
     }
     
