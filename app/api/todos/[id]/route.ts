@@ -24,7 +24,7 @@ export async function PUT(
 
     console.log('🔄 Lambda API経由でTodo更新を試行:', id);
     
-    // Lambda API経由でTodoを更新 (TEXT型対応)
+    // Lambda API経由でTodoを更新 (4ステータス対応)
     const updateData = {
       ...(body.title !== undefined && { title: body.title.trim() }),
       ...(body.description !== undefined && { description: body.description?.trim() || null }),
@@ -39,18 +39,15 @@ export async function PUT(
       userId: extractUserIdFromPrefixed(session.user.id) // 必須: ユーザー認証用（実際のユーザーID）
     }
     
-    // 一時的な対応: データベースマイグレーション前はcompletedフィールドを使用
-    if (body.completed !== undefined) {
-      (updateData as any).completed = body.completed
-      console.log('🔄 completed フィールドで更新:', body.completed)
+    // 4ステータス対応: statusフィールドを優先、completedは後方互換性のため
+    if (body.status !== undefined) {
+      (updateData as any).status = body.status
+      console.log('🔄 status フィールドで更新:', body.status)
+    } else if (body.completed !== undefined) {
+      // 後方互換性: completedをstatusに変換
+      (updateData as any).status = body.completed ? 'DONE' : 'TODO'
+      console.log('🔄 completed から status に変換:', body.completed, '->', body.completed ? 'DONE' : 'TODO')
     }
-    
-    // TODO: データベースマイグレーション後はこちらに切り替え
-    // if (body.status !== undefined) {
-    //   updateData.status = body.status
-    // } else if (body.completed !== undefined) {
-    //   updateData.status = body.completed ? 'DONE' : 'TODO'
-    // }
     
     console.log('📤 Lambda API更新データ:', { 
       todoId: id, 

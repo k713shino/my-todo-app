@@ -102,30 +102,7 @@ const getNextStatus = (currentStatus: Status): Status => {
 // 後方互換性のため、completedの概念をstatusに変換
 const isCompleted = (status: Status): boolean => status === 'DONE'
 
-// LocalStorageでステータス管理（一時的な解決策）
-const getLocalStatus = (todoId: string, dbCompleted?: boolean, dbStatus?: Status): Status => {
-  if (typeof window === 'undefined') {
-    // サーバーサイド：statusフィールドがあればそれを使用、なければcompletedから推測
-    if (dbStatus) return dbStatus
-    return dbCompleted ? 'DONE' : 'TODO'
-  }
-  
-  const key = `todo-status-${todoId}`
-  const stored = localStorage.getItem(key)
-  if (stored && ['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'].includes(stored)) {
-    return stored as Status
-  }
-  
-  // LocalStorageにない場合は、statusフィールドがあればそれを使用、なければcompletedから推測
-  if (dbStatus) return dbStatus
-  return dbCompleted ? 'DONE' : 'TODO'
-}
-
-const setLocalStatus = (todoId: string, status: Status) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(`todo-status-${todoId}`, status)
-  }
-}
+// 以前のLocalStorage依存のコードを削除し、APIレスポンスを直接使用
 
 export default function TodoList({ modalSearchValues }: TodoListProps) {
   // ページ移動デバッグ開始
@@ -229,21 +206,35 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       const warmupStart = performance.now()
       
       // 非同期でウォームアップ実行（UI をブロックしない）
+      // タイムアウトを追加して、ハングしないように改善
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10秒タイムアウト
+      
       fetch('/api/lambda/warmup', { 
         method: 'GET',
-        cache: 'no-store' 
+        cache: 'no-store',
+        signal: controller.signal
       }).then(async (response) => {
+        clearTimeout(timeoutId)
         const warmupTime = performance.now() - warmupStart
-        const result = await response.json()
         
-        if (result.success) {
-          console.log(`🚀 Lambda関数ウォームアップ完了 (${warmupTime.toFixed(2)}ms)`)
-          setLambdaWarmedUp(true)
-        } else {
-          console.warn('⚠️ Lambda関数ウォームアップ失敗:', result.error)
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success) {
+            console.log(`🚀 Lambda関数ウォームアップ完了 (${warmupTime.toFixed(2)}ms)`)
+            setLambdaWarmedUp(true)
+            
+            // 5分後にウォームアップ状態をリセット（再ウォームアップのため）
+            setTimeout(() => setLambdaWarmedUp(false), 5 * 60 * 1000)
+          } else {
+            console.warn('⚠️ Lambda関数ウォームアップ失敗:', result.error)
+          }
         }
       }).catch(error => {
-        console.warn('⚠️ Lambda関数ウォームアップエラー:', error)
+        clearTimeout(timeoutId)
+        if (error.name !== 'AbortError') {
+          console.warn('⚠️ Lambda関数ウォームアップエラー:', error)
+        }
       })
     } catch (error) {
       console.warn('⚠️ Lambda関数ウォームアップエラー:', error)
@@ -315,9 +306,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       
       const parsedTodos = data.map((todo) => {
         const parsed = safeParseTodoDate(todo)
-        // LocalStorageからステータスを取得して適用
-        const localStatus = getLocalStatus(parsed.id, parsed.completed, parsed.status)
-        return { ...parsed, status: localStatus }
+        // APIから直接ステータスを使用（LocalStorage依存を削除）
+        return parsed
       })
       setTodos(parsedTodos)
       
@@ -355,8 +345,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
             if (cachedData.length > 0) {
               const parsedTodos = cachedData.map((todo: TodoResponse) => {
                 const parsed = safeParseTodoDate(todo)
-                const localStatus = getLocalStatus(parsed.id, parsed.completed, parsed.status)
-                return { ...parsed, status: localStatus }
+                return parsed
               })
               setTodos(parsedTodos)
               toast.success('📦 キャッシュからデータを復旧しました')
@@ -398,10 +387,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
     console.log('🔵 楽観的UI更新 - 追加:', { tempId, title: data.title });
     setTodos(prev => [optimisticTodo, ...prev])
     
-    // 楽観的更新時にもLocalStorageにステータスを保存
-    if (optimisticTodo.status) {
-      setLocalStatus(tempId, optimisticTodo.status)
-    }
+    // 楽観的更新（LocalStorage依存を削除）
     
     try {
       const response = await retryWithBackoff(async () => {
@@ -425,22 +411,11 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       const newTodo: TodoResponse = await response.json()
       console.log('✅ API成功レスポンス:', newTodo);
       
-      // 一時的なTodoを実際のTodoで置き換え（LocalStorageのステータスを適用）
+      // 一時的なTodoを実際のTodoで置き換え（APIレスポンスを直接使用）
       setTodos(prev => prev.map(todo => {
         if (todo.id === tempId) {
           const parsed = safeParseTodoDate({ ...newTodo })
-          
-          // 一時的なIDから実際のIDにLocalStorageのステータスを移行
-          const tempStatus = getLocalStatus(tempId, parsed.completed, parsed.status)
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem(`todo-status-${tempId}`)
-            if (tempStatus) {
-              setLocalStatus(parsed.id, tempStatus)
-            }
-          }
-          
-          const localStatus = getLocalStatus(parsed.id, parsed.completed, parsed.status)
-          return { ...parsed, status: localStatus }
+          return parsed
         }
         return todo
       }))
@@ -457,12 +432,6 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
     } catch (error) {
       // エラー時は楽観的更新を取り消し
       setTodos(prev => prev.filter(todo => todo.id !== tempId))
-      
-      // LocalStorageからも一時的なエントリを削除
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(`todo-status-${tempId}`)
-        console.log('🧹 エラー時LocalStorage削除:', tempId)
-      }
       
       const errorWithStatus = error as ErrorWithStatus
       logApiError(errorWithStatus, 'Todo作成')
@@ -488,28 +457,12 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
     ))
     
     try {
-      // LocalStorageにステータスを保存（一時的な解決策）
-      if (data.status) {
-        setLocalStatus(id, data.status)
-        console.log('💾 LocalStorageにステータス保存:', { todoId: id, status: data.status })
-      }
-      
-      // 一時的な修正: statusをcompletedに変換（データベースマイグレーション前の対応）
-      const requestData = { ...data }
-      if (data.status) {
-        // 4段階ステータスを2段階completed（完了/未完了）に変換
-        // 完了はDONEのみ、それ以外は未完了として扱う
-        requestData.completed = data.status === 'DONE'
-        // statusフィールドは送信しない（データベースにまだ存在しないため）
-        delete requestData.status
-        console.log('🔄 ステータス変換:', { originalStatus: data.status, completed: requestData.completed })
-      }
       
       const response = await retryWithBackoff(async () => {
         return await fetch(`/api/todos/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestData),
+          body: JSON.stringify(data),
         })
       }, {
         maxRetries: 2,
@@ -524,12 +477,11 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       }
 
       const updatedTodo: TodoResponse = await response.json()
-      // 実際のレスポンスでUIを更新（LocalStorageのステータスを適用）
+      // 実際のレスポンスでUIを更新（APIから直接ステータスを取得）
       setTodos(prev => prev.map(todo => {
         if (todo.id === id) {
           const parsed = safeParseTodoDate({ ...updatedTodo })
-          const localStatus = getLocalStatus(parsed.id, parsed.completed, parsed.status)
-          return { ...parsed, status: localStatus }
+          return parsed
         }
         return todo
       }))
@@ -546,13 +498,6 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
     } catch (error) {
       // エラー時は元の状態に戻す
       setTodos(originalTodos)
-      
-      // LocalStorageのステータスも復元（更新前の状態に戻す）
-      const originalTodo = originalTodos.find(todo => todo.id === id)
-      if (originalTodo && typeof window !== 'undefined') {
-        setLocalStatus(id, originalTodo.status)
-        console.log('🔄 更新エラー時LocalStorage復元:', { id, status: originalTodo.status })
-      }
       
       const errorWithStatus = error as ErrorWithStatus
       logApiError(errorWithStatus, 'Todo更新')
@@ -651,11 +596,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
 
       toast.success('🗑️ Todoを削除しました！')
       
-      // LocalStorageからも削除
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(`todo-status-${id}`)
-        console.log('🧹 LocalStorageからステータス削除:', id)
-      }
+      // 削除成功（LocalStorage依存を削除）
       
       // キャッシュをクリアして次回取得時に最新データを取得
       try {
@@ -669,12 +610,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       // エラー時は元の状態に戻す
       setTodos(originalTodos)
       
-      // LocalStorageのステータスも復元（削除されたTodoがあれば）
-      const deletedTodo = originalTodos.find(todo => todo.id === id)
-      if (deletedTodo && typeof window !== 'undefined') {
-        setLocalStatus(id, deletedTodo.status)
-        console.log('🔄 削除エラー時LocalStorage復元:', { id, status: deletedTodo.status })
-      }
+      // エラー時の処理（LocalStorage依存を削除）
       
       const errorWithStatus = error as ErrorWithStatus
       logApiError(errorWithStatus, 'Todo削除')
@@ -703,11 +639,17 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
    * クライアントサイドフィルタリング - シンプルで確実な動作
    */
   const applyFilters = (allTodos: Todo[], filters: TodoFilters) => {
+    // 早期リターン: フィルターが空の場合
+    if (Object.keys(filters).length === 0) {
+      return allTodos
+    }
+    
     if (process.env.NODE_ENV === 'development') {
       console.log('🔍 フィルター適用開始:', { 全件数: allTodos.length, フィルター: filters })
     }
     
-    let filtered = [...allTodos]
+    // シャローコピーではなく、フィルタリング結果を直接返す
+    let filtered = allTodos
     
     // テキスト検索
     if (filters.search && filters.search.trim()) {
