@@ -75,20 +75,41 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { status: 200 })
     }
     
-    // 🛡️ データサニタイズ (Date オブジェクトに変換)
-    const safeTodos = lambdaResponse.data.map((todo: any) => ({
-      id: todo.id,
-      title: todo.title,
-      description: todo.description || null,
-      status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
-      priority: todo.priority || 'MEDIUM',
-      dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
-      createdAt: new Date(todo.createdAt),
-      updatedAt: new Date(todo.updatedAt),
-      userId: todo.userId,
-      category: todo.category || null,
-      tags: Array.isArray(todo.tags) ? todo.tags : []
-    }))
+    // 🛡️ データサニタイズ (Date オブジェクトに変換) + サブタスク数計算
+    const allTodos = lambdaResponse.data
+    console.log('🔍 デバッグ - 全TodoのparentId:', allTodos.map((t: any) => ({ id: t.id, title: t.title, parentId: t.parentId })))
+    
+    // メインタスクのみをフィルタリング（parentIdがnullまたは未定義のもの）
+    const mainTodos = allTodos.filter((todo: any) => !todo.parentId)
+    console.log('🔍 デバッグ - フィルタリング後のメインタスク:', mainTodos.length, '件', mainTodos.map((t: any) => ({ id: t.id, title: t.title, parentId: t.parentId })))
+    const safeTodos = mainTodos.map((todo: any) => {
+      // このTodoのサブタスク数を計算
+      const subtaskCount = allTodos.filter((t: any) => 
+        t.parentId && t.parentId.toString() === todo.id.toString()
+      ).length
+      
+      if (subtaskCount > 0) {
+        console.log('🔍 サブタスクあり:', { parentId: todo.id, title: todo.title, subtaskCount })
+      }
+      
+      return {
+        id: todo.id,
+        title: todo.title,
+        description: todo.description || null,
+        status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
+        priority: todo.priority || 'MEDIUM',
+        dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
+        createdAt: new Date(todo.createdAt),
+        updatedAt: new Date(todo.updatedAt),
+        userId: todo.userId,
+        category: todo.category || null,
+        tags: Array.isArray(todo.tags) ? todo.tags : [],
+        parentId: todo.parentId ? todo.parentId.toString() : null,
+        _count: {
+          subtasks: subtaskCount
+        }
+      }
+    })
     
     // ⚡ 高速キャッシュ保存 (非同期)
     if (safeTodos.length >= 0) {

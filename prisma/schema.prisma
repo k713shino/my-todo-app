@@ -83,11 +83,17 @@ model Todo {
   tags        String[]
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // サブタスク関係
+  parentId    String?   // 親タスクのID（サブタスクの場合）
+  parent      Todo?     @relation("TodoSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks    Todo[]    @relation("TodoSubtasks")
 
   @@index([userId])
   @@index([status])
   @@index([priority])
   @@index([dueDate])
+  @@index([parentId])
   @@map("todos")
 }
 

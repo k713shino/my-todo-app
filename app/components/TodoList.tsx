@@ -1102,6 +1102,12 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       medium: todos.filter(t => t.priority === 'MEDIUM').length,
       low: todos.filter(t => t.priority === 'LOW').length,
     },
+    // サブタスク統計
+    subtasks: {
+      total: todos.length,
+      mainTasks: todos.filter(t => !t.parentId).length,
+      subTasks: todos.filter(t => t.parentId).length,
+    },
     // 後方互換性
     completed: todos.filter(t => isCompleted(t.status)).length,
     active: todos.filter(t => !isCompleted(t.status)).length,

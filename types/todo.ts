@@ -12,6 +12,12 @@ export interface Todo {
   createdAt: Date
   updatedAt: Date
   userId: string
+  // サブタスク関連
+  parentId?: string | null
+  subtasks?: Todo[]
+  _count?: {
+    subtasks: number
+  }
 }
 
 export interface CreateTodoData {
@@ -22,6 +28,7 @@ export interface CreateTodoData {
   dueDate?: Date
   category?: string
   tags?: string[]
+  parentId?: string  // サブタスク作成時の親ID
 }
 
 export interface UpdateTodoData {
@@ -77,6 +84,12 @@ export interface TodoStats {
     high: number
     medium: number
     low: number
+  }
+  // サブタスク統計
+  subtasks: {
+    total: number
+    mainTasks: number  // 親タスク数
+    subTasks: number   // サブタスク数
   }
   // 後方互換性のため
   completed: number
