@@ -134,6 +134,11 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   const [draggedTodo, setDraggedTodo] = useState<Todo | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<Status | null>(null)
   
+  // バルク操作用のstate
+  const [selectedTodos, setSelectedTodos] = useState<Set<string>>(new Set())
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [isBulkOperating, setIsBulkOperating] = useState(false)
+  
   // カレンダー用ヘルパー関数
   const getCalendarDays = (date: Date) => {
     const year = date.getFullYear()
@@ -676,6 +681,178 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   }
 
   /**
+   * バルク操作関数群
+   */
+  // 全選択・全解除
+  const handleSelectAll = () => {
+    if (selectedTodos.size === filteredTodos.length) {
+      setSelectedTodos(new Set())
+    } else {
+      setSelectedTodos(new Set(filteredTodos.map(todo => todo.id)))
+    }
+  }
+  
+  // 個別選択・解除
+  const handleSelectTodo = (todoId: string) => {
+    const newSelected = new Set(selectedTodos)
+    if (newSelected.has(todoId)) {
+      newSelected.delete(todoId)
+    } else {
+      newSelected.add(todoId)
+    }
+    setSelectedTodos(newSelected)
+  }
+  
+  // 選択モード切り替え
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode)
+    if (isSelectionMode) {
+      setSelectedTodos(new Set())
+    }
+  }
+  
+  // バルクステータス更新
+  const handleBulkStatusUpdate = async (targetStatus: Status) => {
+    if (selectedTodos.size === 0) {
+      toast.error('更新するTodoを選択してください')
+      return
+    }
+    
+    setIsBulkOperating(true)
+    const selectedIds = Array.from(selectedTodos)
+    const originalTodos = todos
+    
+    try {
+      console.log(`🚀 バルクステータス更新開始: ${selectedIds.length}件 → ${targetStatus}`)
+      
+      // 楽観的更新
+      setTodos(prev => prev.map(todo => 
+        selectedIds.includes(todo.id) 
+          ? { ...todo, status: targetStatus, updatedAt: new Date() }
+          : todo
+      ))
+      
+      // APIに順次送信
+      const promises = selectedIds.map(id => 
+        retryWithBackoff(async () => {
+          const response = await fetch(`/api/todos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: targetStatus }),
+          })
+          
+          if (!response.ok) {
+            const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+            errorWithStatus.status = response.status
+            errorWithStatus.statusText = response.statusText
+            throw errorWithStatus
+          }
+          
+          return response.json()
+        }, {
+          maxRetries: 2,
+          shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
+        })
+      )
+      
+      await Promise.all(promises)
+      
+      toast.success(`✅ ${selectedIds.length}件のTodoを${targetStatus === 'DONE' ? '完了' : targetStatus === 'TODO' ? '未着手' : targetStatus === 'IN_PROGRESS' ? '作業中' : '確認中'}に更新しました`)
+      
+      // 選択をクリア
+      setSelectedTodos(new Set())
+      
+      // キャッシュクリア
+      try {
+        await fetch('/api/cache?type=user', { method: 'DELETE' })
+      } catch (error) {
+        console.log('⚠️ キャッシュクリア失敗:', error)
+      }
+      
+    } catch (error) {
+      // エラー時は元の状態に戻す
+      setTodos(originalTodos)
+      
+      const errorWithStatus = error as ErrorWithStatus
+      logApiError(errorWithStatus, 'バルクステータス更新')
+      
+      const friendlyMessage = getErrorMessage(errorWithStatus)
+      toast.error(`バルク更新エラー: ${friendlyMessage}`)
+    } finally {
+      setIsBulkOperating(false)
+    }
+  }
+  
+  // バルク削除
+  const handleBulkDelete = async () => {
+    if (selectedTodos.size === 0) {
+      toast.error('削除するTodoを選択してください')
+      return
+    }
+    
+    if (!confirm(`選択された${selectedTodos.size}件のTodoを削除しますか？この操作は取り消せません。`)) {
+      return
+    }
+    
+    setIsBulkOperating(true)
+    const selectedIds = Array.from(selectedTodos)
+    const originalTodos = todos
+    
+    try {
+      console.log(`🗑️ バルク削除開始: ${selectedIds.length}件`)
+      
+      // 楽観的更新
+      setTodos(prev => prev.filter(todo => !selectedIds.includes(todo.id)))
+      
+      // APIに順次送信
+      const promises = selectedIds.map(id => 
+        retryWithBackoff(async () => {
+          const response = await fetch(`/api/todos/${id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+          })
+          
+          if (!response.ok) {
+            const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+            errorWithStatus.status = response.status
+            errorWithStatus.statusText = response.statusText
+            throw errorWithStatus
+          }
+        }, {
+          maxRetries: 2,
+          shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
+        })
+      )
+      
+      await Promise.all(promises)
+      
+      toast.success(`🗑️ ${selectedIds.length}件のTodoを削除しました`)
+      
+      // 選択をクリア
+      setSelectedTodos(new Set())
+      
+      // キャッシュクリア
+      try {
+        await fetch('/api/cache?type=user', { method: 'DELETE' })
+      } catch (error) {
+        console.log('⚠️ キャッシュクリア失敗:', error)
+      }
+      
+    } catch (error) {
+      // エラー時は元の状態に戻す
+      setTodos(originalTodos)
+      
+      const errorWithStatus = error as ErrorWithStatus
+      logApiError(errorWithStatus, 'バルク削除')
+      
+      const friendlyMessage = getErrorMessage(errorWithStatus)
+      toast.error(`バルク削除エラー: ${friendlyMessage}`)
+    } finally {
+      setIsBulkOperating(false)
+    }
+  }
+
+  /**
    * Todo編集フォームの送信処理
    */
   const handleEditSubmit = async (data: CreateTodoData) => {
@@ -1003,6 +1180,93 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         </div>
       </div>
 
+      {/* バルク操作ツールバー */}
+      {activeView === 'all' && (
+        <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleSelectionMode}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  isSelectionMode 
+                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' 
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {isSelectionMode ? '📋 選択モード終了' : '📋 選択モード'}
+              </button>
+              
+              {isSelectionMode && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <span>
+                    {selectedTodos.size}件選択中
+                  </span>
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-purple-600 dark:text-purple-400 hover:underline"
+                  >
+                    {selectedTodos.size === filteredTodos.length ? '全解除' : '全選択'}
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {isSelectionMode && selectedTodos.size > 0 && (
+              <div className="flex items-center gap-2">
+                {/* バルクステータス変更 */}
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-gray-600 dark:text-gray-400">ステータス:</span>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('TODO')}
+                    disabled={isBulkOperating}
+                    className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+                  >
+                    📝 未着手
+                  </button>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('IN_PROGRESS')}
+                    disabled={isBulkOperating}
+                    className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 disabled:opacity-50"
+                  >
+                    🔄 作業中
+                  </button>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('REVIEW')}
+                    disabled={isBulkOperating}
+                    className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:hover:bg-yellow-900/50 disabled:opacity-50"
+                  >
+                    👀 確認中
+                  </button>
+                  <button
+                    onClick={() => handleBulkStatusUpdate('DONE')}
+                    disabled={isBulkOperating}
+                    className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/50 disabled:opacity-50"
+                  >
+                    ✅ 完了
+                  </button>
+                </div>
+                
+                {/* バルク削除 */}
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isBulkOperating}
+                  className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 dark:hover:bg-red-900/50 disabled:opacity-50"
+                >
+                  🗑️ 削除
+                </button>
+                
+                {isBulkOperating && (
+                  <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+                    <div className="w-3 h-3 border border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                    処理中...
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Notionライクなタブビュー */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden">
         {/* タブヘッダー */}
@@ -1093,7 +1357,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                 {[
                   { status: 'TODO' as Status, label: '📝 未着手', bgColor: 'bg-gray-100', textColor: 'text-gray-800', borderColor: 'border-gray-300' },
                   { status: 'IN_PROGRESS' as Status, label: '🔄 作業中', bgColor: 'bg-blue-100', textColor: 'text-blue-800', borderColor: 'border-blue-300' },
-                  { status: 'REVIEW' as Status, label: '👀 確認中', bgColor: 'bg-yellow-100', textColor: 'text-yellow-800', borderColor: 'border-yellow-300' },
+                  { status: 'REVIEW' as Status, label: '👀 確認中', bgColor: 'bg-orange-100', textColor: 'text-orange-800', borderColor: 'border-orange-300' },
                   { status: 'DONE' as Status, label: '✅ 完了', bgColor: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-300' },
                 ].map(({ status, label, bgColor, textColor, borderColor }) => {
                   const count = filteredTodos.filter(t => t.status === status).length
@@ -1121,7 +1385,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                   {[
                     { status: 'TODO' as Status, label: '未着手', color: 'gray' },
                     { status: 'IN_PROGRESS' as Status, label: '作業中', color: 'blue' },
-                    { status: 'REVIEW' as Status, label: '確認中', color: 'yellow' },
+                    { status: 'REVIEW' as Status, label: '確認中', color: 'orange' },
                     { status: 'DONE' as Status, label: '完了', color: 'green' },
                   ].map(({ status, label, color }) => {
                     const count = filteredTodos.filter(t => t.status === status).length
@@ -1136,7 +1400,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                             className={`h-2 rounded-full transition-all duration-300 ${
                               color === 'gray' ? 'bg-gray-400' :
                               color === 'blue' ? 'bg-blue-500' :
-                              color === 'yellow' ? 'bg-yellow-500' :
+                              color === 'orange' ? 'bg-orange-500' :
                               'bg-green-500'
                             }`}
                             style={{ width: `${percentage}%` }}
@@ -1160,7 +1424,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                       <div className={`w-3 h-3 rounded-full ${
                         todo.status === 'TODO' ? 'bg-gray-400' :
                         todo.status === 'IN_PROGRESS' ? 'bg-blue-500' :
-                        todo.status === 'REVIEW' ? 'bg-yellow-500' :
+                        todo.status === 'REVIEW' ? 'bg-orange-500' :
                         'bg-green-500'
                       }`} />
                       <div 
@@ -1329,7 +1593,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                 {[
                   { status: 'TODO' as Status, label: '📝 未着手', color: 'gray' },
                   { status: 'IN_PROGRESS' as Status, label: '🔄 作業中', color: 'blue' },
-                  { status: 'REVIEW' as Status, label: '👀 確認中', color: 'yellow' },
+                  { status: 'REVIEW' as Status, label: '👀 確認中', color: 'orange' },
                   { status: 'DONE' as Status, label: '✅ 完了', color: 'green' },
                 ].map(({ status, label, color }) => {
                   const columnTodos = filteredTodos.filter(t => t.status === status)
@@ -1618,6 +1882,9 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                             onUpdate={handleUpdateTodo}
                             onDelete={handleDeleteTodo}
                             onEdit={setEditingTodo}
+                            isSelectionMode={isSelectionMode}
+                            isSelected={selectedTodos.has(todo.id)}
+                            onSelect={handleSelectTodo}
                           />
                         ))}
                       </div>
@@ -1638,6 +1905,9 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                             onUpdate={handleUpdateTodo}
                             onDelete={handleDeleteTodo}
                             onEdit={setEditingTodo}
+                            isSelectionMode={isSelectionMode}
+                            isSelected={selectedTodos.has(todo.id)}
+                            onSelect={handleSelectTodo}
                           />
                         ))}
                       </div>

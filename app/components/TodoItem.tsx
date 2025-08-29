@@ -22,6 +22,10 @@ interface TodoItemProps {
   onEdit: (todo: Todo) => void
   onDelete: (id: string) => void
   isLoading?: boolean
+  // バルク操作用
+  isSelectionMode?: boolean
+  isSelected?: boolean
+  onSelect?: (todoId: string) => void
 }
 
 /**
@@ -110,7 +114,10 @@ export default function TodoItem({
   onUpdate, 
   onEdit, 
   onDelete, 
-  isLoading = false 
+  isLoading = false,
+  isSelectionMode = false,
+  isSelected = false,
+  onSelect
 }: TodoItemProps) {
   const [isUpdating, setIsUpdating] = useState(false)
 
@@ -163,6 +170,17 @@ export default function TodoItem({
       {/* ヘッダー */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
+          {/* バルク選択チェックボックス */}
+          {isSelectionMode && (
+            <div className="flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onSelect?.(todo.id)}
+                className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
+              />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-3">
               <div className="flex-1">
