@@ -24,7 +24,7 @@ export async function PUT(
 
     console.log('🔄 Lambda API経由でTodo更新を試行:', id);
     
-    // Lambda API経由でTodoを更新 (4ステータス対応)
+    // Lambda API経由でTodoを更新
     const updateData = {
       ...(body.title !== undefined && { title: body.title.trim() }),
       ...(body.description !== undefined && { description: body.description?.trim() || null }),
@@ -39,14 +39,18 @@ export async function PUT(
       userId: extractUserIdFromPrefixed(session.user.id) // 必須: ユーザー認証用（実際のユーザーID）
     }
     
-    // 4ステータス対応: statusフィールドを優先、completedは後方互換性のため
+    // 一時的な修正: Lambda APIがstatusフィールドを未サポートのため、completedに変換
     if (body.status !== undefined) {
-      (updateData as any).status = body.status
-      console.log('🔄 status フィールドで更新:', body.status)
+      // 4ステータスから2段階completedに変換
+      (updateData as any).completed = body.status === 'DONE'
+      console.log('🔄 status から completed に変換:', { 
+        originalStatus: body.status, 
+        completed: (updateData as any).completed 
+      })
     } else if (body.completed !== undefined) {
-      // 後方互換性: completedをstatusに変換
-      (updateData as any).status = body.completed ? 'DONE' : 'TODO'
-      console.log('🔄 completed から status に変換:', body.completed, '->', body.completed ? 'DONE' : 'TODO')
+      // 既存のcompletedフィールドはそのまま使用
+      (updateData as any).completed = body.completed
+      console.log('🔄 completed フィールドで更新:', body.completed)
     }
     
     console.log('📤 Lambda API更新データ:', { 
@@ -61,12 +65,27 @@ export async function PUT(
     
     if (lambdaResponse.success && lambdaResponse.data) {
       // レスポンスデータの安全な日付変換
-      const updatedTodo = {
+      let updatedTodo = {
         ...lambdaResponse.data,
         createdAt: safeToISOString(lambdaResponse.data.createdAt),
         updatedAt: safeToISOString(lambdaResponse.data.updatedAt),
         dueDate: lambdaResponse.data.dueDate ? safeToISOString(lambdaResponse.data.dueDate) : null,
       };
+      
+      // Lambda APIのレスポンスにstatusフィールドがない場合、completedから復元
+      if (!updatedTodo.status && updatedTodo.completed !== undefined) {
+        updatedTodo.status = updatedTodo.completed ? 'DONE' : 'TODO'
+        console.log('🔄 completed から status に復元:', { 
+          completed: updatedTodo.completed, 
+          status: updatedTodo.status 
+        })
+      }
+      
+      // フロントエンドから送信されたstatusを維持
+      if (body.status && !updatedTodo.status) {
+        updatedTodo.status = body.status
+        console.log('📋 フロントエンドのstatusを維持:', body.status)
+      }
       
       console.log('✅ Lambda API でのTodo更新成功:', updatedTodo.id);
       
