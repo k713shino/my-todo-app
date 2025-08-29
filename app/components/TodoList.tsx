@@ -20,6 +20,14 @@ import {
 } from '@/lib/error-utils'
 import { withScrollPreservation } from '../hooks/useScrollPreservation'
 
+// 優先度の日本語ラベル
+const PRIORITY_LABELS: Record<Priority, string> = {
+  LOW: '低',
+  MEDIUM: '中',
+  HIGH: '高',
+  URGENT: '緊急',
+}
+
 
 /**
  * APIレスポンスのTodoデータ型定義
@@ -1453,7 +1461,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                                       todo.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200' :
                                       'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
                                     }`}>
-                                      {todo.priority === 'URGENT' ? '🔥' : todo.priority === 'HIGH' ? '⚡' : todo.priority === 'MEDIUM' ? '⭐' : '📝'} {todo.priority}
+                                      {todo.priority === 'URGENT' ? '🔥' : todo.priority === 'HIGH' ? '⚡' : todo.priority === 'MEDIUM' ? '⭐' : '📝'} {PRIORITY_LABELS[todo.priority]}
                                     </span>
                                     
                                     {todo.category && (
