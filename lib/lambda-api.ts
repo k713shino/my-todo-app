@@ -353,9 +353,9 @@ export class LambdaAPI {
   /**
    * 汎用GETリクエスト（VercelAPIResponse形式の戻り値用）
    */
-  async get<T = any>(endpoint: string): Promise<LambdaAPIResponse<T>> {
+  async get<T = any>(endpoint: string, options: RequestOptions = {}): Promise<LambdaAPIResponse<T>> {
     try {
-      const response = await this.request<T>(endpoint, { method: 'GET' });
+      const response = await this.request<T>(endpoint, { method: 'GET', ...options });
       return {
         success: true,
         data: response,

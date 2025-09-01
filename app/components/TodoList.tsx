@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -19,6 +19,7 @@ import {
   type ErrorWithStatus 
 } from '@/lib/error-utils'
 import { withScrollPreservation } from '../hooks/useScrollPreservation'
+import { useDeadlineNotifications } from '@/app/hooks/useDeadlineNotifications'
 
 // 優先度の日本語ラベル
 const PRIORITY_LABELS: Record<Priority, string> = {
@@ -120,6 +121,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
+  const newFormRef = useRef<HTMLInputElement | null>(null)
   const [filter, setFilterInternal] = useState<TodoFilters>({})
   
   // ソート機能のstate
@@ -181,6 +183,26 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
     setFilterInternal(newFilter)
   })
   const [lambdaWarmedUp, setLambdaWarmedUp] = useState(false)
+  // 締切通知（ユーザーが許可すれば動作）
+  const { enabled: deadlineNotifyEnabled, requestPermission: requestDeadlinePermission } = useDeadlineNotifications(todos, { minutesBefore: 15, intervalMs: 60_000 })
+
+  // クライアント側の簡易キャッシュ（localStorage）
+  const loadClientCache = () => {
+    try {
+      if (typeof window === 'undefined') return null
+      const raw = localStorage.getItem('todos:cache:v1')
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return null
+      return parsed.map((t: any) => safeParseTodoDate(t))
+    } catch { return null }
+  }
+  const saveClientCache = (data: any[]) => {
+    try {
+      if (typeof window === 'undefined') return
+      localStorage.setItem('todos:cache:v1', JSON.stringify(data))
+    } catch { /* ignore */ }
+  }
 
   // モーダルからの検索値をフィルターに反映
   useEffect(() => {
@@ -273,6 +295,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       // リトライ機能付きの高速フェッチ
       const response = await retryWithBackoff(async () => {
         const fetchStart = performance.now()
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 10_000)
         const res = await fetch(url, {
           ...(bypassCache ? {
             cache: 'no-store',
@@ -282,10 +306,14 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
             }
           } : {
             cache: 'default'
-          })
+          }),
+          signal: controller.signal,
         })
+        clearTimeout(timer)
         const fetchTime = performance.now() - fetchStart
-        console.log(`📡 API呼び出し時間: ${fetchTime.toFixed(2)}ms`)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`📡 API呼び出し時間: ${fetchTime.toFixed(2)}ms`)
+        }
         return res
       }, {
         maxRetries: 2,
@@ -310,12 +338,14 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       const performanceLevel = totalTime < 500 ? '🟢 高速' : 
                               totalTime < 1000 ? '🟡 普通' : '🔴 要改善'
       
-      console.log(`✅ Todo取得完了 (${totalTime.toFixed(2)}ms) ${performanceLevel}:`, {
-        todoCount: data.length,
-        cacheStatus: response.headers.get('X-Cache-Status'),
-        apiResponseTime: response.headers.get('X-Response-Time'),
-        lambdaWarmedUp
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`✅ Todo取得完了 (${totalTime.toFixed(2)}ms) ${performanceLevel}:`, {
+          todoCount: data.length,
+          cacheStatus: response.headers.get('X-Cache-Status'),
+          apiResponseTime: response.headers.get('X-Response-Time'),
+          lambdaWarmedUp
+        });
+      }
       
       const parsedTodos = data.map((todo) => {
         const parsed = safeParseTodoDate(todo)
@@ -323,9 +353,11 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         return parsed
       })
       setTodos(parsedTodos)
+      // クライアントキャッシュにも保存
+      saveClientCache(parsedTodos)
       
       // パフォーマンスが1秒を超えた場合の警告
-      if (totalTime > 1000) {
+      if (totalTime > 1000 && process.env.NODE_ENV !== 'production') {
         console.warn(`⚠️ パフォーマンス警告: 読み込みに${totalTime.toFixed(2)}msかかりました`)
         
         // Lambda関数のウォームアップを次回のために実行
@@ -433,6 +465,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         return todo
       }))
       toast.success('📝 新しいTodoを作成しました！')
+      // ダッシュボード統計の即時更新通知
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
       // キャッシュをクリアして次回取得時に最新データを取得
       try {
@@ -499,6 +533,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         return todo
       }))
       toast.success('✅ Todoを更新しました！')
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
       // キャッシュをクリアして次回取得時に最新データを取得
       try {
@@ -655,6 +690,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       }
 
       toast.success('🗑️ Todoを削除しました！')
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
       // 削除成功（LocalStorage依存を削除）
       
@@ -761,6 +797,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       
       // 選択をクリア
       setSelectedTodos(new Set())
+      // ダッシュボード統計の即時更新通知
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
       // キャッシュクリア
       try {
@@ -830,6 +868,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       
       // 選択をクリア
       setSelectedTodos(new Set())
+      // ダッシュボード統計の即時更新通知
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
       // キャッシュクリア
       try {
@@ -1118,12 +1158,53 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
    * Lambda関数のウォームアップも実行
    */
   useEffect(() => {
-    // 初回読み込み開始
-    fetchTodos()
-    
-    // バックグラウンドでLambda関数をウォームアップ
+    const fetchedRef = (window as any).__todosFetchedRef || { current: false }
+    ;(window as any).__todosFetchedRef = fetchedRef
+
+    // 先にウォームアップを開始（非同期）
     warmupLambda()
+
+    // クライアントキャッシュがあれば即描画
+    const cached = loadClientCache()
+    if (cached && cached.length > 0) {
+      setTodos(cached)
+      setIsLoading(false)
+    }
+
+    if (!fetchedRef.current) {
+      fetchedRef.current = true
+      // 初回読み込み開始（バックグラウンドでも）
+      fetchTodos()
+    } else {
+      // StrictModeなどによる二重発火を抑制
+      console.log('ℹ️ 初回取得は既に実行済み（重複防止）')
+    }
   }, [])
+
+  // 軽量ショートカットキー
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // 入力中は無効化
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return
+
+      // n: 新規作成フォームのタイトルへフォーカス
+      if (e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        try {
+          const el = document.querySelector('form input[type="text"]') as HTMLInputElement | null
+          el?.focus()
+        } catch {}
+      }
+      // esc: 編集キャンセル
+      if (e.key === 'Escape' && editingTodo) {
+        e.preventDefault()
+        setEditingTodo(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editingTodo])
 
   if (isLoading) {
     return (
@@ -1138,6 +1219,13 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
 
   return (
     <div className="max-w-4xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      {/* 締切通知の有効化スイッチ */}
+      {typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted' && (
+        <div className="p-3 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200 text-sm flex items-center justify-between">
+          <span>⏰ 期限が近づいたら通知を受け取りますか？</span>
+          <button onClick={requestDeadlinePermission} className="ml-3 px-3 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700">有効にする</button>
+        </div>
+      )}
       {/* React Hot Toast通知システム */}
       <Toaster 
         position="top-right"
@@ -1164,27 +1252,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         }}
       />
 
-      {/* Todo統計表示 */}
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-          <div>
-            <div className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
-            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">合計</div>
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{stats.completed}</div>
-            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">完了</div>
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.active}</div>
-            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">未完了</div>
-          </div>
-          <div>
-            <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{stats.overdue}</div>
-            <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">期限切れ</div>
-          </div>
-        </div>
-      </div>
+      {/* 統計の簡易カード（ダッシュボードに統合したため削除） */}
 
       {/* バルク操作ツールバー */}
       {activeView === 'all' && (
@@ -1823,6 +1891,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
             title: editingTodo.title,
             description: editingTodo.description || '',
             priority: editingTodo.priority,
+            status: editingTodo.status,
             dueDate: editingTodo.dueDate,
             category: editingTodo.category,
             tags: editingTodo.tags,
@@ -1833,6 +1902,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         <TodoForm
           onSubmit={handleCreateTodo}
           isLoading={isSubmitting}
+          // タイトル入力へショートカットでフォーカスするためのref
+          // TodoForm側で最初のinputにforwardRefする対応が無いので、次善策として後段のuseEffectでquerySelector
         />
       )}
 

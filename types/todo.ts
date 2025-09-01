@@ -94,4 +94,8 @@ export interface TodoStats {
   // 後方互換性のため
   completed: number
   active: number
+  // 追加メタ
+  weeklyDone?: number
+  monthlyDone?: number
+  unavailable?: boolean
 }

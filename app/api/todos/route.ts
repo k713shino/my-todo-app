@@ -172,6 +172,13 @@ export async function POST(request: NextRequest) {
         const responseData = lambdaResponse.data
         
         // レスポンスデータの安全な日付変換
+        // タグ正規化（CSV/配列両対応）
+        const normalizedTags = Array.isArray(responseData.tags)
+          ? responseData.tags
+          : (typeof responseData.tags === 'string'
+              ? responseData.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+              : [])
+
         const newTodo = {
           ...responseData,
           createdAt: safeToISOString(responseData.createdAt),
@@ -179,7 +186,7 @@ export async function POST(request: NextRequest) {
           dueDate: responseData.dueDate ? safeToISOString(responseData.dueDate) : null,
           priority: responseData.priority || 'MEDIUM',
           category: responseData.category || null,
-          tags: responseData.tags || []
+          tags: normalizedTags
         }
         
         // キャッシュ無効化（非同期）
@@ -219,4 +226,3 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
-

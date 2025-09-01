@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { redirect } from 'next/navigation'
 import TodoList from '@/app/components/TodoList'
 import DashboardHeader from '@/app/components/DashboardHeader'
+import TodoStatsDisplay from '@/app/components/TodoStatsDisplay'
+import type { TodoStats } from '@/types/todo'
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
@@ -18,6 +20,30 @@ export default function Dashboard() {
     priority: undefined as string | undefined,
     dateRange: undefined as string | undefined
   })
+
+  // ダッシュボード統計の取得（最小）
+  const [stats, setStats] = useState<TodoStats | null>(null)
+  useEffect(() => {
+    let mounted = true
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/todos/stats?cache=false&refresh=true')
+        if (!res.ok) return
+        const data = await res.json()
+        // サーバがunavailableを示した場合は表示しない
+        if (mounted && !data.unavailable) setStats(data)
+      } catch {}
+    }
+    fetchStats()
+    // 5分に1回リフレッシュ
+    const id = setInterval(fetchStats, 5 * 60 * 1000)
+    // Todo変更イベントで即時リフレッシュ
+    const onChanged = () => fetchStats()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('todo:changed', onChanged)
+    }
+    return () => { mounted = false; clearInterval(id); if (typeof window !== 'undefined') window.removeEventListener('todo:changed', onChanged) }
+  }, [])
 
   // 認証チェック
   if (status === 'loading') {
@@ -62,6 +88,13 @@ export default function Dashboard() {
       {/* メインコンテンツ - 固定ヘッダー分の上余白を追加 */}
       <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pt-20 sm:pt-24">
         <div className="max-w-7xl mx-auto">
+
+          {/* 統計カード */}
+          {stats && (
+            <div className="mb-6 max-w-4xl mx-auto">
+              <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
+            </div>
+          )}
 
           {/* 既存のTodoリスト */}
           <TodoList modalSearchValues={modalSearchValues} />

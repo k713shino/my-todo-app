@@ -70,7 +70,8 @@ const nextConfig = {
   },
 
   // 本番環境でのCSS最適化
-  productionBrowserSourceMaps: false,
+  // デバッグ用に一時的に本番ソースマップを有効化（原因特定後はfalseへ戻す）
+  productionBrowserSourceMaps: true,
 
   // 静的最適化の設定
   staticPageGenerationTimeout: 180,

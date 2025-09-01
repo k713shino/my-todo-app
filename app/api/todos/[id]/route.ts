@@ -60,11 +60,22 @@ export async function PUT(
     
     if (lambdaResponse.success && lambdaResponse.data) {
       // レスポンスデータの安全な日付変換
+      // タグ正規化（CSV/配列両対応）
+      const normalizedTags = Array.isArray(lambdaResponse.data.tags)
+        ? lambdaResponse.data.tags
+        : (typeof lambdaResponse.data.tags === 'string'
+            ? lambdaResponse.data.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+            : [])
+
       const updatedTodo = {
         ...lambdaResponse.data,
         createdAt: safeToISOString(lambdaResponse.data.createdAt),
         updatedAt: safeToISOString(lambdaResponse.data.updatedAt),
         dueDate: lambdaResponse.data.dueDate ? safeToISOString(lambdaResponse.data.dueDate) : null,
+        // ステータスが欠落するバックエンド実装に備えてフォールバック
+        status: (lambdaResponse.data as any).status || ((lambdaResponse.data as any).completed ? 'DONE' : 'TODO'),
+        category: lambdaResponse.data.category || null,
+        tags: normalizedTags,
       };
       
       console.log('✅ Lambda API でのTodo更新成功:', { 

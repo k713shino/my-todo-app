@@ -115,8 +115,8 @@ export class CacheManager {
 
   // Todoリストを保存（最適化版）
   static async setTodos(userId: string, todos: Todo[], ttl = 300): Promise<boolean> { // 5分
-    // 大きなデータは要約してキャッシュ
-    const optimizedTodos = todos.map(todo => ({
+    // 大きなデータは要約してキャッシュしつつ、UIに必要なフィールドは保持
+    const optimizedTodos = todos.map((todo: any) => ({
       id: todo.id,
       title: todo.title,
       status: todo.status,
@@ -125,12 +125,15 @@ export class CacheManager {
       createdAt: todo.createdAt,
       updatedAt: todo.updatedAt,
       userId: todo.userId,
+      category: todo.category ?? null,
+      tags: Array.isArray(todo.tags) ? todo.tags : (typeof todo.tags === 'string' ? todo.tags.split(',').map((t: string)=>t.trim()).filter(Boolean) : []),
+      parentId: todo.parentId ?? null,
+      _count: todo._count && typeof todo._count.subtasks === 'number' ? { subtasks: todo._count.subtasks } : { subtasks: 0 },
       // 説明文は長い場合は省略
-      description: todo.description && todo.description.length > 200 
-        ? todo.description.slice(0, 200) + '...' 
-        : todo.description
+      description: todo.description && typeof todo.description === 'string' && todo.description.length > 200 
+        ? todo.description.slice(0, 200) + '...'
+        : (todo.description ?? null),
     }))
-    
     return this.set(CacheKeys.userTodos(userId), optimizedTodos, ttl)
   }
 
