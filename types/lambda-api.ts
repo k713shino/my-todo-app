@@ -21,18 +21,42 @@ export interface Todo {
   userId: string;
   createdAt: string;
   updatedAt: string;
+  // Optional fields supported by backend but absent before
+  parentId?: string | null;
+  status?: string; // e.g., 'TODO' | 'IN_PROGRESS' | 'DONE'
+  priority?: string; // e.g., 'LOW' | 'MEDIUM' | 'HIGH'
+  category?: string | null;
+  tags?: string[] | string | null;
+  dueDate?: string | null;
 }
 
 export interface CreateTodoRequest {
   title: string;
   description?: string;
   userId: string;
+  // Optional extended fields
+  status?: string;
+  priority?: string;
+  category?: string;
+  tags?: string[];
+  dueDate?: string | null;
+  parentId?: string;
+  // Additional metadata possibly sent by caller
+  userEmail?: string;
+  userName?: string;
 }
 
 export interface UpdateTodoRequest {
   title?: string;
   description?: string;
   completed?: boolean;
+  // Optional extended fields for updates
+  status?: string;
+  priority?: string;
+  category?: string;
+  tags?: string[];
+  dueDate?: string | null;
+  parentId?: string | null;
 }
 
 // ユーザー認証関連の型定義
@@ -142,4 +166,3 @@ export interface VercelAPIResponse<T = any> {
   error?: string;
   timestamp: string;
 }
-

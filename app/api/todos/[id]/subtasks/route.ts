@@ -113,6 +113,8 @@ export async function POST(
     // Lambda APIを使用してサブタスクを作成
     const newTodo = await lambdaAPI.createTodo({
       ...subtaskData,
+      // Lambda API 型では dueDate は文字列/ISO を期待するため変換
+      dueDate: subtaskData.dueDate ? new Date(subtaskData.dueDate).toISOString() : undefined,
       userId: actualUserId,
       userEmail: session.user.email || '',
       userName: session.user.name || '',

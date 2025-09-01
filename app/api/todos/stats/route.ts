@@ -39,7 +39,9 @@ export async function GET(request: NextRequest) {
         highCount,
         mediumCount,
         lowCount,
-        overdueCount
+        overdueCount,
+        mainTaskCount,
+        subTaskCount
       ] = await Promise.all([
         prisma.todo.count({ where: { userId: session.user.id } }),
         prisma.todo.count({ where: { userId: session.user.id, status: 'DONE' } }),
@@ -57,7 +59,10 @@ export async function GET(request: NextRequest) {
             status: { not: 'DONE' },
             dueDate: { lt: new Date() }
           } 
-        })
+        }),
+        // サブタスク統計
+        prisma.todo.count({ where: { userId: session.user.id, parentId: null } }),
+        prisma.todo.count({ where: { userId: session.user.id, NOT: { parentId: null } } })
       ])
 
       stats = {
@@ -74,6 +79,11 @@ export async function GET(request: NextRequest) {
           high: highCount,
           medium: mediumCount,
           low: lowCount
+        },
+        subtasks: {
+          total: subTaskCount,
+          mainTasks: mainTaskCount,
+          subTasks: subTaskCount,
         },
         // 後方互換性
         completed: completedCount,
