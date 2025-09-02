@@ -27,7 +27,8 @@ export default function Dashboard() {
     let mounted = true
     const fetchStats = async () => {
       try {
-        const res = await fetch('/api/todos/stats?cache=false&refresh=true')
+        // 週数/週開始/タイムゾーンを指定（例: 12週・月曜開始・UTC）
+        const res = await fetch('/api/todos/stats?cache=false&refresh=true&weeks=12&weekStart=mon&tz=UTC')
         if (!res.ok) return
         const data = await res.json()
         // サーバがunavailableを示した場合は表示しない
@@ -85,18 +86,28 @@ export default function Dashboard() {
       {/* ヘッダー */}
       <DashboardHeader onModalSearch={handleModalSearch} />
 
-      {/* メインコンテンツ - 固定ヘッダー分の上余白を追加 */}
+      {/* メインコンテンツ - 固定ヘッダー分の上余白を追加（1カラム） */}
       <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pt-20 sm:pt-24">
         <div className="max-w-7xl mx-auto">
-
-          {/* 統計カード */}
+          {/* 統計カード（コンパクト常時表示＋詳細は折りたたみ） */}
           {stats && (
-            <div className="mb-6 max-w-4xl mx-auto">
-              <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
+            <div className="mb-6 max-w-4xl mx-auto space-y-4">
+              {/* コンパクト統計 */}
+              <TodoStatsDisplay stats={stats} variant="compact" showTimestamp={false} />
+              {/* 詳細分析（折りたたみ） */}
+              <details className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <summary className="cursor-pointer select-none px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                  <span>📈 詳細分析</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">開閉</span>
+                </summary>
+                <div className="p-3">
+                  <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
+                </div>
+              </details>
             </div>
           )}
 
-          {/* 既存のTodoリスト */}
+          {/* Todoリスト */}
           <TodoList modalSearchValues={modalSearchValues} />
         </div>
       </main>

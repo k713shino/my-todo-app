@@ -148,9 +148,9 @@ export async function GET(request: NextRequest) {
 
     // 形式に応じてレスポンス生成
     if (format === 'csv') {
-      // CSV形式
+      // CSV形式（現行仕様: 4ステータス/カテゴリ/タグ/親子関係対応、後方互換でCompletedも含む）
       const csvHeaders = [
-        'ID', 'Title', 'Description', 'Completed', 'Priority', 'Due Date', 'Created At', 'Updated At'
+        'ID', 'Title', 'Description', 'Status', 'Completed', 'Priority', 'Category', 'Tags', 'Parent ID', 'Due Date', 'Created At', 'Updated At'
       ]
       
       const csvRows = (exportData.todos || []).map((todo: any) => {
@@ -163,8 +163,12 @@ export async function GET(request: NextRequest) {
           todo.id,
           escapeCsv(todo.title),
           escapeCsv(todo.description),
-          todo.completed ? 'true' : 'false',
+          (todo.status || (todo.completed ? 'DONE' : 'TODO')),
+          (todo.completed ? 'true' : 'false'),
           todo.priority,
+          escapeCsv(todo.category || ''),
+          escapeCsv(Array.isArray(todo.tags) ? todo.tags.join(',') : (todo.tags || '')),
+          (todo.parentId || ''),
           todo.dueDate ? new Date(todo.dueDate).toISOString() : '',
           new Date(todo.createdAt).toISOString(),
           new Date(todo.updatedAt).toISOString()

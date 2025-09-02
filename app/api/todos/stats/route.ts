@@ -19,6 +19,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const useCache = searchParams.get('cache') !== 'false'
     const forceRefresh = searchParams.get('refresh') === 'true'
+    // パラメータ: 週数、週開始、タイムゾーン
+    const weeksParam = parseInt(searchParams.get('weeks') || '0', 10)
+    const weeks = isFinite(weeksParam) && weeksParam > 0 && weeksParam <= 52 ? weeksParam : 8
+    const weekStartParam = (searchParams.get('weekStart') || 'mon').toLowerCase()
+    const weekStart: 'mon' | 'sun' = weekStartParam === 'sun' ? 'sun' : 'mon'
+    const tzParam = (searchParams.get('tz') || '').toUpperCase()
+    const tz: 'UTC' | 'local' = tzParam === 'UTC' ? 'UTC' : 'local'
 
     // キャッシュから統計を取得
     const cacheKey = `stats:user:${session.user.id}`
@@ -65,7 +72,7 @@ export async function GET(request: NextRequest) {
       if (sourceTodos) {
         // クライアント側と同じ定義で集計することで整合を取る
         const now = Date.now()
-        const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 7)
+        const weekStartRef = new Date(); weekStartRef.setDate(weekStartRef.getDate() - 7)
         const monthStart = new Date(); monthStart.setMonth(monthStart.getMonth() - 1)
 
         const totalCount = sourceTodos.length
@@ -84,8 +91,48 @@ export async function GET(request: NextRequest) {
         }
         const mainTaskCount = sourceTodos.filter((t: any) => !t.parentId).length
         const subTaskCount = sourceTodos.filter((t: any) => t.parentId).length
-        const weeklyDone = sourceTodos.filter((t: any) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= weekStart.getTime()).length
+        const weeklyDone = sourceTodos.filter((t: any) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= weekStartRef.getTime()).length
         const monthlyDone = sourceTodos.filter((t: any) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= monthStart.getTime()).length
+        // 週次完了推移（可変週数・週開始・タイムゾーン）
+        const weekBuckets: Array<{ start: Date; end: Date; label: string; count: number }> = []
+        const toLocalMidnight = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x }
+        const toUtcMidnight = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0))
+        const getDay = (d: Date) => tz === 'UTC' ? d.getUTCDay() : d.getDay()
+        const shiftDays = (d: Date, days: number) => { const x = new Date(d); x.setDate(x.getDate() + days); return x }
+        const startOfThisWeek = (() => {
+          const nowD = new Date()
+          const base = tz === 'UTC' ? toUtcMidnight(new Date(nowD)) : toLocalMidnight(new Date(nowD))
+          const day = getDay(base)
+          // 月曜開始 => 月=1, 日=0 として、(day+6)%7 を引く
+          const offset = weekStart === 'mon' ? ((day + 6) % 7) : day
+          return shiftDays(base, -offset)
+        })()
+        const fmtMD = (d: Date) => {
+          const y = tz === 'UTC' ? d.getUTCFullYear() : d.getFullYear()
+          const m = (tz === 'UTC' ? d.getUTCMonth() : d.getMonth()) + 1
+          const dd = tz === 'UTC' ? d.getUTCDate() : d.getDate()
+          return `${m}/${dd}`
+        }
+        let cursor = startOfThisWeek
+        for (let i = 0; i < weeks; i++) {
+          const start = new Date(cursor)
+          const end = shiftDays(start, 7)
+          const label = `${fmtMD(start)}`
+          weekBuckets.unshift({ start, end, label, count: 0 })
+          cursor = shiftDays(cursor, -7)
+        }
+        for (const t of sourceTodos) {
+          if ((t as any).status !== 'DONE') continue
+          const u = new Date((t as any).updatedAt)
+          for (const b of weekBuckets) {
+            if (u >= b.start && u < b.end) { b.count++; break }
+          }
+        }
+        const categoryBreakdown: Record<string, number> = {}
+        for (const t of sourceTodos) {
+          const cat = (t as any).category || '未分類'
+          categoryBreakdown[cat] = (categoryBreakdown[cat] ?? 0) + 1
+        }
 
         stats = {
           total: totalCount,
@@ -93,11 +140,14 @@ export async function GET(request: NextRequest) {
           overdue: overdueCount,
           byPriority,
           subtasks: { total: subTaskCount, mainTasks: mainTaskCount, subTasks: subTaskCount },
+          categoryBreakdown,
           completed: byStatus.done,
           active: totalCount - byStatus.done,
           weeklyDone,
           monthlyDone,
           unavailable: false,
+          weeklyTrend: weekBuckets.map(b => ({ label: b.label, count: b.count })),
+          trendMeta: { weeks, weekStart, tz },
         }
 
         if (useCache) {
@@ -121,11 +171,14 @@ export async function GET(request: NextRequest) {
           overdue: 0,
           byPriority: { urgent: 0, high: 0, medium: 0, low: 0 },
           subtasks: { total: 0, mainTasks: 0, subTasks: 0 },
+          categoryBreakdown: {},
           completed: doneCount,
           active: Math.max(totalCount - doneCount, 0),
           weeklyDone: 0,
           monthlyDone: 0,
           unavailable: true, // 明示的に非表示対象にする
+          weeklyTrend: Array.from({ length: weeks }).map((_, i) => ({ label: `W-${i+1}`, count: 0 })),
+          trendMeta: { weeks, weekStart, tz },
         }
       }
     }

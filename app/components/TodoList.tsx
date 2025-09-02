@@ -140,6 +140,17 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
   const [selectedTodos, setSelectedTodos] = useState<Set<string>>(new Set())
   const [isSelectionMode, setIsSelectionMode] = useState(false)
   const [isBulkOperating, setIsBulkOperating] = useState(false)
+  // サブタスク変更の反映（ロールアップ再取得用デバウンス）
+  const subtaskRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSubtasksChanged = () => {
+    if (subtaskRefreshTimerRef.current) {
+      clearTimeout(subtaskRefreshTimerRef.current)
+    }
+    subtaskRefreshTimerRef.current = setTimeout(() => {
+      fetchTodos(true).catch(() => {})
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
+    }, 300)
+  }
   
   // カレンダー用ヘルパー関数
   const getCalendarDays = (date: Date) => {
@@ -524,11 +535,16 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       }
 
       const updatedTodo: TodoResponse = await response.json()
-      // 実際のレスポンスでUIを更新（APIから直接ステータスを取得）
+      // 実際のレスポンスでUIを更新（既存のロールアップ/件数は保持）
       setTodos(prev => prev.map(todo => {
         if (todo.id === id) {
           const parsed = safeParseTodoDate({ ...updatedTodo })
-          return parsed
+          return {
+            ...todo,           // 既存フィールド（_count, rollup など）維持
+            ...parsed,         // サーバーからの最新値で上書き
+            _count: todo._count,
+            rollup: todo.rollup,
+          }
         }
         return todo
       }))
@@ -1188,6 +1204,13 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return
 
+      // /: 検索モーダルを開いてキーワードにフォーカス
+      if (e.key === '/') {
+        e.preventDefault()
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('search:open')) } catch {}
+        return
+      }
+
       // n: 新規作成フォームのタイトルへフォーカス
       if (e.key.toLowerCase() === 'n') {
         e.preventDefault()
@@ -1201,10 +1224,43 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         e.preventDefault()
         setEditingTodo(null)
       }
+
+      // Ctrl+A: 全選択（選択モードがオフの場合はオンにして全選択）
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        if (!isSelectionMode) {
+          setIsSelectionMode(true)
+        }
+        setSelectedTodos(new Set(filteredTodos.map(t => t.id)))
+        return
+      }
+
+      // Space / Enter: 完了切替（選択中 or 編集中のタスク）
+      if (e.key === ' ' || e.key === 'Enter') {
+        // 編集や入力中でなく、選択が存在する場合のみ処理
+        e.preventDefault()
+        if (selectedTodos.size > 0) {
+          // 全選択中の状態から、全てDONEかどうかでトグル
+          const selectedList = filteredTodos.filter(t => selectedTodos.has(t.id))
+          if (selectedList.length === 0) return
+          const allDone = selectedList.every(t => t.status === 'DONE')
+          const nextStatus: Status = allDone ? 'TODO' : 'DONE'
+          // まとめて更新（既存のバルク機構を使わず1件ずつ呼ぶ）
+          selectedList.forEach(t => {
+            handleUpdateTodo(t.id, { status: nextStatus })
+          })
+          return
+        }
+        if (editingTodo) {
+          const nextStatus: Status = editingTodo.status === 'DONE' ? 'TODO' : 'DONE'
+          handleUpdateTodo(editingTodo.id, { status: nextStatus })
+          return
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [editingTodo])
+  }, [editingTodo, isSelectionMode, filteredTodos, selectedTodos, handleUpdateTodo])
 
   if (isLoading) {
     return (
@@ -1801,7 +1857,19 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                                     }`}>
                                       {todo.priority === 'URGENT' ? '🔥' : todo.priority === 'HIGH' ? '⚡' : todo.priority === 'MEDIUM' ? '⭐' : '📝'} {PRIORITY_LABELS[todo.priority]}
                                     </span>
-                                    
+                                    {/* サブタスクロールアップ（親タスクのみ） */}
+                                    {!todo.parentId && (todo.rollup?.total ?? 0) > 0 && (
+                                      <span className="text-[11px] text-gray-600 dark:text-gray-300 flex items-center gap-1">
+                                        📋 {todo.rollup?.done ?? 0}/{todo.rollup?.total ?? 0}
+                                        <span className="w-12 h-1 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden inline-flex">
+                                          <span
+                                            className="bg-green-500 h-1"
+                                            style={{ width: `${Math.min(100, Math.max(0, todo.rollup?.percent ?? 0))}%` }}
+                                          />
+                                        </span>
+                                      </span>
+                                    )}
+
                                     {todo.category && (
                                       <span className="text-xs px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200 rounded-full">
                                         📂 {todo.category}
@@ -1962,6 +2030,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                             isSelectionMode={isSelectionMode}
                             isSelected={selectedTodos.has(todo.id)}
                             onSelect={handleSelectTodo}
+                            onSubtaskChange={handleSubtasksChanged}
                           />
                         ))}
                       </div>
@@ -1985,6 +2054,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                             isSelectionMode={isSelectionMode}
                             isSelected={selectedTodos.has(todo.id)}
                             onSelect={handleSelectTodo}
+                            onSubtaskChange={handleSubtasksChanged}
                           />
                         ))}
                       </div>

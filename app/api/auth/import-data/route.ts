@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         console.log('📋 CSVヘッダーを検出:', headers)
         
         // GDPR準拠エクスポート形式のヘッダーチェック
-        const expectedHeaders = ['ID', 'Title', 'Description', 'Completed', 'Priority', 'Due Date', 'Created At', 'Updated At']
+        const expectedHeaders = ['ID', 'Title', 'Description', 'Status', 'Completed', 'Priority', 'Category', 'Tags', 'Parent ID', 'Due Date', 'Created At', 'Updated At']
         const hasGDPRFormat = expectedHeaders.some(header => headers.includes(header))
         
         if (hasGDPRFormat) {
@@ -117,12 +117,26 @@ export async function POST(request: NextRequest) {
                 case 'Description':
                   todo.description = value
                   break
+                case 'Status':
+                  todo.status = value
+                  break
                 case 'Completed':
                   todo.completed = value.toLowerCase() === 'true'
                   break
                 case 'Priority':
                   todo.priority = value
                   console.log('🔍 CSV Priority処理:', { header, value, result: value })
+                  break
+                case 'Category':
+                  todo.category = value
+                  break
+                case 'Tags':
+                  todo.tags = value
+                  break
+                case 'Parent ID':
+                case 'ParentId':
+                case 'ParentID':
+                  todo.parentOriginalId = value
                   break
                 case 'Due Date':
                   todo.dueDate = value
@@ -161,9 +175,14 @@ export async function POST(request: NextRequest) {
     const normalizedTodos = todoData.map(todo => {
       // 基本的なデータ正規化
       // 優先度を大文字に変換（UIコンポーネントの要求に合わせる）
-      const priorityValue = todo.priority && ['low', 'medium', 'high'].includes(todo.priority.toLowerCase()) 
-        ? todo.priority.toUpperCase() 
-        : 'MEDIUM'
+      const priorityValue = (() => {
+        const pRaw = (todo.priority || '').toString()
+        const p = pRaw.toUpperCase()
+        if (['LOW','MEDIUM','HIGH','URGENT'].includes(p)) return p
+        const lower = pRaw.toLowerCase()
+        if (['low','medium','high','urgent'].includes(lower)) return lower.toUpperCase()
+        return 'MEDIUM'
+      })()
       
       console.log('🔍 優先度正規化:', { 
         originalPriority: todo.priority, 
@@ -171,13 +190,27 @@ export async function POST(request: NextRequest) {
         title: todo.title 
       })
       
+      const statusValue = (() => {
+        const sRaw = (todo.status || '').toString()
+        const s = sRaw.toUpperCase()
+        if (['TODO','IN_PROGRESS','REVIEW','DONE'].includes(s)) return s
+        if (todo.completed === true) return 'DONE'
+        if (todo.completed === false) return 'TODO'
+        return 'TODO'
+      })()
+
       const normalized: any = {
         title: todo.title || 'Untitled',
         description: todo.description || '',
+        status: statusValue,
         priority: priorityValue,
-        category: todo.category || 'general',
-        dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString().split('T')[0] : null,
-        tags: typeof todo.tags === 'string' ? todo.tags : (Array.isArray(todo.tags) ? todo.tags.join(',') : '')
+        category: todo.category || null,
+        dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString() : null,
+        tags: Array.isArray(todo.tags)
+          ? todo.tags
+          : (typeof todo.tags === 'string' && todo.tags.length > 0
+              ? todo.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+              : [])
       }
       
       // GDPR準拠エクスポートデータの追加フィールドを保持
@@ -188,6 +221,9 @@ export async function POST(request: NextRequest) {
       // 元のIDが存在する場合は保持（重複チェック用）
       if (todo.originalId || todo.id) {
         normalized.originalId = todo.originalId || todo.id
+      }
+      if (todo.parentOriginalId) {
+        normalized.parentOriginalId = todo.parentOriginalId
       }
       
       // タイムスタンプ情報の保持（参考情報として）

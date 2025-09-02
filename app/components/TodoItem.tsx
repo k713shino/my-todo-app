@@ -136,6 +136,8 @@ export default function TodoItem({
   const [editSubtaskTitle, setEditSubtaskTitle] = useState('')
   const [editSubtaskDue, setEditSubtaskDue] = useState('') // datetime-local 形式
   const [isSavingSubtask, setIsSavingSubtask] = useState(false)
+  const [draggingSubtaskId, setDraggingSubtaskId] = useState<string | null>(null)
+  const [dragOverSubtaskId, setDragOverSubtaskId] = useState<string | null>(null)
 
   /**
    * 期限切れ判定
@@ -249,7 +251,20 @@ export default function TodoItem({
         throw new Error(`Failed to create subtask: ${res.status} ${text}`)
       }
       const created = safeParseTodoDate<Todo>(await res.json())
-      setSubtasks(prev => (prev ? [created, ...prev] : [created]))
+      let nextList: Todo[] = []
+      setSubtasks(prev => {
+        nextList = prev ? [created, ...prev] : [created]
+        return nextList
+      })
+      // 並び順保存（先頭に追加）
+      try {
+        const order = nextList.map(s => s.id)
+        await fetch(`/api/todos/${todo.id}/subtasks`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order })
+        })
+      } catch {}
       setNewSubtaskTitle('')
       onSubtaskChange?.()
     } catch (e) {
@@ -270,6 +285,15 @@ export default function TodoItem({
         throw new Error(`Failed to delete subtask: ${res.status} ${text}`)
       }
       setSubtasks(prev => prev ? prev.filter(s => s.id !== subtaskId) : prev)
+      // 並び順保存
+      try {
+        const order = (subtasks || []).filter(s => s.id !== subtaskId).map(s => s.id)
+        await fetch(`/api/todos/${todo.id}/subtasks`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order })
+        })
+      } catch {}
       onSubtaskChange?.()
     } catch (e) {
       setSubtasksError(e instanceof Error ? e.message : 'Unknown error')
@@ -277,6 +301,61 @@ export default function TodoItem({
       setDeletingSubtaskId(null)
     }
   }, [onSubtaskChange])
+
+  // 並び替え保存
+  const persistSubtaskOrder = useCallback(async (list: Todo[]) => {
+    try {
+      const order = list.map(s => s.id)
+      await fetch(`/api/todos/${todo.id}/subtasks`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order })
+      })
+    } catch (e) {
+      // 非致命的
+      console.warn('サブタスク順序保存に失敗:', e)
+    }
+  }, [todo.id])
+
+  // DnD: drag開始
+  const onDragStartSub = (e: React.DragEvent, subId: string) => {
+    setDraggingSubtaskId(subId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  // DnD: drag over
+  const onDragOverSub = (e: React.DragEvent, overId: string) => {
+    e.preventDefault()
+    if (dragOverSubtaskId !== overId) setDragOverSubtaskId(overId)
+  }
+  // DnD: dropで順序更新
+  const onDropSub = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault()
+    if (!subtasks || !draggingSubtaskId || draggingSubtaskId === targetId) {
+      setDraggingSubtaskId(null)
+      setDragOverSubtaskId(null)
+      return
+    }
+    const srcIndex = subtasks.findIndex(s => s.id === draggingSubtaskId)
+    const dstIndex = subtasks.findIndex(s => s.id === targetId)
+    if (srcIndex < 0 || dstIndex < 0) {
+      setDraggingSubtaskId(null)
+      setDragOverSubtaskId(null)
+      return
+    }
+    const next = [...subtasks]
+    const [moved] = next.splice(srcIndex, 1)
+    next.splice(dstIndex, 0, moved)
+    setSubtasks(next)
+    await persistSubtaskOrder(next)
+    onSubtaskChange?.()
+    setDraggingSubtaskId(null)
+    setDragOverSubtaskId(null)
+  }
+  // DnD: drag end
+  const onDragEndSub = () => {
+    setDraggingSubtaskId(null)
+    setDragOverSubtaskId(null)
+  }
 
   // Date -> datetime-local 変換 (ローカルタイム)
   const toDatetimeLocalValue = (date: Date | null | undefined): string => {
@@ -452,6 +531,19 @@ export default function TodoItem({
             {priorityLabels[todo.priority]}
           </span>
 
+          {/* サブタスク ロールアップ（件数/進捗）*/}
+          {!todo.parentId && (todo.rollup?.total ?? 0) > 0 && (
+            <span className="text-xs text-gray-600 dark:text-gray-300 flex items-center gap-1">
+              📋 {todo.rollup?.done ?? 0} / {todo.rollup?.total ?? 0}
+              <span className="w-16 h-1 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden inline-flex">
+                <span
+                  className="bg-green-500 h-1"
+                  style={{ width: `${Math.min(100, Math.max(0, todo.rollup?.percent ?? 0))}%` }}
+                />
+              </span>
+            </span>
+          )}
+
           {/* 期限 */}
           {todo.dueDate && (
             <span className={`text-xs break-words ${
@@ -514,8 +606,8 @@ export default function TodoItem({
               </span>
             </button>
             
-            {/* サブタスクの進捗バー */}
-            {(subtasks && subtasks.length > 0) && (
+            {/* サブタスクの進捗バー（開いている時のみ表示） */}
+            {isSubtasksOpen && (subtasks && subtasks.length > 0) && (
               <div className="mt-2">
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                   <div 
@@ -566,7 +658,15 @@ export default function TodoItem({
                     {subtasks.map((s) => {
                       const overdue = s.dueDate && !isCompleted(s.status) && isAfter(new Date(), s.dueDate)
                       return (
-                        <li key={s.id} className="flex items-start justify-between bg-gray-50 dark:bg-gray-900/30 rounded px-2 py-2">
+                        <li
+                          key={s.id}
+                          className={`flex items-start justify-between bg-gray-50 dark:bg-gray-900/30 rounded px-2 py-2 ${dragOverSubtaskId === s.id ? 'ring-2 ring-purple-400' : ''}`}
+                          draggable
+                          onDragStart={(e) => onDragStartSub(e, s.id)}
+                          onDragOver={(e) => onDragOverSub(e, s.id)}
+                          onDrop={(e) => onDropSub(e, s.id)}
+                          onDragEnd={onDragEndSub}
+                        >
                           <div className="min-w-0 flex-1 pr-2">
                             {editingSubtaskId === s.id ? (
                               <div className="space-y-2">

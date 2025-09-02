@@ -18,6 +18,15 @@ export interface Todo {
   _count?: {
     subtasks: number
   }
+  // サブタスクのロールアップ情報（サーバー集計）
+  rollup?: {
+    total: number
+    done: number
+    inProgress: number
+    review: number
+    todo: number
+    percent: number // 0-100（小数点あり）
+  }
 }
 
 export interface CreateTodoData {
@@ -90,6 +99,19 @@ export interface TodoStats {
     total: number
     mainTasks: number  // 親タスク数
     subTasks: number   // サブタスク数
+  }
+  // カテゴリ分布
+  categoryBreakdown?: Record<string, number>
+  // 週次完了推移（直近N週）
+  weeklyTrend?: Array<{
+    label: string // 例: M/D〜
+    count: number
+  }>
+  // 週次推移のメタ情報
+  trendMeta?: {
+    weeks: number
+    weekStart: 'mon' | 'sun'
+    tz: 'UTC' | 'local'
   }
   // 後方互換性のため
   completed: number

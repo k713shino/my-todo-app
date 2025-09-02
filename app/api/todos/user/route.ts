@@ -136,10 +136,19 @@ export async function GET(request: NextRequest) {
       console.log('🔍 デバッグ - フィルタリング後のメインタスク:', mainTodos.length, '件', mainTodos.map((t: any) => ({ id: t.id, title: t.title, parentId: t.parentId })))
     }
     const safeTodos = mainTodos.map((todo: any) => {
-      // このTodoのサブタスク数を計算
-      const subtaskCount = allTodos.filter((t: any) => 
+      // このTodoのサブタスク群と集計を計算
+      const relatedSubtasks = allTodos.filter((t: any) => 
         t.parentId && t.parentId.toString() === todo.id.toString()
-      ).length
+      )
+      const subtaskCount = relatedSubtasks.length
+      const rollupCounts = {
+        total: subtaskCount,
+        todo: relatedSubtasks.filter((t: any) => (t.status || (t.completed ? 'DONE' : 'TODO')) === 'TODO').length,
+        inProgress: relatedSubtasks.filter((t: any) => (t.status || (t.completed ? 'DONE' : 'TODO')) === 'IN_PROGRESS').length,
+        review: relatedSubtasks.filter((t: any) => (t.status || (t.completed ? 'DONE' : 'TODO')) === 'REVIEW').length,
+        done: relatedSubtasks.filter((t: any) => (t.status || (t.completed ? 'DONE' : 'TODO')) === 'DONE').length,
+      }
+      const percent = rollupCounts.total > 0 ? (rollupCounts.done / rollupCounts.total) * 100 : 0
       
       if (process.env.NODE_ENV !== 'production') {
         if (subtaskCount > 0) {
@@ -169,6 +178,14 @@ export async function GET(request: NextRequest) {
         parentId: todo.parentId ? todo.parentId.toString() : null,
         _count: {
           subtasks: subtaskCount
+        },
+        rollup: {
+          total: rollupCounts.total,
+          done: rollupCounts.done,
+          inProgress: rollupCounts.inProgress,
+          review: rollupCounts.review,
+          todo: rollupCounts.todo,
+          percent,
         }
       }
     })

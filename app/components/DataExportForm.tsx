@@ -53,7 +53,7 @@ export default function DataExportForm({ userId: _userId }: DataExportFormProps)
       </h3>
 
       <p className="text-gray-600 mb-4">
-        あなたのすべてのTodoデータをダウンロードできます。
+        あなたのすべてのTodoデータをダウンロードできます（サブタスク含む）。
         GDPR準拠の完全なデータポータビリティを提供します。
       </p>
 
@@ -84,9 +84,9 @@ export default function DataExportForm({ userId: _userId }: DataExportFormProps)
           <h4 className="text-sm font-medium text-gray-900 mb-2">📋 エクスポートされるデータ</h4>
           <ul className="text-sm text-gray-600 space-y-1">
             <li>• アカウント情報（名前、メール、作成日時）</li>
-            <li>• すべてのTodoアイテム（タイトル、説明、優先度、期限、作成・更新日時）</li>
-            <li>• 統計情報（完了数、優先度別集計）</li>
-            <li>• アカウント設定情報</li>
+            <li>• すべてのTodoアイテム（タイトル、説明、ステータス、優先度、カテゴリ、タグ、期限、作成・更新日時）</li>
+            <li>• サブタスクの親子関係（Parent ID）</li>
+            <li>• 統計情報（総数・完了数などの概要）</li>
           </ul>
         </div>
 

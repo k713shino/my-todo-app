@@ -21,6 +21,7 @@ interface SearchModalProps {
 }
 
 function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModalProps) {
+  const keywordInputRef = React.useRef<HTMLInputElement | null>(null)
   const [keyword, setKeyword] = useState('')
   const [category, setCategory] = useState('')
   const [tags, setTags] = useState('')
@@ -70,6 +71,8 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
           console.error('最後の検索条件の読み込みに失敗:', error)
         }
       }
+      // キーワード入力へフォーカス
+      setTimeout(() => keywordInputRef.current?.focus(), 0)
     }
   }, [isOpen])
   
@@ -278,6 +281,7 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
                     onChange={(e) => setKeyword(e.target.value)}
                     placeholder="タイトルや説明文で検索..."
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                    ref={keywordInputRef}
                   />
                 </div>
 
@@ -440,6 +444,15 @@ export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps)
       onModalSearch(filters)
     }
   }
+
+  // グローバルイベントで検索モーダルを開く（TodoList側の "/" ショートカットから呼ばれる）
+  React.useEffect(() => {
+    const openHandler = () => {
+      if (session?.user) setIsSearchModalOpen(true)
+    }
+    window.addEventListener('search:open', openHandler)
+    return () => window.removeEventListener('search:open', openHandler)
+  }, [session?.user])
 
   return (
     <>

@@ -1,3 +1,6 @@
+"use client"
+
+import { useState } from 'react'
 import { TodoStats } from '@/types/todo'
 
 type Variant = 'color' | 'neutral' | 'compact'
@@ -32,6 +35,52 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
       return lastUpdatedRaw
     }
   })()
+
+  // カテゴリ分布（円グラフ用データ作成）
+  const categoryEntries = (() => {
+    const entries = (Object.entries(stats.categoryBreakdown || {}) as Array<[string, number]>)
+      .filter(([_, c]) => Number(c) > 0)
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+    if (entries.length <= 7) return entries
+    const top = entries.slice(0, 6)
+    const restCount = entries.slice(6).reduce((sum, [, c]) => sum + Number(c), 0)
+    return [...top, ['その他', restCount]]
+  })()
+
+  const categoryTotal = categoryEntries.reduce((sum, [, c]) => sum + Number(c), 0)
+  const palette = ['#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#14b8a6']
+  const categorySegments = (() => {
+    let acc = 0
+    return categoryEntries.map(([name, count], i) => {
+      const start = (acc / Math.max(1, categoryTotal)) * 100
+      acc += Number(count)
+      const end = (acc / Math.max(1, categoryTotal)) * 100
+      return { name, count: Number(count), start, end, color: palette[i % palette.length] }
+    })
+  })()
+
+  // 優先度棒グラフ用データ（件数降順でソート）
+  const priorityBars = [
+    { key: 'URGENT', label: '緊急', color: '#ef4444', value: stats.byPriority.urgent },
+    { key: 'HIGH', label: '高', color: '#f97316', value: stats.byPriority.high },
+    { key: 'MEDIUM', label: '中', color: '#f59e0b', value: stats.byPriority.medium },
+    { key: 'LOW', label: '低', color: '#10b981', value: stats.byPriority.low },
+  ].sort((a, b) => b.value - a.value)
+  const priorityMax = Math.max(...priorityBars.map(b => b.value), 1)
+  const [showPercent, setShowPercent] = useState(false)
+
+  // 週次折れ線グラフ
+  const trend = (stats.weeklyTrend || []).slice(-8)
+  const trendMax = Math.max(...trend.map(t => t.count), 1)
+  const w = 260, h = 80, pad = 6
+  const points = trend.length > 0
+    ? trend.map((t, i) => {
+        const x = pad + (i * (w - pad*2)) / Math.max(1, trend.length - 1)
+        const y = h - pad - (t.count / trendMax) * (h - pad*2)
+        return `${x},${y}`
+      }).join(' ')
+    : ''
+  const trendLabelStep = trend.length > 10 ? Math.ceil(trend.length / 8) : 1
 
   if (variant === 'compact') {
     // コンパクト: ダッシュボードの小カードと同じサイズ感で4指標のみ
@@ -107,24 +156,114 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
       </div>
 
       {/* 優先度別統計 */}
-      <div className="grid grid-cols-4 gap-2 text-xs">
-        <div className={`text-center ${cardBg} rounded p-2 backdrop-blur-sm`}>
-          <div className="font-bold text-white">🔴 {stats.byPriority.urgent}</div>
-          <div className={`${mutedText}`}>緊急</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 棒グラフ */}
+        <div className={`${cardBg} rounded p-3`}>
+          <div className={`flex items-center justify-between mb-2`}>
+            <div className={`text-sm ${mutedText}`}>優先度別分布</div>
+            <button
+              className={`text-[11px] px-2 py-0.5 rounded ${variant==='neutral' ? 'bg-gray-200 dark:bg-gray-700' : 'bg-white/20'} ${mutedText}`}
+              onClick={(e) => { e.preventDefault(); setShowPercent(p => !p) }}
+              title={showPercent ? '件数表示に切替' : '割合表示に切替'}
+            >{showPercent ? '％' : '#'} 表示</button>
+          </div>
+          <div className="space-y-2">
+            {priorityBars.map(b => (
+              <div key={b.key} className="flex items-center gap-2 text-xs">
+                <div className="w-10 text-right pr-1" style={{ color: b.color }} title={`${b.label}: ${b.value}件 (${Math.round((b.value/Math.max(1, stats.total))*100)}%)`}>{b.label}</div>
+                <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded" title={`${b.label}: ${b.value}件 (${Math.round((b.value/Math.max(1, stats.total))*100)}%)`}>
+                  <div className="h-2 rounded" style={{ width: `${showPercent ? Math.round((b.value/Math.max(1, stats.total))*100) : Math.round((b.value/priorityMax)*100)}%`, backgroundColor: b.color }} />
+                </div>
+                <div className={`${mutedText} w-10 text-right font-mono`}>
+                  {showPercent ? `${Math.round((b.value/Math.max(1, stats.total))*100)}%` : b.value}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className={`text-center ${cardBg} rounded p-2 backdrop-blur-sm`}>
-          <div className="font-bold text-white">🟠 {stats.byPriority.high}</div>
-          <div className={`${mutedText}`}>高</div>
-        </div>
-        <div className={`text-center ${cardBg} rounded p-2 backdrop-blur-sm`}>
-          <div className="font-bold text-white">🟡 {stats.byPriority.medium}</div>
-          <div className={`${mutedText}`}>中</div>
-        </div>
-        <div className={`text-center ${cardBg} rounded p-2 backdrop-blur-sm`}>
-          <div className="font-bold text-white">🟢 {stats.byPriority.low}</div>
-          <div className={`${mutedText}`}>低</div>
+
+        {/* 折れ線グラフ */}
+        <div className={`${cardBg} rounded p-3`}>
+          <div className={`text-sm mb-2 ${mutedText}`}>週次完了推移</div>
+          <div className="space-y-2">
+            <svg viewBox={`0 0 ${w} ${h + 18}`} className="w-full h-28 overflow-visible">
+              {/* 横グリッド（3本） */}
+              {[0.25, 0.5, 0.75].map((p, i) => (
+                <line key={i} x1={pad} y1={pad + (h - pad*2) * p} x2={w-pad} y2={pad + (h - pad*2) * p} stroke={variant==='neutral' ? '#e5e7eb' : 'rgba(255,255,255,0.25)'} strokeWidth={0.5} />
+              ))}
+              {/* 軸 */}
+              <line x1={pad} y1={h-pad} x2={w-pad} y2={h-pad} stroke={variant==='neutral' ? '#9ca3af' : 'rgba(255,255,255,0.6)'} strokeWidth={0.75} />
+              <line x1={pad} y1={pad} x2={pad} y2={h-pad} stroke={variant==='neutral' ? '#9ca3af' : 'rgba(255,255,255,0.6)'} strokeWidth={0.75} />
+              {/* 折れ線 */}
+              {points && (
+                <polyline points={points} fill="none" stroke={variant==='neutral' ? '#8b5cf6' : '#ffffff'} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              )}
+              {/* データ点 */}
+              {trend.map((t, i) => {
+                const x = pad + (i * (w - pad*2)) / Math.max(1, trend.length - 1)
+                const y = h - pad - (t.count / trendMax) * (h - pad*2)
+                return (
+                  <g key={i}>
+                    <circle cx={x} cy={y} r={3} fill={variant==='neutral' ? '#8b5cf6' : '#ffffff'}>
+                      <title>{`${t.label}: ${t.count}件`}</title>
+                    </circle>
+                    {/* ラベル（SVG内・点と同じxに配置） */}
+                    {(i % trendLabelStep === 0 || i === trend.length - 1) && (
+                      <text x={x} y={h - pad + 12} textAnchor="middle" fontSize="9" className="fill-current" style={{ fill: variant==='neutral' ? '#9ca3af' : 'rgba(255,255,255,0.8)' }}>
+                        {t.label}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+            </svg>
+          </div>
         </div>
       </div>
+
+      {/* 週次集計の基準表記 */}
+      {stats.trendMeta && (
+        <div className={`mt-2 text-[11px] ${mutedText}`}>週次基準: {stats.trendMeta.weeks}週・{stats.trendMeta.weekStart === 'mon' ? '月曜' : '日曜'}開始・{stats.trendMeta.tz === 'UTC' ? 'UTC' : 'ローカル'} 時間</div>
+      )}
+
+      {/* カテゴリ分布（円グラフ） */}
+      {categoryTotal > 0 && (
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+          <div className="md:col-span-1 flex items-center justify-center">
+            <div
+              className="relative w-40 h-40 rounded-full"
+              style={{
+                background: `conic-gradient(${categorySegments.map(seg => `${seg.color} ${seg.start}% ${seg.end}%`).join(', ')})`
+              }}
+              aria-label="カテゴリ分布"
+              role="img"
+            >
+              <div className={`absolute inset-4 ${variant === 'neutral' ? 'bg-white dark:bg-gray-800' : 'bg-white/80'} rounded-full flex items-center justify-center`}> 
+                <div className={`text-center ${variant === 'neutral' ? 'text-gray-800 dark:text-gray-100' : 'text-gray-800'}`}>
+                  <div className="text-xs">カテゴリ</div>
+                  <div className="text-lg font-bold">{categoryTotal}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="md:col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              {categorySegments.map((seg) => (
+                <div key={seg.name} className={`${cardBg} rounded p-2 flex items-center justify-between`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: seg.color }} />
+                    <span className={`truncate ${variant === 'neutral' ? 'text-gray-800 dark:text-gray-200' : 'text-white'}`}>{seg.name}</span>
+                  </div>
+                  <div className={`flex items-center gap-2 ${variant === 'neutral' ? 'text-gray-700 dark:text-gray-300' : 'text-white/90'}`}>
+                    <span className="font-mono">{seg.count}</span>
+                    <span className={`${mutedText}`}>{Math.round((seg.count / Math.max(1, categoryTotal)) * 100)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 期間別（直近）完了数 */}
       <div className="mt-4">

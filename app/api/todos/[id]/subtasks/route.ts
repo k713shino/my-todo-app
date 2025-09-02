@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { CreateTodoData } from '@/types/todo'
+import { CacheManager } from '@/lib/cache'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 
 /**
@@ -36,9 +37,30 @@ export async function GET(
 
     // 全てのTodoを取得してサブタスクをフィルタリング
     const allTodos = parentTodos
-    const subtasks = allTodos.filter(todo => 
+    let subtasks = allTodos.filter(todo => 
       todo.parentId && todo.parentId.toString() === parentId
     )
+
+    // 並び順をRedisから取得して適用
+    try {
+      const order = await CacheManager.getSubtaskOrder(actualUserId, parentId)
+      if (order && Array.isArray(order) && order.length > 0) {
+        const map = new Map(subtasks.map(t => [t.id.toString(), t]))
+        const ordered: typeof subtasks = []
+        for (const id of order) {
+          const item = map.get(id)
+          if (item) {
+            ordered.push(item)
+            map.delete(id)
+          }
+        }
+        // 順序にない新規は作成日時で末尾に
+        const rest = Array.from(map.values()).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        subtasks = [...ordered, ...rest]
+      }
+    } catch (e) {
+      console.log('⚠️ サブタスク順序適用失敗:', e)
+    }
 
     console.log('✅ サブタスク取得成功:', { parentId, count: subtasks.length })
 
@@ -121,6 +143,21 @@ export async function POST(
     })
     console.log('✅ サブタスク作成成功:', { subtaskId: newTodo.id, parentId })
 
+    // 親ユーザーのTodoキャッシュを無効化（ロールアップ再計算のため）
+    try {
+      await CacheManager.invalidateUserTodos(session.user.id)
+      console.log('📦 親Todoキャッシュ無効化完了')
+    } catch (cacheError) {
+      console.log('⚠️ 親Todoキャッシュ無効化失敗:', cacheError)
+    }
+
+    // 既存の順序があれば先頭に追加
+    try {
+      const prev = await CacheManager.getSubtaskOrder(actualUserId, parentId)
+      const nextOrder = [newTodo.id.toString(), ...(prev || [])]
+      await CacheManager.setSubtaskOrder(actualUserId, parentId, nextOrder)
+    } catch {}
+
     return NextResponse.json({
       id: newTodo.id.toString(),
       title: newTodo.title,
@@ -143,5 +180,42 @@ export async function POST(
       { error: 'Internal server error' },
       { status: 500 }
     )
+  }
+}
+
+/**
+ * サブタスク並び順更新
+ * PATCH /api/todos/[id]/subtasks
+ * Body: { order: string[] }
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const { id: parentId } = await params
+    const actualUserId = extractUserIdFromPrefixed(session.user.id)
+    const body = await request.json() as { order?: string[] }
+    if (!Array.isArray(body.order)) {
+      return NextResponse.json({ error: 'Invalid order payload' }, { status: 400 })
+    }
+    // 現在のサブタスクを取得して妥当性チェック
+    const parentTodos = await lambdaAPI.getUserTodos(actualUserId)
+    const allTodos = parentTodos || []
+    const validIds = new Set(
+      allTodos
+        .filter((t: any) => t.parentId && t.parentId.toString() === parentId)
+        .map((t: any) => t.id.toString())
+    )
+    const cleaned = body.order.filter(id => validIds.has(id))
+    await CacheManager.setSubtaskOrder(actualUserId, parentId, cleaned)
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('❌ サブタスク順序更新エラー:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
