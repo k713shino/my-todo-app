@@ -4,6 +4,37 @@ import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { CacheManager } from '@/lib/cache'
 
+// CSVテキストを安全に解析（引用符・改行・二重引用符エスケープ対応）
+function parseCSVText(text: string): { headers: string[]; rows: string[][] } {
+  if (!text) return { headers: [], rows: [] }
+  // UTF-8 BOM除去
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        const next = text[i + 1]
+        if (next === '"') { field += '"'; i++ } else { inQuotes = false }
+      } else { field += ch }
+    } else {
+      if (ch === '"') inQuotes = true
+      else if (ch === ',') { row.push(field); field = '' }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+      else if (ch === '\r') { /* CRLF無視 */ }
+      else { field += ch }
+    }
+  }
+  row.push(field); rows.push(row)
+  const nonEmpty = rows.filter(r => r.some(c => c.trim().length > 0))
+  const headers = (nonEmpty[0] || []).map(h => h.trim())
+  const dataRows = nonEmpty.slice(1)
+  return { headers, rows: dataRows }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('📥 Data import API called')
@@ -69,13 +100,11 @@ export async function POST(request: NextRequest) {
           throw new Error('Invalid JSON structure. Expected format: {todos: [...]} or [...]')
         }
       } else if (file.name.endsWith('.csv')) {
-        // GDPR準拠CSV解析（エクスポート形式対応）
-        const lines = fileContent.split('\n').filter(line => line.trim())
-        if (lines.length < 2) {
+        // CSV解析（引用符・改行対応）
+        const { headers, rows } = parseCSVText(fileContent)
+        if (headers.length === 0 || rows.length === 0) {
           throw new Error('CSV file must have header and at least one data row')
         }
-
-        const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
         console.log('📋 CSVヘッダーを検出:', headers)
         
         // GDPR準拠エクスポート形式のヘッダーチェック
@@ -87,25 +116,18 @@ export async function POST(request: NextRequest) {
         }
         
         // 最低限必要なヘッダーチェック
-        const titleHeader = headers.find(h => 
-          h.toLowerCase().includes('title') || h === 'Title'
-        )
+        const titleHeader = headers.find(h => h.toLowerCase() === 'title' || h === 'Title')
         
         if (!titleHeader) {
-          throw new Error('CSV must contain a "Title" or "title" column')
+          throw new Error('CSV must contain a "Title" column')
         }
 
-        todoData = lines.slice(1).map(line => {
-          // CSVの値を簡易解析（パフォーマンス最適化）
-          const values = line.split(',').map(value => {
-            // ダブルクォートの処理
-            return value.trim().replace(/^"|"$/g, '').replace(/""/g, '"')
-          })
+        todoData = rows.map(values => {
           
           const todo: any = {}
           
           headers.forEach((header, index) => {
-            const value = values[index]?.trim()
+            const value = (values[index] ?? '').trim()
             if (value) {
               // ヘッダー名を標準形式にマッピング
               switch (header) {
