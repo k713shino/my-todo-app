@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 import { lambdaAPI } from '@/lib/lambda-api'
+import { CacheManager } from '@/lib/cache'
 
 export async function POST(request: NextRequest) {
   try {
@@ -225,6 +226,10 @@ export async function POST(request: NextRequest) {
       if (todo.parentOriginalId) {
         normalized.parentOriginalId = todo.parentOriginalId
       }
+      // JSONエクスポート由来の親参照（parentId）も受け入れる
+      if (!normalized.parentOriginalId && (todo.parentId || (todo as any).parent_id)) {
+        normalized.parentOriginalId = todo.parentId || (todo as any).parent_id
+      }
       
       // タイムスタンプ情報の保持（参考情報として）
       if (todo.createdAt) {
@@ -266,63 +271,72 @@ export async function POST(request: NextRequest) {
     })
 
     try {
-      // Lambda API経由でデータをインポート
-      const response = await lambdaAPI.post('/import-todos', {
-        userId: actualUserId,
-        userEmail: session.user.email,
-        userName: session.user.name,
-        todos: normalizedTodos
-      })
-
-      console.log('Lambda import response:', response)
-
-      if (!response.success) {
-        console.error('Lambda import failed:', response.error)
-        
-        // エラーメッセージから適切なステータスコードを判定
-        let statusCode = 400
-        if (response.error?.includes('Unauthorized')) {
-          statusCode = 401
-        } else if (response.error?.includes('not found')) {
-          statusCode = 404
-        } else if (response.error?.includes('required')) {
-          statusCode = 400
+      // 2パス方式で親→子の順に作成（親子関係を確実に復元）
+      const parents = normalizedTodos.filter(t => !t.parentOriginalId)
+      const children = normalizedTodos.filter(t => t.parentOriginalId)
+      const idMap = new Map<string, string>() // originalId -> newId
+      let importedCount = 0
+      let skippedCount = 0
+      const createOne = async (payload: any) => {
+        const res = await lambdaAPI.post('/todos', {
+          title: payload.title,
+          description: payload.description || undefined,
+          userId: actualUserId,
+          userEmail: session.user.email || undefined,
+          userName: session.user.name || undefined,
+          priority: payload.priority || 'MEDIUM',
+          status: payload.status || 'TODO',
+          dueDate: payload.dueDate || undefined,
+          category: payload.category || undefined,
+          tags: Array.isArray(payload.tags) ? payload.tags : undefined,
+          parentId: payload.parentId || undefined,
+        })
+        if (res.success && res.data) {
+          importedCount++
+          return res.data
+        } else {
+          skippedCount++
+          return null
         }
-        
-        return NextResponse.json({ 
-          error: response.error || 'Import failed' 
-        }, { status: statusCode })
       }
 
-      // Lambdaからの詳細なレスポンスを解析
-      const lambdaData = response.data as any
-      const importedCount = lambdaData?.importedCount || 0
-      const skippedCount = lambdaData?.skippedCount || 0
-      const totalCount = lambdaData?.totalCount || normalizedTodos.length
+      // 親を作成
+      for (const t of parents) {
+        const created = await createOne(t)
+        if (created && t.originalId) {
+          idMap.set(String(t.originalId), String((created as any).id))
+        }
+      }
+      // 子を作成（親ID解決）
+      for (const t of children) {
+        const parentOrig = String(t.parentOriginalId)
+        const parentNewId = idMap.get(parentOrig)
+        const payload = { ...t, parentId: parentNewId }
+        const created = await createOne(payload)
+        if (created && t.originalId) {
+          idMap.set(String(t.originalId), String((created as any).id))
+        }
+      }
 
-      console.log('📈 Import results:', {
-        imported: importedCount,
-        skipped: skippedCount,
-        total: totalCount,
-        originalFileCount: todoData.length,
-        normalizedCount: normalizedTodos.length
-      })
+      const totalCount = normalizedTodos.length
+      console.log('📈 Import results (2-pass):', { importedCount, skippedCount, totalCount })
 
-      return NextResponse.json({ 
+      // キャッシュ無効化
+      try { await CacheManager.invalidateUserTodos(session.user.id) } catch {}
+
+      return NextResponse.json({
         success: true,
         importedCount,
         skippedCount,
         totalCount,
-        message: importedCount > 0 
+        message: importedCount > 0
           ? `Successfully imported ${importedCount} todos${skippedCount > 0 ? ` (${skippedCount} skipped)` : ''}`
-          : `All ${totalCount} todos were skipped due to duplicates`
+          : `All ${totalCount} todos were skipped due to errors or duplicates`
       })
 
     } catch (error) {
-      console.error('Lambda API error:', error)
-      return NextResponse.json({ 
-        error: 'Internal server error' 
-      }, { status: 500 })
+      console.error('Import processing error:', error)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 
   } catch (error) {
