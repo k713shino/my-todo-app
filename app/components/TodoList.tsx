@@ -1819,7 +1819,7 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                                   >
                                     {todo.title}
                                   </div>
-                                  <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="flex items-center gap-1 ml-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                     <button
                                       onClick={() => handleUpdateTodo(todo.id, { status: getNextStatus(todo.status) })}
                                       className="text-xs p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1859,7 +1859,12 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                                     </span>
                                     {/* サブタスクロールアップ（親タスクのみ） */}
                                     {!todo.parentId && (todo.rollup?.total ?? 0) > 0 && (
-                                      <span className="text-[11px] text-gray-600 dark:text-gray-300 flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        className="text-[11px] text-gray-600 dark:text-gray-300 flex items-center gap-1 hover:underline"
+                                        title="サブタスクの進捗（クリックで編集）"
+                                        onClick={() => setEditingTodo(todo)}
+                                      >
                                         📋 {todo.rollup?.done ?? 0}/{todo.rollup?.total ?? 0}
                                         <span className="w-12 h-1 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden inline-flex">
                                           <span
@@ -1867,7 +1872,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
                                             style={{ width: `${Math.min(100, Math.max(0, todo.rollup?.percent ?? 0))}%` }}
                                           />
                                         </span>
-                                      </span>
+                                        <span className="ml-1">({Math.round(Math.min(100, Math.max(0, todo.rollup?.percent ?? 0)))}%)</span>
+                                      </button>
                                     )}
 
                                     {todo.category && (
