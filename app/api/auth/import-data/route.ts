@@ -153,12 +153,7 @@ export async function POST(request: NextRequest) {
         if (t.originalId) return `oid:${String(t.originalId)}`
         return `k:${normalizeStr(t.title)}|d:${t.dueDate ? new Date(t.dueDate).toDateString() : 'none'}|c:${(t.category||'')}`
       }
-      const uniqueTodos = normalizedTodos.filter(t => {
-        const key = batchKey(t)
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
+      // uniqueTodos は normalizedTodos 定義後に算出する（後段で宣言）
       if (file.name.endsWith('.json')) {
         const jsonData = JSON.parse(fileContent)
         
@@ -368,6 +363,14 @@ export async function POST(request: NextRequest) {
         userName: session.user.name,
         todoCount: normalizedTodos.length,
         sampleTodos: normalizedTodos.slice(0, 2).map(t => ({ title: t.title, priority: t.priority }))
+      })
+
+      // バッチ内重複（originalId優先、なければキー合成）を除いた配列を作成
+      const uniqueTodos = normalizedTodos.filter(t => {
+        const key = batchKey(t)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
       })
 
     try {
