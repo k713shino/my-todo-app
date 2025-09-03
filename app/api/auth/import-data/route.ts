@@ -78,11 +78,12 @@ export async function POST(request: NextRequest) {
     const fileContent = await file.text()
     let todoData: any[] = []
 
+    // ユーザーID（接頭辞除去）を先に確定（後続でも利用）
+    const actualUserId = extractUserIdFromPrefixed(session.user.id)
+    // 既存ユーザーのTodoを取得（重複検知のため）
+    const existingTodos: any[] = await lambdaAPI.getUserTodos(actualUserId)
+
     try {
-      // ユーザーID（接頭辞除去）を先に確定しておく（下流で参照するため）
-      const actualUserId = extractUserIdFromPrefixed(session.user.id)
-      // 既存ユーザーのTodoを取得（重複検知のため）
-      const existingTodos: any[] = await lambdaAPI.getUserTodos(actualUserId)
 
       // 文字列正規化（NFKC + 小文字 + 句読点/記号/余分な空白除去）
       const normalizeStr = (s: string) => (s || '')
