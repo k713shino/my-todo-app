@@ -20,6 +20,8 @@ declare namespace NodeJS {
     // その他
     NODE_ENV: 'development' | 'production' | 'test';
     VERCEL_URL?: string;
+    // インポート並列度
+    IMPORT_CONCURRENCY?: string;
   }
 }
 

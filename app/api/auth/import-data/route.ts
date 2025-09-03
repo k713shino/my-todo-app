@@ -293,12 +293,33 @@ export async function POST(request: NextRequest) {
     })
 
     try {
+      // 並列度（同時実行数）を環境変数で制御。デフォルト4。
+      const CONCURRENCY = Math.max(1, parseInt(process.env.IMPORT_CONCURRENCY || '4', 10) || 4)
+
+      // シンプルな並列ワーカー実装
+      const runWithConcurrency = async <T>(
+        items: T[],
+        worker: (item: T, index: number) => Promise<void>,
+        limit = CONCURRENCY
+      ) => {
+        let cursor = 0
+        const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+          while (true) {
+            const myIndex = cursor++
+            if (myIndex >= items.length) break
+            await worker(items[myIndex], myIndex)
+          }
+        })
+        await Promise.all(workers)
+      }
+
       // 2パス方式で親→子の順に作成（親子関係を確実に復元）
       const parents = normalizedTodos.filter(t => !t.parentOriginalId)
       const children = normalizedTodos.filter(t => t.parentOriginalId)
       const idMap = new Map<string, string>() // originalId -> newId
       let importedCount = 0
       let skippedCount = 0
+
       const createOne = async (payload: any) => {
         const res = await lambdaAPI.post('/todos', {
           title: payload.title,
@@ -322,15 +343,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 親を作成
-      for (const t of parents) {
+      // 親を並列作成
+      await runWithConcurrency(parents, async (t) => {
         const created = await createOne(t)
         if (created && t.originalId) {
           idMap.set(String(t.originalId), String((created as any).id))
         }
-      }
-      // 子を作成（親ID解決）
-      for (const t of children) {
+      })
+
+      // 子を並列作成（親ID解決後）
+      await runWithConcurrency(children, async (t) => {
         const parentOrig = String(t.parentOriginalId)
         const parentNewId = idMap.get(parentOrig)
         const payload = { ...t, parentId: parentNewId }
@@ -338,10 +360,10 @@ export async function POST(request: NextRequest) {
         if (created && t.originalId) {
           idMap.set(String(t.originalId), String((created as any).id))
         }
-      }
+      })
 
       const totalCount = normalizedTodos.length
-      console.log('📈 Import results (2-pass):', { importedCount, skippedCount, totalCount })
+      console.log('📈 Import results (2-pass, parallelized):', { importedCount, skippedCount, totalCount, concurrency: CONCURRENCY, parents: parents.length, children: children.length })
 
       // キャッシュ無効化
       try { await CacheManager.invalidateUserTodos(session.user.id) } catch {}
