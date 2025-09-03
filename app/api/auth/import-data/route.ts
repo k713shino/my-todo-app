@@ -83,78 +83,77 @@ export async function POST(request: NextRequest) {
     // 既存ユーザーのTodoを取得（重複検知のため）
     const existingTodos: any[] = await lambdaAPI.getUserTodos(actualUserId)
 
-    try {
+    // 文字列正規化（NFKC + 小文字 + 句読点/記号/余分な空白除去）
+    const normalizeStr = (s: string) => (s || '')
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/[\p{P}\p{S}]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    // トークン化
+    const tokenize = (s: string) => new Set(normalizeStr(s).split(' ').filter(Boolean))
+    // Jaccard類似度
+    const jaccard = (a: Set<string>, b: Set<string>) => {
+      if (a.size === 0 && b.size === 0) return 1
+      let inter = 0
+      for (const t of a) if (b.has(t)) inter++
+      const uni = a.size + b.size - inter
+      return uni === 0 ? 1 : inter / uni
+    }
+    const eqDay = (d1?: string | null, d2?: string | null) => {
+      if (!d1 && !d2) return true
+      if (!d1 || !d2) return false
+      const a = new Date(d1)
+      const b = new Date(d2)
+      if (isNaN(a.getTime()) || isNaN(b.getTime())) return d1 === d2
+      const da = `${a.getFullYear()}-${a.getMonth()+1}-${a.getDate()}`
+      const db = `${b.getFullYear()}-${b.getMonth()+1}-${b.getDate()}`
+      return da === db
+    }
+    const eqNullable = (x?: string | null, y?: string | null) => (x || '') === (y || '')
 
-      // 文字列正規化（NFKC + 小文字 + 句読点/記号/余分な空白除去）
-      const normalizeStr = (s: string) => (s || '')
-        .normalize('NFKC')
-        .toLowerCase()
-        .replace(/[\p{P}\p{S}]/gu, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-      // トークン化
-      const tokenize = (s: string) => new Set(normalizeStr(s).split(' ').filter(Boolean))
-      // Jaccard類似度
-      const jaccard = (a: Set<string>, b: Set<string>) => {
-        if (a.size === 0 && b.size === 0) return 1
-        let inter = 0
-        for (const t of a) if (b.has(t)) inter++
-        const uni = a.size + b.size - inter
-        return uni === 0 ? 1 : inter / uni
-      }
-      const eqDay = (d1?: string | null, d2?: string | null) => {
-        if (!d1 && !d2) return true
-        if (!d1 || !d2) return false
-        const a = new Date(d1)
-        const b = new Date(d2)
-        if (isNaN(a.getTime()) || isNaN(b.getTime())) return d1 === d2
-        const da = `${a.getFullYear()}-${a.getMonth()+1}-${a.getDate()}`
-        const db = `${b.getFullYear()}-${b.getMonth()+1}-${b.getDate()}`
-        return da === db
-      }
-      const eqNullable = (x?: string | null, y?: string | null) => (x || '') === (y || '')
+    const existingIndexByTitle = new Map<string, any[]>()
+    for (const e of existingTodos) {
+      const key = normalizeStr(e.title)
+      const arr = existingIndexByTitle.get(key) || []
+      arr.push(e)
+      existingIndexByTitle.set(key, arr)
+    }
 
-      const existingIndexByTitle = new Map<string, any[]>()
-      for (const e of existingTodos) {
-        const key = normalizeStr(e.title)
-        const arr = existingIndexByTitle.get(key) || []
-        arr.push(e)
-        existingIndexByTitle.set(key, arr)
-      }
-
-      const isDuplicateOfExisting = (t: any): any | null => {
-        const key = normalizeStr(t.title)
-        const candidates = [
-          ...(existingIndexByTitle.get(key) || []),
-          // 類似タイトル候補（簡易探索）: 同じ先頭語を含むもの
-          ...Array.from(existingIndexByTitle.entries())
-            .filter(([k]) => k !== key && (k.includes(key) || key.includes(k)))
-            .flatMap(([, v]) => v)
-        ]
-        const tTokens = tokenize(t.title)
-        let best: any | null = null
-        let bestScore = 0
-        for (const c of candidates) {
-          const score = jaccard(tTokens, tokenize(c.title))
-          // 厳密一致 or 高類似度 + 重要フィールド一致で重複判定
-          const exact = normalizeStr(c.title) === key
-          const strongSimilar = score >= 0.9
-          const dateOk = eqDay(t.dueDate ?? null, c.dueDate ?? null)
-          const catOk = eqNullable(t.category ?? null, c.category ?? null)
-          if ((exact || strongSimilar) && dateOk && catOk) {
-            if (score > bestScore) { best = c; bestScore = score }
-          }
+    const isDuplicateOfExisting = (t: any): any | null => {
+      const key = normalizeStr(t.title)
+      const candidates = [
+        ...(existingIndexByTitle.get(key) || []),
+        // 類似タイトル候補（簡易探索）: 同じ先頭語を含むもの
+        ...Array.from(existingIndexByTitle.entries())
+          .filter(([k]) => k !== key && (k.includes(key) || key.includes(k)))
+          .flatMap(([, v]) => v)
+      ]
+      const tTokens = tokenize(t.title)
+      let best: any | null = null
+      let bestScore = 0
+      for (const c of candidates) {
+        const score = jaccard(tTokens, tokenize(c.title))
+        // 厳密一致 or 高類似度 + 重要フィールド一致で重複判定
+        const exact = normalizeStr(c.title) === key
+        const strongSimilar = score >= 0.9
+        const dateOk = eqDay(t.dueDate ?? null, c.dueDate ?? null)
+        const catOk = eqNullable(t.category ?? null, c.category ?? null)
+        if ((exact || strongSimilar) && dateOk && catOk) {
+          if (score > bestScore) { best = c; bestScore = score }
         }
-        return best
       }
+      return best
+    }
 
-      // バッチ内重複（originalId優先、なければキー合成）をスキップ
-      const seen = new Set<string>()
-      const batchKey = (t: any) => {
-        if (t.originalId) return `oid:${String(t.originalId)}`
-        return `k:${normalizeStr(t.title)}|d:${t.dueDate ? new Date(t.dueDate).toDateString() : 'none'}|c:${(t.category||'')}`
-      }
-      // uniqueTodos は normalizedTodos 定義後に算出する（後段で宣言）
+    // バッチ内重複（originalId優先、なければキー合成）をスキップ
+    const seen = new Set<string>()
+    const batchKey = (t: any) => {
+      if (t.originalId) return `oid:${String(t.originalId)}`
+      return `k:${normalizeStr(t.title)}|d:${t.dueDate ? new Date(t.dueDate).toDateString() : 'none'}|c:${(t.category||'')}`
+    }
+
+    try {
       if (file.name.endsWith('.json')) {
         const jsonData = JSON.parse(fileContent)
         
