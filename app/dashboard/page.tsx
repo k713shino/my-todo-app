@@ -20,6 +20,7 @@ export default function Dashboard() {
     priority: undefined as string | undefined,
     dateRange: undefined as string | undefined
   })
+  const [advancedParams, setAdvancedParams] = useState<Record<string, string> | undefined>(undefined)
 
   // ダッシュボード統計の取得（最小）
   const [stats, setStats] = useState<TodoStats | null>(null)
@@ -67,7 +68,7 @@ export default function Dashboard() {
     completed?: boolean
     priority?: string
     dateRange?: string
-  }) => {
+  }, advanced?: Record<string, string>) => {
     console.log('🔍 ヘッダーモーダルからの検索:', filters)
     
     // 検索値を更新してTodoListに反映
@@ -79,6 +80,7 @@ export default function Dashboard() {
       priority: filters.priority,
       dateRange: filters.dateRange
     })
+    setAdvancedParams(advanced)
   }
 
   return (
@@ -108,7 +110,7 @@ export default function Dashboard() {
           )}
 
           {/* Todoリスト */}
-          <TodoList modalSearchValues={modalSearchValues} />
+          <TodoList modalSearchValues={modalSearchValues} advancedSearchParams={advancedParams} />
         </div>
       </main>
     </div>

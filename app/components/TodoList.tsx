@@ -84,6 +84,7 @@ interface TodoListProps {
     priority?: string
     dateRange?: string
   }
+  advancedSearchParams?: Record<string, string>
 }
 
 // ステータス関連のヘルパー関数（LocalStorage連携版）
@@ -113,7 +114,7 @@ const isCompleted = (status: Status): boolean => status === 'DONE'
 
 // 以前のLocalStorage依存のコードを削除し、APIレスポンスを直接使用
 
-export default function TodoList({ modalSearchValues }: TodoListProps) {
+export default function TodoList({ modalSearchValues, advancedSearchParams }: TodoListProps) {
   // ページ移動デバッグ開始
   usePageMovementDebugger()
 
@@ -298,10 +299,17 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
     try {
       console.log('⚡ 高速Todo取得開始:', { bypassCache, 現在のTodos数: todos.length });
       
-      // 🚀 最適化されたユーザー専用エンドポイント使用
-      const url = bypassCache 
-        ? `/api/todos/user?cache=false&_t=${Date.now()}` 
-        : `/api/todos/user`
+      // 🚀 高度検索パラメータがある場合は検索APIを使用
+      let url = ''
+      if (advancedSearchParams && Object.keys(advancedSearchParams).length > 0) {
+        const params = new URLSearchParams(advancedSearchParams)
+        if (bypassCache) params.set('_t', String(Date.now()))
+        url = `/api/todos/search?${params.toString()}`
+      } else {
+        url = bypassCache 
+          ? `/api/todos/user?cache=false&_t=${Date.now()}` 
+          : `/api/todos/user`
+      }
       
       // リトライ機能付きの高速フェッチ
       const response = await retryWithBackoff(async () => {
@@ -342,7 +350,8 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
         throw errorWithStatus
       }
 
-      const data: TodoResponse[] = await response.json()
+      const dataJson = await response.json()
+      const data: TodoResponse[] = Array.isArray(dataJson) ? dataJson : (dataJson.results || [])
       const totalTime = performance.now() - startTime
       
       // パフォーマンス分析
@@ -1130,13 +1139,15 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
     if (process.env.NODE_ENV === 'development') {
       console.log('📊 todos, filter, または sort設定 変更検知 (useMemo)')
     }
-    const filtered = applyFilters(todos, filter)
+    // 高度検索使用中はサーバ側でフィルタ済みのため、クライアントフィルタは適用しない
+    const usingAdvanced = advancedSearchParams && Object.keys(advancedSearchParams).length > 0
+    const filtered = usingAdvanced ? todos : applyFilters(todos, filter)
     const sorted = sortTodos(filtered)
     if (process.env.NODE_ENV === 'development') {
       console.log('🔄 フィルター・ソート結果:', { 入力件数: todos.length, 出力件数: sorted.length, ソート: `${sortBy} ${sortOrder}`, activeView })
     }
     return sorted
-  }, [todos, filter, sortBy, sortOrder, activeView])
+  }, [todos, filter, sortBy, sortOrder, activeView, advancedSearchParams])
 
   /**
    * Todoの統計情報を計算
@@ -1196,6 +1207,13 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
       console.log('ℹ️ 初回取得は既に実行済み（重複防止）')
     }
   }, [])
+
+  // 高度検索条件の変更でサーバ検索を再実行（重複呼び出し防止のため advanced のみに依存）
+  useEffect(() => {
+    if (advancedSearchParams && Object.keys(advancedSearchParams).length > 0) {
+      try { fetchTodos(true) } catch {}
+    }
+  }, [advancedSearchParams])
 
   // 軽量ショートカットキー
   useEffect(() => {

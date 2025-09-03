@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { lambdaAPI } from '@/lib/lambda-api'
+import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 import { Todo, TodoFilters } from '@/types/todo'
 import { safeToISOString } from '@/lib/date-utils'
-import { Priority } from '@prisma/client'
+import { Priority, Status } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
+    // 既存フィルタ（後方互換）
     const filters: TodoFilters = {
       search: searchParams.get('q') || undefined,
       completed: searchParams.get('completed') ? searchParams.get('completed') === 'true' : undefined,
@@ -27,70 +29,100 @@ export async function GET(request: NextRequest) {
       dateRange: searchParams.get('dateRange') as any || undefined,
     }
 
+    // スマートフィルタv2 拡張パラメータ
+    const fieldsParam = (searchParams.get('fields') || 'title,description,category,tags').split(',').map(s => s.trim()).filter(Boolean)
+    const regexParam = searchParams.get('regex') || undefined // 例: 
+    // - regex=/foo.*/i （全フィールド）
+    // - regex=title:/^feat/i （特定フィールド）
+    const statusParam = searchParams.get('status') || undefined // 例: status=TODO,IN_PROGRESS
+    const tagsAllParam = searchParams.get('tags_all') || undefined // すべて含む
+    const scoreWeightsParam = searchParams.get('weights') || undefined // JSON: {titleExact:5,...}
+    const exprParam = searchParams.get('expr') || undefined // JSON複合条件
+
+    type Expr = 
+      | { op: 'and' | 'or'; conds: Expr[] }
+      | { field: 'title'|'description'|'category'|'status'|'priority'|'tags'|'dueDate'; 
+          type: 'eq'|'neq'|'contains'|'regex'|'in'|'range';
+          value?: any; from?: string; to?: string; flags?: string }
+
+    const parseExprJSON = (raw?: string): Expr | undefined => {
+      if (!raw) return undefined
+      try { return JSON.parse(raw) as Expr } catch { return undefined }
+    }
+
+    // 正規表現の解析
+    const parseRegex = (raw?: string): { field?: string; re: RegExp } | undefined => {
+      if (!raw) return undefined
+      try {
+        // 形式1: /pattern/flags
+        if (raw.startsWith('/') && raw.lastIndexOf('/') > 0) {
+          const last = raw.lastIndexOf('/')
+          const pat = raw.slice(1, last)
+          const flags = raw.slice(last + 1)
+          return { re: new RegExp(pat, flags) }
+        }
+        // 形式2: field:/pattern/flags
+        const m = raw.match(/^([a-zA-Z_]+):\/(.*)\/(\w*)$/)
+        if (m) {
+          return { field: m[1], re: new RegExp(m[2], m[3]) }
+        }
+      } catch {}
+      return undefined
+    }
+
+    const parsedRegex = parseRegex(regexParam)
+    const expr = parseExprJSON(exprParam)
+
+    // スコアの重み（デフォルト）
+    const defaultWeights = {
+      titleExact: 6,
+      titlePartial: 3,
+      descPartial: 1,
+      categoryMatch: 1,
+      tagMatch: 2,
+      regexBonus: 2,
+      overdue: 3,
+      dueSoon: 2,
+      priorityUrgent: 4,
+      priorityHigh: 2,
+      donePenalty: -2,
+    }
+    const weights = (() => {
+      if (!scoreWeightsParam) return defaultWeights
+      try { return { ...defaultWeights, ...JSON.parse(scoreWeightsParam) } } catch { return defaultWeights }
+    })()
+
     console.log('🔍 検索フィルター:', filters);
     console.log('👤 現在のユーザー:', session.user.id);
 
-    // Lambda API経由で全Todoを取得してフロントエンドでフィルタリング
-    console.log('📡 Lambda API経由で全Todo取得開始...');
-    const lambdaResponse = await lambdaAPI.get('/todos');
-    
-    if (!lambdaResponse.success || !lambdaResponse.data) {
-      console.error('❌ Lambda API失敗:', lambdaResponse.error);
+    // ユーザー専用エンドポイントを利用（確実・高速）
+    const actualUserId = extractUserIdFromPrefixed(session.user.id)
+    console.log('📡 Lambda API ユーザーTodo取得開始:', actualUserId)
+    let userTodos: any[] = []
+    try {
+      userTodos = await lambdaAPI.getUserTodos(actualUserId)
+    } catch (e) {
+      console.error('❌ Lambda getUserTodos 失敗:', e)
       return NextResponse.json({ 
-        filters,
-        results: [],
-        count: 0,
-        error: 'Failed to fetch todos from Lambda API'
-      }, { status: 500 });
+        filters, results: [], count: 0, error: 'Failed to fetch user todos' 
+      }, { status: 500 })
     }
-
-    const allTodos = Array.isArray(lambdaResponse.data) ? lambdaResponse.data : [];
-    console.log('📊 全Todo件数:', allTodos.length);
-
-    // ユーザー固有Todoのフィルタリング（既存のスマートマッピング使用）
-    let userTodos = allTodos.filter((todo: any) => {
-      const todoUserId = todo.userId;
-      const currentGoogleId = session.user.id;
-      
-      // 直接比較
-      if (todoUserId === currentGoogleId) return true;
-      
-      // 既知のマッピング
-      if (currentGoogleId === '110701307742242924558' && todoUserId === 'cmdpi4dye0000lc04xn7yujpn') return true;
-      if (currentGoogleId === '112433279481859708110' && todoUserId === 'cmdsbbogh0000l604u08lqcp4') return true;
-      
-      return false;
-    });
-
-    // スマートマッピング：新規ユーザーの場合
-    if (userTodos.length === 0) {
-      console.log('🔍 スマートマッピング: 新規ユーザーの可能性をチェック');
-      
-      const newUserTodos = allTodos.filter((todo: any) => {
-        const userId = todo.userId;
-        if (!userId || !userId.startsWith('c') || userId.length < 15) return false;
-        
-        const todoCreatedAt = new Date(todo.createdAt);
-        const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-        
-        return todoCreatedAt > thirtyMinutesAgo;
-      });
-      
-      if (newUserTodos.length > 0) {
-        const sortedTodos = newUserTodos.sort((a, b) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        const detectedUserId = sortedTodos[0].userId;
-        
-        console.log('🆕 新規ユーザー検出:', detectedUserId);
-        userTodos = allTodos.filter((todo: any) => todo.userId === detectedUserId);
-      }
-    }
-
-    console.log('📊 ユーザー固有Todo件数:', userTodos.length);
+    console.log('📊 ユーザー固有Todo件数:', userTodos.length)
 
     // 検索フィルタリング適用
     let filteredTodos = userTodos;
+
+    // 状態の複数指定（例: status=TODO,IN_PROGRESS）
+    if (statusParam) {
+      const wanted = new Set(statusParam.split(',').map(s => s.trim()).filter(Boolean))
+      if (wanted.size > 0) {
+        filteredTodos = filteredTodos.filter((todo: any) => {
+          const s = todo.status ? String(todo.status) : (todo.completed ? 'DONE' : 'TODO')
+          return wanted.has(s)
+        })
+        console.log(`🎯 ステータス複数フィルター ${[...wanted].join(',')} 結果:`, filteredTodos.length)
+      }
+    }
 
     // 全文検索
     if (filters.search) {
@@ -126,13 +158,25 @@ export async function GET(request: NextRequest) {
       console.log(`📁 カテゴリフィルター "${filters.category}" 結果:`, filteredTodos.length, '件');
     }
 
-    // タグフィルター
+    // タグフィルター（いずれか）
     if (filters.tags && filters.tags.length > 0) {
       filteredTodos = filteredTodos.filter((todo: any) => {
         const todoTags = Array.isArray(todo.tags) ? todo.tags : [];
         return filters.tags!.some(tag => todoTags.includes(tag));
       });
       console.log(`🏷️ タグフィルター "${filters.tags.join(',')}" 結果:`, filteredTodos.length, '件');
+    }
+
+    // タグフィルター（すべて含む）
+    if (tagsAllParam) {
+      const must = tagsAllParam.split(',').map(s => s.trim()).filter(Boolean)
+      if (must.length > 0) {
+        filteredTodos = filteredTodos.filter((todo: any) => {
+          const todoTags = Array.isArray(todo.tags) ? todo.tags : []
+          return must.every(tag => todoTags.includes(tag))
+        })
+        console.log(`🏷️ タグ(AND) "${must.join(',')}" 結果:`, filteredTodos.length, '件')
+      }
     }
 
     // 日付範囲フィルター
@@ -168,31 +212,130 @@ export async function GET(request: NextRequest) {
       console.log(`📅 日付範囲フィルター "${filters.dateRange}" 結果:`, filteredTodos.length, '件');
     }
 
-    // ソート（優先度、期限、更新日時順）
-    filteredTodos.sort((a: any, b: any) => {
-      // 完了状態（未完了を先に）
-      if (a.completed !== b.completed) {
-        return a.completed ? 1 : -1;
+    // 正規表現フィルタ
+    if (parsedRegex) {
+      const fields = parsedRegex.field ? [parsedRegex.field] : fieldsParam
+      filteredTodos = filteredTodos.filter((todo: any) => {
+        return fields.some((f) => {
+          const v = f === 'tags' ? (Array.isArray(todo.tags) ? todo.tags.join(' ') : '') : String(todo[f] ?? '')
+          return parsedRegex!.re.test(v)
+        })
+      })
+      console.log(`🧪 正規表現フィルター ${parsedRegex.field ? parsedRegex.field+':' : ''}${parsedRegex.re} 結果:`, filteredTodos.length)
+    }
+
+    // 複合条件（JSON）
+    const applyExpr = (t: any, e?: Expr): boolean => {
+      if (!e) return true
+      if ((e as any).op) {
+        const node = e as any
+        const results = (node.conds || []).map((c: Expr) => applyExpr(t, c))
+        return node.op === 'and' ? results.every(Boolean) : results.some(Boolean)
       }
-      
-      // 優先度（高いものを先に）
-      const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
-      const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] || 2;
-      const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] || 2;
-      if (aPriority !== bPriority) {
-        return bPriority - aPriority;
+      const c = e as any
+      const get = (field: string): any => {
+        if (field === 'tags') return Array.isArray(t.tags) ? t.tags : []
+        return t[field]
       }
-      
-      // 期限（近いものを先に）
-      if (a.dueDate && b.dueDate) {
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      switch (c.type) {
+        case 'eq': return String(get(c.field)) === String(c.value)
+        case 'neq': return String(get(c.field)) !== String(c.value)
+        case 'contains': {
+          const v = get(c.field)
+          return String(v ?? '').toLowerCase().includes(String(c.value ?? '').toLowerCase())
+        }
+        case 'regex': {
+          try {
+            const re = new RegExp(String(c.value ?? ''), c.flags || '')
+            const v = c.field === 'tags' ? (Array.isArray(t.tags) ? t.tags.join(' ') : '') : String(get(c.field) ?? '')
+            return re.test(v)
+          } catch { return false }
+        }
+        case 'in': {
+          const arr = Array.isArray(c.value) ? c.value.map((x: any) => String(x)) : []
+          const v = get(c.field)
+          return arr.includes(String(v))
+        }
+        case 'range': {
+          // 日付範囲用
+          const v = get(c.field)
+          if (!v) return false
+          const dt = new Date(v)
+          const fromOk = c.from ? dt >= new Date(c.from) : true
+          const toOk = c.to ? dt <= new Date(c.to) : true
+          return fromOk && toOk
+        }
+        default: return true
       }
-      if (a.dueDate && !b.dueDate) return -1;
-      if (!a.dueDate && b.dueDate) return 1;
-      
-      // 更新日時（新しいものを先に）
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
+    }
+    if (expr && filteredTodos.length > 0) {
+      filteredTodos = filteredTodos.filter(t => applyExpr(t, expr))
+      console.log('🧩 複合条件(expr) 適用後:', filteredTodos.length)
+    }
+
+    // 重み付きスコア（v2）
+    const tokens = (filters.search || '').trim().split(/\s+/).filter(Boolean)
+    const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 } as const
+    const now = new Date()
+    const withScore = filteredTodos.map((t: any) => {
+      let score = 0
+      const title = String(t.title || '')
+      const desc = String(t.description || '')
+      const category = String(t.category || '')
+      const tagStr = Array.isArray(t.tags) ? t.tags.join(' ') : ''
+
+      // 正規表現一致ボーナス（既にフィルタしているが、スコアにも加点）
+      if (parsedRegex) {
+        const fields = parsedRegex.field ? [parsedRegex.field] : fieldsParam
+        if (fields.some(f => parsedRegex.re.test(f === 'tags' ? tagStr : String((t as any)[f] ?? '')))) {
+          score += weights.regexBonus
+        }
+      }
+
+      // クエリトークンの一致
+      for (const token of tokens) {
+        const low = token.toLowerCase()
+        if (title.toLowerCase() === low) score += weights.titleExact
+        else if (title.toLowerCase().includes(low)) score += weights.titlePartial
+        if (desc.toLowerCase().includes(low)) score += weights.descPartial
+        if (category.toLowerCase().includes(low)) score += weights.categoryMatch
+        if (tagStr.toLowerCase().includes(low)) score += weights.tagMatch
+      }
+
+      // 期限: 24時間以内 or 期限切れ
+      if (t.dueDate) {
+        const due = new Date(t.dueDate)
+        if (due < now && !(t.completed || t.status === 'DONE')) score += weights.overdue
+        else if (due.getTime() - now.getTime() <= 24*60*60*1000 && due >= now) score += weights.dueSoon
+      }
+
+      // 優先度
+      const p = String(t.priority || 'MEDIUM')
+      if (p === 'URGENT') score += weights.priorityUrgent
+      else if (p === 'HIGH') score += weights.priorityHigh
+
+      // 完了ペナルティ（明示指定がない場合）
+      if ((filters.completed === undefined) && (t.completed || t.status === 'DONE')) score += weights.donePenalty
+
+      return { t, score }
+    })
+
+    withScore.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      // タイブレーク: 未完了優先 → 優先度 → 期限 → 更新日
+      const aC = a.t.completed || a.t.status === 'DONE'
+      const bC = b.t.completed || b.t.status === 'DONE'
+      if (aC !== bC) return aC ? 1 : -1
+      const aP = priorityOrder[a.t.priority as keyof typeof priorityOrder] || 2
+      const bP = priorityOrder[b.t.priority as keyof typeof priorityOrder] || 2
+      if (aP !== bP) return bP - aP
+      if (a.t.dueDate && b.t.dueDate) return new Date(a.t.dueDate).getTime() - new Date(b.t.dueDate).getTime()
+      if (a.t.dueDate && !b.t.dueDate) return -1
+      if (!a.t.dueDate && b.t.dueDate) return 1
+      return new Date(b.t.updatedAt).getTime() - new Date(a.t.updatedAt).getTime()
+    })
+
+    filteredTodos = withScore.map(x => x.t)
 
     // 安全な日付変換
     const results = filteredTodos.map((todo: any) => ({
@@ -216,7 +359,13 @@ export async function GET(request: NextRequest) {
       filters,
       results,
       count: results.length,
-      cached: false // Lambda経由なのでキャッシュなし
+      cached: false, // Lambda経由なのでキャッシュなし
+      meta: {
+        weights,
+        regex: regexParam || null,
+        fields: fieldsParam,
+        hasExpr: !!expr
+      }
     })
 
   } catch (error) {

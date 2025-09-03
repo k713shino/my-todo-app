@@ -16,7 +16,7 @@ interface SearchModalProps {
     completed?: boolean
     priority?: string
     dateRange?: string
-  }) => void
+  }, advanced?: Record<string, string>) => void
   isAuthenticated: boolean
 }
 
@@ -42,6 +42,14 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
   }>>([])
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveSearchName, setSaveSearchName] = useState('')
+  // 高度検索のUI状態
+  const [regex, setRegex] = useState('')
+  const [regexFields, setRegexFields] = useState<string[]>(['title','description','category','tags'])
+  const [tagMode, setTagMode] = useState<'or'|'and'>('or')
+  const [statusMulti, setStatusMulti] = useState<string[]>([])
+  const [dateFrom, setDateFrom] = useState<string>('')
+  const [dateTo, setDateTo] = useState<string>('')
+  const [weightPreset, setWeightPreset] = useState<string>('default')
   
   // コンポーネントマウント時に保存された検索条件を読み込み
   React.useEffect(() => {
@@ -97,7 +105,52 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
     // 最後の検索条件として保存（下位互換性のため）
     localStorage.setItem('todoSearchFilters', JSON.stringify(filters))
     
-    onSearch(filters)
+    // 高度検索のクエリパラメータを組み立て
+    const params: Record<string, string> = {}
+    // 高度検索の有無を先に判定
+    const hasAdvanced = (
+      (!!regex.trim()) ||
+      (statusMulti.length > 0) ||
+      (tagMode === 'and' && filters.tags.length > 0) ||
+      (!!dateFrom || !!dateTo) ||
+      (weightPreset !== 'default')
+    )
+    if (hasAdvanced && filters.keyword) params.q = filters.keyword
+    if (regex.trim()) {
+      params.regex = regex.trim()
+      if (regexFields && regexFields.length > 0) params.fields = regexFields.join(',')
+    }
+    if (statusMulti.length > 0) params.status = statusMulti.join(',')
+    if (filters.tags.length > 0) {
+      if (tagMode === 'and') params.tags_all = filters.tags.join(',')
+      else params.tags = filters.tags.join(',')
+    }
+    if (hasAdvanced && filters.completed !== undefined) params.completed = String(filters.completed)
+    if (hasAdvanced && filters.priority) params.priority = String(filters.priority)
+    if (hasAdvanced && filters.category) params.category = filters.category
+    if (hasAdvanced && filters.dateRange) params.dateRange = String(filters.dateRange)
+    if (dateFrom || dateTo) {
+      const expr = {
+        field: 'dueDate',
+        type: 'range',
+        ...(dateFrom ? { from: new Date(dateFrom).toISOString() } : {}),
+        ...(dateTo ? { to: new Date(dateTo).toISOString() } : {}),
+      }
+      params.expr = JSON.stringify(expr)
+    }
+    const presets: Record<string, Record<string, number>> = {
+      default: {},
+      urgent_first: { priorityUrgent: 6, priorityHigh: 3 },
+      due_soon_first: { dueSoon: 4, overdue: 5 },
+      title_exact_first: { titleExact: 10, titlePartial: 2 },
+    }
+    if (weightPreset !== 'default') {
+      params.weights = JSON.stringify(presets[weightPreset] || {})
+    }
+
+    // 高度検索が有効な時のみ advanced を渡す
+    const advanced = hasAdvanced && Object.keys(params).length > 0 ? params : undefined
+    onSearch(filters, advanced)
     onClose()
   }
   
@@ -355,18 +408,69 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
                   />
                 </div>
 
-                {/* タグ */}
+                {/* タグ */
+                }
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
                     🏷️ タグ（カンマ区切り）
                   </label>
-                  <input
-                    type="text"
-                    value={tags}
-                    onChange={(e) => setTags(e.target.value)}
-                    placeholder="重要, 会議, レビューなど"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
-                  />
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      value={tags}
+                      onChange={(e) => setTags(e.target.value)}
+                      placeholder="重要, 会議, レビューなど"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                      <label className="inline-flex items-center gap-1"><input type="radio" name="tagMode" value="or" checked={tagMode==='or'} onChange={()=>setTagMode('or')} />OR</label>
+                      <label className="inline-flex items-center gap-1"><input type="radio" name="tagMode" value="and" checked={tagMode==='and'} onChange={()=>setTagMode('and')} />AND</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 高度検索 */}
+              <div className="space-y-4 mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h3 className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">🧪 高度検索</h3>
+                {/* 正規表現 */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">正規表現（例: /bug|バグ/i または title:/^feat/i）</label>
+                  <input type="text" value={regex} onChange={(e)=>setRegex(e.target.value)} placeholder="/pattern/i または title:/^feat/i" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white" />
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                    {['title','description','category','tags'].map(f => (
+                      <label key={f} className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-300">
+                        <input type="checkbox" checked={regexFields.includes(f)} onChange={(e)=>setRegexFields(prev => e.target.checked ? Array.from(new Set([...prev, f])) : prev.filter(x=>x!==f))} />{f}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {/* ステータス複数 */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ステータス（複数選択）</label>
+                  <div className="flex flex-wrap gap-3 text-xs text-gray-700 dark:text-gray-300">
+                    {['TODO','IN_PROGRESS','REVIEW','DONE'].map(s => (
+                      <label key={s} className="inline-flex items-center gap-1"><input type="checkbox" checked={statusMulti.includes(s)} onChange={(e)=>setStatusMulti(prev => e.target.checked ? [...prev, s] : prev.filter(x=>x!==s))} />{s}</label>
+                    ))}
+                  </div>
+                </div>
+                {/* カスタム期間 */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">期間（カスタム・任意）</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="date" value={dateFrom} onChange={(e)=>setDateFrom(e.target.value)} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white" />
+                    <input type="date" value={dateTo} onChange={(e)=>setDateTo(e.target.value)} className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white" />
+                  </div>
+                </div>
+                {/* 重みプリセット */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">重みプリセット</label>
+                  <select value={weightPreset} onChange={(e)=>setWeightPreset(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white">
+                    <option value="default">デフォルト</option>
+                    <option value="urgent_first">緊急重視</option>
+                    <option value="due_soon_first">期限重視</option>
+                    <option value="title_exact_first">タイトル厳密一致重視</option>
+                  </select>
                 </div>
               </div>
             </form>
@@ -421,7 +525,7 @@ interface DashboardHeaderProps {
     completed?: boolean
     priority?: string
     dateRange?: string
-  }) => void
+  }, advanced?: Record<string, string>) => void
 }
 
 export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps) {
@@ -438,10 +542,10 @@ export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps)
     completed?: boolean
     priority?: string
     dateRange?: string
-  }) => {
+  }, advanced?: Record<string, string>) => {
     // モーダルからの検索処理を親コンポーネントに委譲
     if (onModalSearch && isAuthenticated) {
-      onModalSearch(filters)
+      onModalSearch(filters, advanced)
     }
   }
 
