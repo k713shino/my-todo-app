@@ -79,6 +79,8 @@ export async function POST(request: NextRequest) {
     let todoData: any[] = []
 
     try {
+      // ユーザーID（接頭辞除去）を先に確定しておく（下流で参照するため）
+      const actualUserId = extractUserIdFromPrefixed(session.user.id)
       // 既存ユーザーのTodoを取得（重複検知のため）
       const existingTodos: any[] = await lambdaAPI.getUserTodos(actualUserId)
 
@@ -360,15 +362,13 @@ export async function POST(request: NextRequest) {
       priorities: normalizedTodos.map(t => ({ title: t.title, priority: t.priority, originalPriority: todoData.find(orig => orig.title === t.title)?.priority }))
     })
 
-    const actualUserId = extractUserIdFromPrefixed(session.user.id)
-    
-    console.log('📊 Import request details:', {
-      userId: actualUserId,
-      userEmail: session.user.email,
-      userName: session.user.name,
-      todoCount: normalizedTodos.length,
-      sampleTodos: normalizedTodos.slice(0, 2).map(t => ({ title: t.title, priority: t.priority }))
-    })
+      console.log('📊 Import request details:', {
+        userId: actualUserId,
+        userEmail: session.user.email,
+        userName: session.user.name,
+        todoCount: normalizedTodos.length,
+        sampleTodos: normalizedTodos.slice(0, 2).map(t => ({ title: t.title, priority: t.priority }))
+      })
 
     try {
       // 並列度（同時実行数）を環境変数で制御。デフォルト4。
