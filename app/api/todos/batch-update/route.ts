@@ -22,19 +22,43 @@ export async function POST(request: NextRequest) {
 
     const userId = extractUserIdFromPrefixed(session.user.id)
 
+    // まずはバッチAPIを試行
     const updates = { updates: ids.map(id => ({ id: String(id), data })) }
     const resp = await lambdaDB.batchUpdateTodos(userId, updates)
 
-    if (!resp.success) {
-      return NextResponse.json({ error: resp.error || 'Batch update failed' }, { status: 500 })
+    let ok = 0
+    let fail = 0
+
+    if (resp.success) {
+      ok = ids.length
+    } else {
+      // フォールバック: エンドポイント未実装などの場合は1件ずつ更新
+      const notFound = (resp.httpStatus === 404) || (typeof resp.error === 'string' && /Endpoint not found|404/i.test(resp.error))
+      if (!notFound) {
+        return NextResponse.json({ error: resp.error || 'Batch update failed' }, { status: 500 })
+      }
+
+      // 並列度を制限して更新
+      const limit = Math.max(1, Math.min(10, Number(process.env.BULK_UPDATE_CONCURRENCY || 5)))
+      let cursor = 0
+      const workers = new Array(Math.min(limit, ids.length)).fill(0).map(async () => {
+        while (true) {
+          const index = cursor++
+          if (index >= ids.length) break
+          const id = String(ids[index])
+          const res = await lambdaDB.updateTodo(userId, id, data)
+          if (res.success) ok++
+          else fail++
+        }
+      })
+      await Promise.all(workers)
     }
 
     // キャッシュ無効化
     try { await CacheManager.invalidateUserTodos(session.user.id) } catch {}
 
-    return NextResponse.json({ success: true, count: ids.length })
+    return NextResponse.json({ success: true, count: ok, failed: fail })
   } catch (e) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
-
