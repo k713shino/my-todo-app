@@ -349,7 +349,7 @@ export async function GET(request: NextRequest) {
     }));
 
     console.log('✅ 検索完了:', {
-      totalTodos: allTodos.length,
+      totalTodos: userTodos.length,
       userTodos: userTodos.length,
       filteredResults: results.length,
       filters
