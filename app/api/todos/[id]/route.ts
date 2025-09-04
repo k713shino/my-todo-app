@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { lambdaAPI } from '@/lib/lambda-api'
+import { lambdaDB } from '@/lib/lambda-db'
 import { safeToISOString } from '@/lib/date-utils'
 import { CacheManager } from '@/lib/cache'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
@@ -130,14 +131,11 @@ export async function DELETE(
       userIdType: typeof session.user.id 
     });
     
-    // Lambda API経由でTodoを削除 (実際のuserIdをクエリパラメータで送信、TEXT型対応)
-    const deleteEndpoint = `/todos/${id}?userId=${encodeURIComponent(actualUserId)}`
-    console.log('🔗 削除エンドポイント:', deleteEndpoint);
+    // 削除は LambdaDB のユーザー固有エンドポイントを使用
+    const dbResp = await lambdaDB.deleteTodo(actualUserId, String(id))
+    console.log('📥 LambdaDB 削除レスポンス:', dbResp)
     
-    const lambdaResponse = await lambdaAPI.delete(deleteEndpoint);
-    console.log('📥 Lambda API削除レスポンス:', lambdaResponse);
-    
-    if (lambdaResponse.success) {
+    if (dbResp.success) {
       console.log('✅ Lambda API でのTodo削除成功:', id);
       
       // キャッシュ無効化
@@ -150,10 +148,9 @@ export async function DELETE(
       
       return NextResponse.json({ message: 'Todo deleted successfully' });
     } else {
-      console.error('❌ Lambda API削除失敗:', lambdaResponse.error);
-      // 404エラーの場合は適切なステータスコードを返す
-      const status = lambdaResponse.error?.includes('not found') ? 404 : 500;
-      return NextResponse.json({ error: lambdaResponse.error || 'Todo削除に失敗しました' }, { status });
+      console.error('❌ Lambda 削除失敗:', dbResp.error);
+      const status = (dbResp.httpStatus === 404 || (dbResp.error||'').includes('not found')) ? 404 : 500
+      return NextResponse.json({ error: dbResp.error || 'Todo削除に失敗しました' }, { status });
     }
 
   } catch (error) {
