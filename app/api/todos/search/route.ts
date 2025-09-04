@@ -337,6 +337,13 @@ export async function GET(request: NextRequest) {
 
     filteredTodos = withScore.map(x => x.t)
 
+    // 検索結果は親タスクのみを返す（サブタスクは一覧に表示しない）
+    const beforeRemoveSub = filteredTodos.length
+    filteredTodos = filteredTodos.filter((t: any) => !t.parentId)
+    if (beforeRemoveSub !== filteredTodos.length) {
+      console.log(`🧹 サブタスク除外: ${beforeRemoveSub - filteredTodos.length} 件を除外、残り ${filteredTodos.length} 件`)
+    }
+
     // 安全な日付変換
     const results = filteredTodos.map((todo: any) => ({
       ...todo,
