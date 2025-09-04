@@ -152,7 +152,7 @@ export async function DELETE(
       const dbResp = await lambdaDB.deleteTodo(actualUserId, String(id))
       console.log('📥 LambdaDB 削除レスポンス:', dbResp)
       ok = dbResp.success
-      notFound = notFound || (dbResp.httpStatus === 404 || (dbResp.error && /not found/i.test(dbResp.error)))
+      notFound = Boolean(notFound) || dbResp.httpStatus === 404 || (typeof dbResp.error === 'string' && /not found/i.test(dbResp.error))
     }
 
     if (ok) {
