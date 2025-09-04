@@ -335,14 +335,59 @@ export async function GET(request: NextRequest) {
       return new Date(b.t.updatedAt).getTime() - new Date(a.t.updatedAt).getTime()
     })
 
-    filteredTodos = withScore.map(x => x.t)
+    // まずマッチしたタスク集合（親・子を含む）を取得
+    const matchedTodos = withScore.map(x => x.t)
 
-    // 検索結果は親タスクのみを返す（サブタスクは一覧に表示しない）
-    const beforeRemoveSub = filteredTodos.length
-    filteredTodos = filteredTodos.filter((t: any) => !t.parentId)
-    if (beforeRemoveSub !== filteredTodos.length) {
-      console.log(`🧹 サブタスク除外: ${beforeRemoveSub - filteredTodos.length} 件を除外、残り ${filteredTodos.length} 件`)
+    // 親を含めるルール:
+    // - 親がマッチした場合はその親を含める
+    // - 子（サブタスク）がマッチした場合も、その親を一覧に含める（親自身が直接マッチしていなくても可）
+    const idToTodo = new Map<string, any>(userTodos.map((t: any) => [String(t.id), t]))
+    const idToScore = new Map<string, number>(withScore.map(ws => [String(ws.t.id), ws.score]))
+    const includeParentIds = new Set<string>()
+    const matchedSubtasksByParent = new Map<string, any[]>()
+
+    for (const t of matchedTodos) {
+      if (!t.parentId) {
+        includeParentIds.add(String(t.id))
+      } else {
+        const p = String(t.parentId)
+        includeParentIds.add(p)
+        const arr = matchedSubtasksByParent.get(p) || []
+        arr.push(t)
+        matchedSubtasksByParent.set(p, arr)
+      }
     }
+
+    // 親タスクのみを作成し、子のマッチ数に応じて少しスコア加点
+    const childMatchBoost = 1
+    type ParentEntry = { parent: any; aggScore: number }
+    const parentEntries: ParentEntry[] = []
+    for (const pid of includeParentIds) {
+      const parent = idToTodo.get(pid)
+      if (!parent) continue
+      const base = idToScore.get(pid) || 0
+      const childMatches = matchedSubtasksByParent.get(pid) || []
+      const aggScore = base + childMatches.length * childMatchBoost
+      parentEntries.push({ parent, aggScore })
+    }
+
+    parentEntries.sort((a, b) => {
+      if (b.aggScore !== a.aggScore) return b.aggScore - a.aggScore
+      // タイブレークは従来どおり: 未完了優先 → 優先度 → 期限 → 更新日
+      const aC = a.parent.completed || a.parent.status === 'DONE'
+      const bC = b.parent.completed || b.parent.status === 'DONE'
+      if (aC !== bC) return aC ? 1 : -1
+      const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 } as const
+      const aP = priorityOrder[a.parent.priority as keyof typeof priorityOrder] || 2
+      const bP = priorityOrder[b.parent.priority as keyof typeof priorityOrder] || 2
+      if (aP !== bP) return bP - aP
+      if (a.parent.dueDate && b.parent.dueDate) return new Date(a.parent.dueDate).getTime() - new Date(b.parent.dueDate).getTime()
+      if (a.parent.dueDate && !b.parent.dueDate) return -1
+      if (!a.parent.dueDate && b.parent.dueDate) return 1
+      return new Date(b.parent.updatedAt).getTime() - new Date(a.parent.updatedAt).getTime()
+    })
+
+    filteredTodos = parentEntries.map(e => e.parent)
 
     // 安全な日付変換
     const results = filteredTodos.map((todo: any) => ({
@@ -371,7 +416,10 @@ export async function GET(request: NextRequest) {
         weights,
         regex: regexParam || null,
         fields: fieldsParam,
-        hasExpr: !!expr
+        hasExpr: !!expr,
+        matchedSubtasks: Object.fromEntries(
+          Array.from(matchedSubtasksByParent.entries()).map(([pid, subs]) => [pid, subs.map((s: any) => ({ id: s.id, title: s.title, status: s.status }))])
+        )
       }
     })
 
