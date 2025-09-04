@@ -22,8 +22,8 @@ const getRedisConfig = () => {
     },
     
     // タイムアウト設定（Vercel serverless最適化）
-    connectTimeout: 3000,
-    commandTimeout: 2000,
+    connectTimeout: Number(process.env.REDIS_CONNECT_TIMEOUT_MS || 7000),
+    commandTimeout: Number(process.env.REDIS_COMMAND_TIMEOUT_MS || 7000),
     
     // TLS設定（Upstashは必須）
     tls: {},

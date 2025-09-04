@@ -62,10 +62,31 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
       // 新フロー: init -> parents (chunk loop) -> children (chunk loop)
       const initRes = await fetch('/api/auth/import/init', { method: 'POST', body: formData })
       if (!initRes.ok) {
+        // フォールバック: 旧APIで単発インポート（大容量ではタイムアウトの可能性）
+        const legacy = await fetch('/api/auth/import-data', { method: 'POST', body: formData })
         toast.dismiss(loadingToast)
-        const data = await initRes.json().catch(()=>({}))
-        setModalResult({ type:'error', title:'初期化エラー', message: data.error || 'インポート初期化に失敗しました。' })
-        setShowModal(true)
+        if (legacy.ok) {
+          const result = await legacy.json()
+          const importedCount = result.importedCount || 0
+          const skippedCount = result.skippedCount || 0
+          const totalCount = result.totalCount || 0
+          if (fileInputRef.current) fileInputRef.current.value = ''
+          if (importedCount > 0) {
+            setModalResult({ type:'success', title:'インポート完了（フォールバック）', message:`旧方式でインポートしました。${skippedCount>0?'重複は自動スキップ。':''}`, importedCount, skippedCount, totalCount })
+            setShowModal(true)
+            setTimeout(() => { window.location.reload() }, 2000)
+          } else if (skippedCount > 0) {
+            setModalResult({ type:'info', title:'インポート完了（フォールバック）', message:'すべて重複のためスキップされました。', importedCount:0, skippedCount, totalCount })
+            setShowModal(true)
+          } else {
+            setModalResult({ type:'error', title:'インポートエラー', message:'有効なデータが見つかりませんでした。', totalCount:0 })
+            setShowModal(true)
+          }
+        } else {
+          const data = await legacy.json().catch(()=>({}))
+          setModalResult({ type:'error', title:'初期化エラー', message: (await initRes.json().catch(()=>({}))).error || data.error || 'インポート初期化に失敗しました。' })
+          setShowModal(true)
+        }
         setIsImporting(false)
         return
       }
