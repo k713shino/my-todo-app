@@ -11,9 +11,15 @@ const getRedisConfig = () => {
   return {
     // 基本設定
     lazyConnect: true,
-    maxRetriesPerRequest: 1, // Vercel serverless最適化
+    // リクエストリトライをやや増やして初回接続の不安定さを吸収
+    maxRetriesPerRequest: Number(process.env.REDIS_MAX_RETRIES_PER_REQUEST || 3),
     retryDelayOnFailover: 50,
     enableReadyCheck: false,
+    // 再接続戦略（指数バックオフ、最大1s）
+    retryStrategy(times: number) {
+      const delay = Math.min(times * 200, 1000)
+      return delay
+    },
     
     // タイムアウト設定（Vercel serverless最適化）
     connectTimeout: 3000,
@@ -153,7 +159,12 @@ class RedisClient {
         this.instance.on('error', (err: Error) => {
           console.error('❌ Redis error:', err.message)
           // エラーが続く場合は無効化
-          if (err.message.includes('ECONNREFUSED')) {
+          if (
+            err.message.includes('ECONNREFUSED') ||
+            err.message.includes('max retries per request') ||
+            err.message.includes('ETIMEDOUT') ||
+            err.message.includes('ENOTFOUND')
+          ) {
             console.log('Redis gracefully disabled due to connection issues')
             this.isDisabled = true
           }
@@ -189,7 +200,12 @@ class RedisClient {
         
         this.pubClient.on('error', (err: Error) => {
           console.error('❌ Redis Pub client error:', err.message)
-          if (err.message.includes('ECONNREFUSED')) {
+          if (
+            err.message.includes('ECONNREFUSED') ||
+            err.message.includes('max retries per request') ||
+            err.message.includes('ETIMEDOUT') ||
+            err.message.includes('ENOTFOUND')
+          ) {
             this.isDisabled = true
           }
         })
@@ -215,7 +231,12 @@ class RedisClient {
         
         this.subClient.on('error', (err: Error) => {
           console.error('❌ Redis Sub client error:', err.message)
-          if (err.message.includes('ECONNREFUSED')) {
+          if (
+            err.message.includes('ECONNREFUSED') ||
+            err.message.includes('max retries per request') ||
+            err.message.includes('ETIMEDOUT') ||
+            err.message.includes('ENOTFOUND')
+          ) {
             this.isDisabled = true
           }
         })
