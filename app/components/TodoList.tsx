@@ -746,6 +746,22 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
   /**
    * バルク操作関数群
    */
+  // 過負荷防止のため、同時実行数を制限する軽量ワーカー
+  const runWithConcurrency = async <T,>(
+    items: T[],
+    worker: (item: T, index: number) => Promise<void>,
+    limit = Math.max(1, parseInt(process.env.NEXT_PUBLIC_BULK_CONCURRENCY || '4', 10))
+  ) => {
+    let cursor = 0
+    const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+      while (true) {
+        const myIndex = cursor++
+        if (myIndex >= items.length) break
+        await worker(items[myIndex], myIndex)
+      }
+    })
+    await Promise.all(workers)
+  }
   // 全選択・全解除
   const handleSelectAll = () => {
     if (selectedTodos.size === filteredTodos.length) {
@@ -795,32 +811,37 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
           : todo
       ))
       
-      // APIに順次送信
-      const promises = selectedIds.map(id => 
-        retryWithBackoff(async () => {
-          const response = await fetch(`/api/todos/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: targetStatus }),
-          })
-          
-          if (!response.ok) {
-            const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
-            errorWithStatus.status = response.status
-            errorWithStatus.statusText = response.statusText
-            throw errorWithStatus
-          }
-          
-          return response.json()
-        }, {
-          maxRetries: 2,
-          shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
-        })
-      )
+      // APIは同時実行数を制限して実行
+      let okCount = 0
+      let failCount = 0
+      await runWithConcurrency(selectedIds, async (id) => {
+        try {
+          await retryWithBackoff(async () => {
+            const response = await fetch(`/api/todos/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: targetStatus }),
+            })
+            if (!response.ok) {
+              const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+              errorWithStatus.status = response.status
+              errorWithStatus.statusText = response.statusText
+              throw errorWithStatus
+            }
+          }, { maxRetries: 2, shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus) })
+          okCount++
+        } catch {
+          failCount++
+        }
+      })
       
-      await Promise.all(promises)
-      
-      toast.success(`✅ ${selectedIds.length}件のTodoを${targetStatus === 'DONE' ? '完了' : targetStatus === 'TODO' ? '未着手' : targetStatus === 'IN_PROGRESS' ? '作業中' : '確認中'}に更新しました`)
+      if (failCount === 0) {
+        toast.success(`✅ ${okCount}件のTodoを${targetStatus === 'DONE' ? '完了' : targetStatus === 'TODO' ? '未着手' : targetStatus === 'IN_PROGRESS' ? '作業中' : '確認中'}に更新しました`)
+      } else if (okCount > 0) {
+        toast.success(`⚠️ ${okCount}件更新成功（${failCount}件は失敗）`)
+      } else {
+        toast.error('❌ 一括更新に失敗しました')
+      }
       
       // 選択をクリア
       setSelectedTodos(new Set())
@@ -869,29 +890,36 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       // 楽観的更新
       setTodos(prev => prev.filter(todo => !selectedIds.includes(todo.id)))
       
-      // APIに順次送信
-      const promises = selectedIds.map(id => 
-        retryWithBackoff(async () => {
-          const response = await fetch(`/api/todos/${id}`, {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-          })
-          
-          if (!response.ok) {
-            const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
-            errorWithStatus.status = response.status
-            errorWithStatus.statusText = response.statusText
-            throw errorWithStatus
-          }
-        }, {
-          maxRetries: 2,
-          shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
-        })
-      )
+      // APIは同時実行数を制限して実行（404は冪等成功として扱う）
+      let okCount = 0
+      let failCount = 0
+      await runWithConcurrency(selectedIds, async (id) => {
+        try {
+          await retryWithBackoff(async () => {
+            const response = await fetch(`/api/todos/${id}`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+            })
+            if (!response.ok && response.status !== 404) {
+              const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
+              errorWithStatus.status = response.status
+              errorWithStatus.statusText = response.statusText
+              throw errorWithStatus
+            }
+          }, { maxRetries: 2, shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus) })
+          okCount++
+        } catch {
+          failCount++
+        }
+      })
       
-      await Promise.all(promises)
-      
-      toast.success(`🗑️ ${selectedIds.length}件のTodoを削除しました`)
+      if (failCount === 0) {
+        toast.success(`🗑️ ${okCount}件のTodoを削除しました`)
+      } else if (okCount > 0) {
+        toast.success(`⚠️ ${okCount}件削除成功（${failCount}件は失敗）`)
+      } else {
+        toast.error('❌ 一括削除に失敗しました')
+      }
       
       // 選択をクリア
       setSelectedTodos(new Set())
@@ -904,6 +932,8 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       } catch (error) {
         console.log('⚠️ キャッシュクリア失敗:', error)
       }
+      // サーバと整合性を合わせるため最新を再取得
+      try { await fetchTodos(true) } catch {}
       
     } catch (error) {
       // エラー時は元の状態に戻す
