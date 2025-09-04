@@ -201,6 +201,16 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
     setCompleted('')
     setPriority('')
     setDateRange('')
+    // 高度検索UIのリセット
+    setRegex('')
+    setRegexFields(['title','description','category','tags'])
+    setRegexFlagI(true)
+    setRegexError('')
+    setStatusMulti([])
+    setTagMode('or')
+    setDateFrom('')
+    setDateTo('')
+    setWeightPreset('default')
     if (isAuthenticated) {
       onSearch({
         keyword: '',

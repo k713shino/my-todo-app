@@ -195,6 +195,8 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
     setFilterInternal(newFilter)
   })
   const [lambdaWarmedUp, setLambdaWarmedUp] = useState(false)
+  // マウント後の判定（高度検索クリア時に通常一覧へ戻すため）
+  const didMountRef = useRef(false)
   // 締切通知（ユーザーが許可すれば動作）
   const { enabled: deadlineNotifyEnabled, requestPermission: requestDeadlinePermission } = useDeadlineNotifications(todos, { minutesBefore: 15, intervalMs: 60_000 })
 
@@ -1206,11 +1208,18 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       // StrictModeなどによる二重発火を抑制
       console.log('ℹ️ 初回取得は既に実行済み（重複防止）')
     }
+    // 以降の高度検索パラメータ変更（特にクリア）を検知して再取得できるようにする
+    didMountRef.current = true
   }, [])
 
-  // 高度検索条件の変更でサーバ検索を再実行（重複呼び出し防止のため advanced のみに依存）
+  // 高度検索条件の変更でサーバ検索を再実行
+  // - あり: 検索APIを呼ぶ
+  // - なし（クリア）: 通常一覧を再取得（マウント後のみ）
   useEffect(() => {
-    if (advancedSearchParams && Object.keys(advancedSearchParams).length > 0) {
+    const hasAdvanced = advancedSearchParams && Object.keys(advancedSearchParams).length > 0
+    if (hasAdvanced) {
+      try { fetchTodos(true) } catch {}
+    } else if (didMountRef.current) {
       try { fetchTodos(true) } catch {}
     }
   }, [advancedSearchParams])
