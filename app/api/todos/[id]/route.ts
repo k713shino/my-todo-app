@@ -168,9 +168,14 @@ export async function DELETE(
       
       return NextResponse.json({ message: 'Todo deleted successfully' });
     } else {
-      const status = notFound ? 404 : 500
-      console.error(`❌ Todo削除失敗: id=${id} status=${status}`)
-      return NextResponse.json({ error: notFound ? 'Todo not found' : 'Todo削除に失敗しました' }, { status });
+      if (notFound) {
+        // 冪等性のため、存在しない＝既に削除済みとして成功扱いにする
+        console.warn(`ℹ️ Todoは既に削除済みの可能性あり（id=${id}）。成功として扱います。`)
+        try { await CacheManager.invalidateUserTodos(session.user.id) } catch {}
+        return NextResponse.json({ message: 'Todo already deleted (idempotent)' })
+      }
+      console.error(`❌ Todo削除失敗: id=${id} status=500`)
+      return NextResponse.json({ error: 'Todo削除に失敗しました' }, { status: 500 });
     }
 
   } catch (error) {
