@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
-import { lambdaAPI } from '@/lib/lambda-api'
 import { redis } from '@/lib/redis'
 import { parseCSVText, normalizeTodos } from '@/lib/import-utils'
 
@@ -48,8 +47,6 @@ export async function POST(request: NextRequest) {
     const children = normalized.filter(t => t.parentOriginalId)
 
     const userId = extractUserIdFromPrefixed(session.user.id)
-    // 既存のTodoスナップショット（重複検知のため）
-    const existing = await lambdaAPI.getUserTodos(userId)
 
     const importId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const baseKey = `import:${userId}:${importId}`
@@ -57,7 +54,8 @@ export async function POST(request: NextRequest) {
     await Promise.all([
       redis.setex(`${baseKey}:parents`, TTL_SEC, JSON.stringify(parents)),
       redis.setex(`${baseKey}:children`, TTL_SEC, JSON.stringify(children)),
-      redis.setex(`${baseKey}:existing`, TTL_SEC, JSON.stringify(existing || [])),
+      // 初期化段階では既存取得を行わず、各チャンク処理側で必要に応じて補う
+      redis.setex(`${baseKey}:existing`, TTL_SEC, JSON.stringify([])),
       redis.setex(`${baseKey}:idmap`, TTL_SEC, JSON.stringify({})),
       redis.setex(`${baseKey}:status`, TTL_SEC, JSON.stringify({
         stage: 'ready',
@@ -71,4 +69,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: e?.message || 'Init failed' }, { status: 500 })
   }
 }
-
