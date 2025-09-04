@@ -811,7 +811,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
           : todo
       ))
       
-      // サーバサイド一括更新APIで高速化
+      // サーバサイド一括更新API で高速化
       let okCount = 0
       let failCount = 0
       try {
@@ -840,14 +840,16 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       // ダッシュボード統計の即時更新通知
       try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
-      // キャッシュクリア
+      // キャッシュクリア後、少し待ってからデータ再取得
       try {
         await fetch('/api/cache?type=user', { method: 'DELETE' })
+        // キャッシュクリア後に少し待機してからサーバデータを取得
+        await new Promise(resolve => setTimeout(resolve, 200))
+        await fetchTodos(true)
       } catch (error) {
-        console.log('⚠️ キャッシュクリア失敗:', error)
+        console.log('⚠️ キャッシュクリアまたはデータ再取得失敗:', error)
+        // データ再取得に失敗した場合も、楽観的更新の状態を維持
       }
-      // サーバ側の結果を反映
-      try { await fetchTodos(true) } catch {}
       
     } catch (error) {
       // エラー時は元の状態に戻す
@@ -884,7 +886,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       // 楽観的更新
       setTodos(prev => prev.filter(todo => !selectedIds.includes(todo.id)))
       
-      // サーバサイド一括削除APIで高速化（404はサーバで冪等成功扱い）
+      // サーバサイド一括削除API で高速化（404はサーバで冪等成功扱い）
       let okCount = 0
       let failCount = 0
       try {
@@ -914,14 +916,16 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       // ダッシュボード統計の即時更新通知
       try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
-      // キャッシュクリア
+      // キャッシュクリア後、少し待ってからデータ再取得
       try {
         await fetch('/api/cache?type=user', { method: 'DELETE' })
+        // キャッシュクリア後に少し待機してからサーバデータを取得
+        await new Promise(resolve => setTimeout(resolve, 200))
+        await fetchTodos(true)
       } catch (error) {
-        console.log('⚠️ キャッシュクリア失敗:', error)
+        console.log('⚠️ キャッシュクリアまたはデータ再取得失敗:', error)
+        // データ再取得に失敗した場合も、楽観的更新の状態を維持
       }
-      // サーバと整合性を合わせるため最新を再取得
-      try { await fetchTodos(true) } catch {}
       
     } catch (error) {
       // エラー時は元の状態に戻す
