@@ -12,6 +12,9 @@ export interface Todo {
   createdAt: Date
   updatedAt: Date
   userId: string
+  // 外部連携ID（重複検知用）
+  externalId?: string | null
+  externalSource?: string | null
   // サブタスク関連
   parentId?: string | null
   subtasks?: Todo[]
@@ -37,6 +40,9 @@ export interface CreateTodoData {
   dueDate?: Date
   category?: string
   tags?: string[]
+  // 外部連携ID（任意）。指定されると重複検知に使用されます。
+  externalId?: string
+  externalSource?: string
   parentId?: string  // サブタスク作成時の親ID
 }
 
@@ -48,6 +54,8 @@ export interface UpdateTodoData {
   dueDate?: Date | null
   category?: string
   tags?: string[]
+  externalId?: string | null
+  externalSource?: string | null
 }
 
 export interface TodoFilters {

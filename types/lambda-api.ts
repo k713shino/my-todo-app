@@ -28,6 +28,9 @@ export interface Todo {
   category?: string | null;
   tags?: string[] | string | null;
   dueDate?: string | null;
+  // External duplication keys
+  externalId?: string | null;
+  externalSource?: string | null;
 }
 
 export interface CreateTodoRequest {
@@ -44,6 +47,8 @@ export interface CreateTodoRequest {
   // Additional metadata possibly sent by caller
   userEmail?: string;
   userName?: string;
+  externalId?: string;
+  externalSource?: string;
 }
 
 export interface UpdateTodoRequest {
@@ -57,6 +62,8 @@ export interface UpdateTodoRequest {
   tags?: string[];
   dueDate?: string | null;
   parentId?: string | null;
+  externalId?: string | null;
+  externalSource?: string | null;
 }
 
 // ユーザー認証関連の型定義

@@ -129,10 +129,31 @@ export async function POST(
       dueDate: body.dueDate,
       category: body.category,
       tags: body.tags,
+      externalId: (body as any).externalId,
+      externalSource: (body as any).externalSource,
       parentId: parentId
     }
 
     // Lambda APIを使用してサブタスクを作成
+    // 外部ID重複の事前チェック（同一親配下での重複も避けたい）
+    try {
+      if (subtaskData.externalId) {
+        const existing = await lambdaAPI.getUserTodos(actualUserId)
+        const conflict = Array.isArray(existing) && existing.find((t: any) => {
+          const sameId = (t.externalId || null) === subtaskData.externalId
+          const sameSource = (subtaskData.externalSource ? (t.externalSource || null) === subtaskData.externalSource : true)
+          // サブタスクは parentId も一致している場合に重複とみなす
+          const sameParent = (t.parentId ? t.parentId.toString() : null) === parentId
+          return sameId && sameSource && sameParent
+        })
+        if (conflict) {
+          return NextResponse.json({ error: 'Duplicate subtask by externalId', conflictId: conflict.id }, { status: 409 })
+        }
+      }
+    } catch (e) {
+      console.log('⚠️ サブタスク重複チェック失敗（継続）:', e)
+    }
+
     const newTodo = await lambdaAPI.createTodo({
       ...subtaskData,
       // Lambda API 型では dueDate は文字列/ISO を期待するため変換

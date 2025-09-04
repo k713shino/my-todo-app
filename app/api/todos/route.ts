@@ -159,8 +159,31 @@ export async function POST(request: NextRequest) {
       status: body.status || 'TODO',
       dueDate: body.dueDate || undefined,
       category: body.category || undefined,
-      tags: body.tags || undefined
+      tags: body.tags || undefined,
+      externalId: body.externalId || undefined,
+      externalSource: body.externalSource || undefined,
     };
+
+    // 外部IDが与えられている場合、ユーザー内で重複がないか事前チェック
+    if (todoData.externalId) {
+      try {
+        const existing = await lambdaAPI.getUserTodos(actualUserId)
+        const conflict = Array.isArray(existing) && existing.find((t: any) => {
+          const sameId = (t.externalId || null) === todoData.externalId
+          // externalSource が指定されていれば一致をより厳密に
+          const sameSource = (todoData.externalSource ? (t.externalSource || null) === todoData.externalSource : true)
+          return sameId && sameSource
+        })
+        if (conflict) {
+          return NextResponse.json({
+            error: 'Duplicate todo by externalId',
+            conflictId: conflict.id,
+          }, { status: 409 })
+        }
+      } catch (e) {
+        console.log('⚠️ 事前重複チェック失敗（継続します）:', e)
+      }
+    }
     
     // Lambda API経由でTodoを作成
     try {
