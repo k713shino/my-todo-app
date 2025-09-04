@@ -45,6 +45,8 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
   // 高度検索のUI状態
   const [regex, setRegex] = useState('')
   const [regexFields, setRegexFields] = useState<string[]>(['title','description','category','tags'])
+  const [regexFlagI, setRegexFlagI] = useState<boolean>(true)
+  const [regexError, setRegexError] = useState<string>('')
   const [tagMode, setTagMode] = useState<'or'|'and'>('or')
   const [statusMulti, setStatusMulti] = useState<string[]>([])
   const [dateFrom, setDateFrom] = useState<string>('')
@@ -83,6 +85,44 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
       setTimeout(() => keywordInputRef.current?.focus(), 0)
     }
   }, [isOpen])
+
+  // 正規表現のライブ検証と i フラグ同期
+  React.useEffect(() => {
+    // iフラグの付与/削除（ユーザー入力を壊さないよう、末尾のフラグを調整）
+    const normalizeWithFlag = (src: string, wantI: boolean) => {
+      // 形式: /pat/flags または field:/pat/flags
+      const mField = src.match(/^([a-zA-Z_]+):\/(.*)\/(\w*)$/)
+      const mAll = src.match(/^\/(.*)\/(\w*)$/)
+      if (!mField && !mAll) return src // 不明な形式はそのまま
+      const isField = !!mField
+      const pat = isField ? mField![2] : mAll![1]
+      let flags = (isField ? mField![3] : mAll![2]) || ''
+      const hasI = flags.includes('i')
+      if (wantI && !hasI) flags += 'i'
+      if (!wantI && hasI) flags = flags.replace('i','')
+      return isField ? `${mField![1]}:/${pat}/${flags}` : `/${pat}/${flags}`
+    }
+    setRegex(prev => normalizeWithFlag(prev, regexFlagI))
+  }, [regexFlagI])
+
+  React.useEffect(() => {
+    // ライブ検証
+    const validate = (src: string) => {
+      setRegexError('')
+      if (!src.trim()) return
+      const mField = src.match(/^([a-zA-Z_]+):\/(.*)\/(\w*)$/)
+      const mAll = src.match(/^\/(.*)\/(\w*)$/)
+      let pat = ''
+      let flags = ''
+      if (mField) { pat = mField[2]; flags = mField[3] || '' }
+      else if (mAll) { pat = mAll[1]; flags = mAll[2] || '' }
+      else { setRegexError('形式は /パターン/フラグ または field:/パターン/フラグ'); return }
+      try { new RegExp(pat, flags) } catch (e: any) { setRegexError(`正規表現エラー: ${e?.message || '不正な式'}`) }
+      // iフラグUIと同期
+      setRegexFlagI(flags.includes('i'))
+    }
+    validate(regex)
+  }, [regex])
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -435,14 +475,38 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
                 <h3 className="text-base font-medium text-gray-900 dark:text-white flex items-center gap-2">🧪 高度検索</h3>
                 {/* 正規表現 */}
                 <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">正規表現（例: /bug|バグ/i または title:/^feat/i）</label>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-2">正規表現 <span className="text-[11px] text-gray-500">（例: /bug|バグ/i または title:/^feat/i）</span></label>
                   <input type="text" value={regex} onChange={(e)=>setRegex(e.target.value)} placeholder="/pattern/i または title:/^feat/i" className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-gray-700 dark:text-white" />
-                  <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                  {/* フィールド選択とフラグ */}
+                  <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
                     {['title','description','category','tags'].map(f => (
                       <label key={f} className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-300">
                         <input type="checkbox" checked={regexFields.includes(f)} onChange={(e)=>setRegexFields(prev => e.target.checked ? Array.from(new Set([...prev, f])) : prev.filter(x=>x!==f))} />{f}
                       </label>
                     ))}
+                    <label className="inline-flex items-center gap-1 ml-auto text-gray-600 dark:text-gray-300">
+                      <input type="checkbox" checked={regexFlagI} onChange={(e)=>setRegexFlagI(e.target.checked)} />大文字小文字を無視（i）
+                    </label>
+                  </div>
+                  {/* ウィザード（かんたん作成） */}
+                  <div className="mt-3 bg-gray-50 dark:bg-gray-700/50 rounded-md p-3">
+                    <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">かんたん作成</div>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className="px-2 py-1 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-600" onClick={()=>setRegex('/バグ|bug/i')}>バグ系</button>
+                      <button type="button" className="px-2 py-1 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-600" onClick={()=>setRegex('title:/^feat:/i')}>featで始まる</button>
+                      <button type="button" className="px-2 py-1 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-600" onClick={()=>setRegex('title:/\.md$/i')}>.mdで終わる</button>
+                      <button type="button" className="px-2 py-1 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-600" onClick={()=>{ setRegex('tags:/\\b(backend|api)\\b/i'); setRegexFields(prev=> Array.from(new Set([...prev, 'tags']))) }}>タグ backend|api</button>
+                      <button type="button" className="px-2 py-1 text-xs border rounded hover:bg-gray-100 dark:hover:bg-gray-600" onClick={()=>setRegex('description:/\\bPR-\\d{3,5}\\b/')}>PR-数値</button>
+                    </div>
+                  </div>
+                  {/* プレビューと検証 */}
+                  <div className="mt-2 text-xs">
+                    {regexError ? (
+                      <div className="text-red-600 dark:text-red-400">{regexError}</div>
+                    ) : (
+                      <div className="text-green-700 dark:text-green-300">OK: この式で検索します</div>
+                    )}
+                    <div className="text-gray-500 dark:text-gray-400 mt-1 break-all">送信例: regex={regex || '(未入力)'}{regexFields?.length ? `  fields=${regexFields.join(',')}` : ''}</div>
                   </div>
                 </div>
                 {/* ステータス複数 */}
