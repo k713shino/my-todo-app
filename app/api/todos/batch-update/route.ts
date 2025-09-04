@@ -3,6 +3,7 @@ import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 import { lambdaDB } from '@/lib/lambda-db'
 import { CacheManager } from '@/lib/cache'
+import { lambdaAPI } from '@/lib/lambda-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,9 @@ export async function POST(request: NextRequest) {
           const index = cursor++
           if (index >= ids.length) break
           const id = String(ids[index])
-          const res = await lambdaDB.updateTodo(userId, id, data)
+          // 既存で実績のある汎用エンドポイントへPUT
+          const updateData = { ...data, userId }
+          const res = await lambdaAPI.put(`/todos/${id}`, updateData)
           if (res.success) ok++
           else fail++
         }

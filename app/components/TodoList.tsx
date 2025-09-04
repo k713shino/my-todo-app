@@ -846,6 +846,8 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       } catch (error) {
         console.log('⚠️ キャッシュクリア失敗:', error)
       }
+      // サーバ側の結果を反映
+      try { await fetchTodos(true) } catch {}
       
     } catch (error) {
       // エラー時は元の状態に戻す
