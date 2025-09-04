@@ -837,8 +837,6 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       
       // 選択をクリア
       setSelectedTodos(new Set())
-      // ダッシュボード統計の即時更新通知
-      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
       // キャッシュクリア後、少し待ってからデータ再取得
       try {
@@ -846,9 +844,14 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
         // キャッシュクリア後に少し待機してからサーバデータを取得
         await new Promise(resolve => setTimeout(resolve, 200))
         await fetchTodos(true)
+        
+        // データ再取得完了後にダッシュボード統計の即時更新通知
+        await new Promise(resolve => setTimeout(resolve, 100))
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       } catch (error) {
         console.log('⚠️ キャッシュクリアまたはデータ再取得失敗:', error)
-        // データ再取得に失敗した場合も、楽観的更新の状態を維持
+        // データ再取得に失敗した場合も、楽観的更新の状態を維持してダッシュボード更新
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       }
       
     } catch (error) {
@@ -883,10 +886,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
     try {
       console.log(`🗑️ バルク削除開始: ${selectedIds.length}件`)
       
-      // 楽観的更新
-      setTodos(prev => prev.filter(todo => !selectedIds.includes(todo.id)))
-      
-      // サーバサイド一括削除API で高速化（404はサーバで冪等成功扱い）
+      // まずサーバーサイド削除を実行
       let okCount = 0
       let failCount = 0
       try {
@@ -899,38 +899,52 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
         const data = await resp.json()
         okCount = data.deleted || 0
         failCount = data.failed || 0
-      } catch {
+        
+        console.log(`🗑️ サーバー削除結果: 成功=${okCount}, 失敗=${failCount}`)
+      } catch (error) {
+        console.error('🗑️ バルク削除API呼び出しエラー:', error)
         failCount = selectedIds.length
       }
       
-      if (failCount === 0) {
-        toast.success(`🗑️ ${okCount}件のTodoを削除しました`)
-      } else if (okCount > 0) {
-        toast.success(`⚠️ ${okCount}件削除成功（${failCount}件は失敗）`)
+      // サーバー削除が成功したアイテムのみUIから削除
+      if (okCount > 0) {
+        // 成功したIDのみを特定（APIレスポンスに成功したIDsが含まれていない場合の対応）
+        // 失敗が0の場合は全て成功したと仮定
+        const successfulIds = failCount === 0 ? selectedIds : selectedIds.slice(0, okCount)
+        
+        setTodos(prev => prev.filter(todo => !successfulIds.includes(todo.id)))
+        
+        if (failCount === 0) {
+          toast.success(`🗑️ ${okCount}件のTodoを削除しました`)
+        } else {
+          toast.success(`⚠️ ${okCount}件削除成功（${failCount}件は失敗）`)
+        }
       } else {
         toast.error('❌ 一括削除に失敗しました')
+        // 削除が全て失敗した場合はUIを変更しない
+        return
       }
       
       // 選択をクリア
       setSelectedTodos(new Set())
-      // ダッシュボード統計の即時更新通知
-      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
-      // キャッシュクリア後、少し待ってからデータ再取得
+      // キャッシュクリア後、少し待ってからデータ再取得で整合性を確保
       try {
         await fetch('/api/cache?type=user', { method: 'DELETE' })
-        // キャッシュクリア後に少し待機してからサーバデータを取得
         await new Promise(resolve => setTimeout(resolve, 200))
         await fetchTodos(true)
+        
+        // データ再取得完了後にダッシュボード統計の即時更新通知
+        await new Promise(resolve => setTimeout(resolve, 100))
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       } catch (error) {
         console.log('⚠️ キャッシュクリアまたはデータ再取得失敗:', error)
-        // データ再取得に失敗した場合も、楽観的更新の状態を維持
+        // データ再取得に失敗した場合もダッシュボード更新は実行
+        try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       }
       
     } catch (error) {
-      // エラー時は元の状態に戻す
-      setTodos(originalTodos)
-      
+      // エラー時は元の状態に戻す必要はない（楽観的更新をしていないため）
       const errorWithStatus = error as ErrorWithStatus
       logApiError(errorWithStatus, 'バルク削除')
       
