@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 import { lambdaDB } from '@/lib/lambda-db'
+import { lambdaAPI } from '@/lib/lambda-api'
 import { CacheManager } from '@/lib/cache'
 
 export const dynamic = 'force-dynamic'
@@ -40,12 +41,22 @@ export async function POST(request: NextRequest) {
     let fail = 0
 
     await runWithConcurrency(ids, async (id) => {
-      const res = await lambdaDB.deleteTodo(userId, String(id))
-      if (res.success || (res.httpStatus === 404 || (typeof res.error === 'string' && /not found/i.test(res.error || '')))) {
-        ok++
-      } else {
-        fail++
-      }
+      const tid = String(id)
+      // 1) 既存で実績のある汎用エンドポイント（クエリに userId）を優先
+      const apiResp = await lambdaAPI.delete(`/todos/${encodeURIComponent(tid)}?userId=${encodeURIComponent(userId)}`)
+      if (apiResp.success) { ok++; return }
+      const apiNotFound = typeof apiResp.error === 'string' && /not found/i.test(apiResp.error)
+      const apiEndpointMissing = typeof apiResp.error === 'string' && /Endpoint not found|404/.test(apiResp.error)
+      if (apiNotFound) { ok++; return }
+
+      // 2) フォールバック: ユーザー固有エンドポイント
+      const dbResp = await lambdaDB.deleteTodo(userId, tid)
+      if (dbResp.success) { ok++; return }
+      const dbNotFound = (dbResp.httpStatus === 404) || (typeof dbResp.error === 'string' && /not found/i.test(dbResp.error))
+      if (dbNotFound) { ok++; return }
+
+      // どちらも失敗
+      fail++
     }, limit)
 
     try { await CacheManager.invalidateUserTodos(session.user.id) } catch {}
@@ -55,4 +66,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
-
