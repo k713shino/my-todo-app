@@ -131,12 +131,32 @@ export async function DELETE(
       userIdType: typeof session.user.id 
     });
     
-    // 削除は LambdaDB のユーザー固有エンドポイントを使用
-    const dbResp = await lambdaDB.deleteTodo(actualUserId, String(id))
-    console.log('📥 LambdaDB 削除レスポンス:', dbResp)
-    
-    if (dbResp.success) {
-      console.log('✅ Lambda API でのTodo削除成功:', id);
+    // まずは既存で稼働実績のある汎用エンドポイント（userIdクエリ）を試す
+    const apiEndpoint = `/todos/${id}?userId=${encodeURIComponent(actualUserId)}`
+    const apiResp = await lambdaAPI.delete(apiEndpoint)
+    console.log('📥 LambdaAPI 削除レスポンス:', apiResp)
+
+    let ok = apiResp.success
+    let notFound = false
+
+    // LambdaAPI 側で失敗した場合はユーザー固有エンドポイントにフォールバック
+    if (!ok) {
+      // ヒント: エラーメッセージに 404 が含まれるかをチェック
+      notFound = typeof apiResp.error === 'string' && /404|not found/i.test(apiResp.error)
+      if (notFound) {
+        // 404 の場合でももう一方のエンドポイントで存在する可能性があるため試す
+        console.log('🟡 汎用DELETEで404。ユーザー固有エンドポイントにフォールバック')
+      } else {
+        console.log('🟡 汎用DELETE失敗。ユーザー固有エンドポイントにフォールバック')
+      }
+      const dbResp = await lambdaDB.deleteTodo(actualUserId, String(id))
+      console.log('📥 LambdaDB 削除レスポンス:', dbResp)
+      ok = dbResp.success
+      notFound = notFound || (dbResp.httpStatus === 404 || (dbResp.error && /not found/i.test(dbResp.error)))
+    }
+
+    if (ok) {
+      console.log('✅ Todo削除成功:', id);
       
       // キャッシュ無効化
       try {
@@ -148,9 +168,9 @@ export async function DELETE(
       
       return NextResponse.json({ message: 'Todo deleted successfully' });
     } else {
-      console.error('❌ Lambda 削除失敗:', dbResp.error);
-      const status = (dbResp.httpStatus === 404 || (dbResp.error||'').includes('not found')) ? 404 : 500
-      return NextResponse.json({ error: dbResp.error || 'Todo削除に失敗しました' }, { status });
+      const status = notFound ? 404 : 500
+      console.error(`❌ Todo削除失敗: id=${id} status=${status}`)
+      return NextResponse.json({ error: notFound ? 'Todo not found' : 'Todo削除に失敗しました' }, { status });
     }
 
   } catch (error) {
