@@ -811,29 +811,21 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
           : todo
       ))
       
-      // APIは同時実行数を制限して実行
+      // サーバサイド一括更新APIで高速化
       let okCount = 0
       let failCount = 0
-      await runWithConcurrency(selectedIds, async (id) => {
-        try {
-          await retryWithBackoff(async () => {
-            const response = await fetch(`/api/todos/${id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: targetStatus }),
-            })
-            if (!response.ok) {
-              const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
-              errorWithStatus.status = response.status
-              errorWithStatus.statusText = response.statusText
-              throw errorWithStatus
-            }
-          }, { maxRetries: 2, shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus) })
-          okCount++
-        } catch {
-          failCount++
-        }
-      })
+      try {
+        const resp = await fetch('/api/todos/batch-update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: selectedIds, data: { status: targetStatus } })
+        })
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+        const data = await resp.json()
+        okCount = data.count || selectedIds.length
+      } catch {
+        failCount = selectedIds.length
+      }
       
       if (failCount === 0) {
         toast.success(`✅ ${okCount}件のTodoを${targetStatus === 'DONE' ? '完了' : targetStatus === 'TODO' ? '未着手' : targetStatus === 'IN_PROGRESS' ? '作業中' : '確認中'}に更新しました`)
@@ -890,28 +882,22 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       // 楽観的更新
       setTodos(prev => prev.filter(todo => !selectedIds.includes(todo.id)))
       
-      // APIは同時実行数を制限して実行（404は冪等成功として扱う）
+      // サーバサイド一括削除APIで高速化（404はサーバで冪等成功扱い）
       let okCount = 0
       let failCount = 0
-      await runWithConcurrency(selectedIds, async (id) => {
-        try {
-          await retryWithBackoff(async () => {
-            const response = await fetch(`/api/todos/${id}`, {
-              method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-            })
-            if (!response.ok && response.status !== 404) {
-              const errorWithStatus = new Error(`HTTP ${response.status}`) as ErrorWithStatus
-              errorWithStatus.status = response.status
-              errorWithStatus.statusText = response.statusText
-              throw errorWithStatus
-            }
-          }, { maxRetries: 2, shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus) })
-          okCount++
-        } catch {
-          failCount++
-        }
-      })
+      try {
+        const resp = await fetch('/api/todos/bulk-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: selectedIds })
+        })
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+        const data = await resp.json()
+        okCount = data.deleted || 0
+        failCount = data.failed || 0
+      } catch {
+        failCount = selectedIds.length
+      }
       
       if (failCount === 0) {
         toast.success(`🗑️ ${okCount}件のTodoを削除しました`)
