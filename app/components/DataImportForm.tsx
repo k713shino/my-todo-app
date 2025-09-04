@@ -59,19 +59,59 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/auth/import-data', {
-        method: 'POST',
-        body: formData
-      })
+      // 新フロー: init -> parents (chunk loop) -> children (chunk loop)
+      const initRes = await fetch('/api/auth/import/init', { method: 'POST', body: formData })
+      if (!initRes.ok) {
+        toast.dismiss(loadingToast)
+        const data = await initRes.json().catch(()=>({}))
+        setModalResult({ type:'error', title:'初期化エラー', message: data.error || 'インポート初期化に失敗しました。' })
+        setShowModal(true)
+        setIsImporting(false)
+        return
+      }
+      const init = await initRes.json()
+      const importId: string = init.importId
+      let importedCount = 0
+      let skippedCount = 0
+
+      // 親タスクをチャンク処理
+      let cursor = 0
+      const limit = Math.max(1, parseInt(process.env.NEXT_PUBLIC_IMPORT_CHUNK_SIZE || '100', 10))
+      while (true) {
+        const res = await fetch('/api/auth/import/parents', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ importId, cursor, limit })
+        })
+        if (!res.ok) break
+        const data = await res.json()
+        importedCount += data.imported || 0
+        skippedCount += data.skipped || 0
+        cursor = data.nextCursor || 0
+        if (data.done) break
+      }
+
+      // 子タスクをチャンク処理
+      cursor = 0
+      while (true) {
+        const res = await fetch('/api/auth/import/children', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ importId, cursor, limit })
+        })
+        if (!res.ok) break
+        const data = await res.json()
+        importedCount += data.imported || 0
+        skippedCount += data.skipped || 0
+        cursor = data.nextCursor || 0
+        if (data.done) break
+      }
 
       // ローディングトースターを削除
       toast.dismiss(loadingToast)
 
-      if (response.ok) {
-        const result = await response.json()
-        const importedCount = result.importedCount || 0
-        const skippedCount = result.skippedCount || 0
-        const totalCount = result.totalCount || 0
+      {
+        const totalCount = (init?.total || 0)
         
         // ファイル入力をリセット
         if (fileInputRef.current) {
@@ -113,23 +153,6 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
           })
           setShowModal(true)
         }
-        
-      } else {
-        const data = await response.json()
-        if (data.maintenanceMode) {
-          setModalResult({
-            type: 'error',
-            title: 'メンテナンス中',
-            message: data.error || 'データベースメンテナンス中です。しばらく時間をおいてから再度お試しください。'
-          })
-        } else {
-          setModalResult({
-            type: 'error',
-            title: 'インポートエラー',
-            message: data.error || 'インポートに失敗しました。ファイルの内容やネットワーク接続を確認してください。'
-          })
-        }
-        setShowModal(true)
       }
     } catch (error) {
       console.error('Import error:', error)
