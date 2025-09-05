@@ -216,6 +216,32 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
 
   const { enabled: deadlineNotifyEnabled, requestPermission: requestDeadlinePermission } = useDeadlineNotifications(todos, { minutesBefore: notifyMinutes, intervalMs: 60_000 })
 
+  // 通知からのディープリンク（?focus=<id>）に対応: 対象タスクにスクロール＆ハイライト
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const focusId = sp.get('focus')
+    if (!focusId) return
+    // 対象要素が描画された後に処理
+    const el = document.querySelector(`[data-todo-id="${CSS.escape(focusId)}"]`) as HTMLElement | null
+    if (el) {
+      try {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        const origOutline = el.style.outline
+        el.style.outline = '3px solid #facc15' // amber-400
+        el.style.outlineOffset = '2px'
+        setTimeout(() => {
+          el.style.outline = origOutline
+          el.style.outlineOffset = ''
+        }, 2000)
+        // 一度処理したらURLからパラメータを除去（履歴は汚さない）
+        sp.delete('focus')
+        const newUrl = window.location.pathname + (sp.toString() ? `?${sp.toString()}` : '')
+        window.history.replaceState(null, '', newUrl)
+      } catch {}
+    }
+  }, [todos])
+
   // クライアント側の簡易キャッシュ（localStorage）
   const loadClientCache = () => {
     try {

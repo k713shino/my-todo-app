@@ -53,10 +53,22 @@ export function useDeadlineNotifications(todos: Todo[], opts: DeadlineNotifyOpti
         if (diff <= threshold && diff > -5 * 60_000) { // 期限直後5分まで許容
           if (!notifiedRef.current.has(t.id)) {
             try {
-              new Notification('⏰ 期限が近づいています', {
+              const n = new Notification('⏰ 期限が近づいています', {
                 body: `${t.title}（${minutesBefore}分以内）`,
                 tag: `todo-deadline-${t.id}`,
-              })
+                // ここでdataを付けておくと将来Service Worker移行時に活用可能
+                data: { todoId: t.id }
+              } as NotificationOptions)
+              n.onclick = () => {
+                try {
+                  // 既存タブにフォーカスし、対象タスクへ移動
+                  window.focus()
+                  const target = `/dashboard?focus=${encodeURIComponent(t.id)}`
+                  // 同タブ遷移（ユーザー意図に沿って即移動）
+                  window.location.href = target
+                  n.close()
+                } catch {}
+              }
             } catch {
               // ignore
             }

@@ -431,7 +431,7 @@ export default function TodoItem({
 
   return (
     <>
-      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/20 p-3 sm:p-4 border-l-4 transition-all duration-200 ${
+      <div data-todo-id={todo.id} id={`todo-${todo.id}`} className={`bg-white dark:bg-gray-800 rounded-lg shadow-md dark:shadow-gray-900/20 p-3 sm:p-4 border-l-4 transition-all duration-200 ${
         isCompleted(todo.status)
           ? 'border-green-400 dark:border-green-500 opacity-75' 
           : isOverdue 
