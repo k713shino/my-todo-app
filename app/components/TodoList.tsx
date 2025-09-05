@@ -393,10 +393,6 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       const errorWithStatus = error as ErrorWithStatus
       logApiError(errorWithStatus, `Todo取得 (${totalTime.toFixed(2)}ms)`)
       
-      // ユーザーフレンドリーなエラーメッセージ
-      const friendlyMessage = getErrorMessage(errorWithStatus)
-      toast.error(friendlyMessage)
-      
       // エラー後にウォームアップを試行（次回のパフォーマンス向上のため）
       if (!lambdaWarmedUp) {
         warmupLambda()
@@ -415,6 +411,8 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
             const parsedTodos = cachedData.map((todo: TodoResponse) => safeParseTodoDate(todo))
             setTodos(parsedTodos)
             toast.success('📦 キャッシュからデータを復旧しました')
+            // バックグラウンドで再試行（最新化）
+            setTimeout(() => { try { fetchTodos(true) } catch {} }, 15000)
             return
           }
         }
@@ -428,9 +426,15 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
         if (local && local.length > 0) {
           setTodos(local)
           toast.success('💾 ローカルキャッシュから復旧しました')
+          // バックグラウンドで再試行（最新化）
+          setTimeout(() => { try { fetchTodos(true) } catch {} }, 20000)
           return
         }
       } catch {}
+
+      // ここまで到達したらフォールバック失敗 → エラーを通知
+      const friendlyMessage = getErrorMessage(errorWithStatus)
+      toast.error(friendlyMessage)
     } finally {
       setIsLoading(false)
     }
