@@ -12,6 +12,37 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
       </head>
       <body className="antialiased">
+        {/* Service Worker 登録とSW→ページのメッセージ受信（通知クリック対応） */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      try {
+        if (!event || !event.data) return;
+        if (event.data.type === 'focus-todo' && event.data.todoId) {
+          const id = String(event.data.todoId);
+          const url = '/dashboard?focus=' + encodeURIComponent(id);
+          // 現在地がダッシュボードならクエリだけ更新、それ以外は遷移
+          if (location.pathname.startsWith('/dashboard')) {
+            const sp = new URLSearchParams(location.search);
+            sp.set('focus', id);
+            history.replaceState(null, '', location.pathname + '?' + sp.toString());
+            // 軽いスクロール誘発（TodoList側の監視でハイライト実施）
+            try { window.dispatchEvent(new Event('popstate')); } catch {}
+          } else {
+            location.href = url;
+          }
+        }
+      } catch {}
+    });
+  }
+})();`,
+          }}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="light"

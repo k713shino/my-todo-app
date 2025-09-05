@@ -42,10 +42,10 @@ export function useDeadlineNotifications(todos: Todo[], opts: DeadlineNotifyOpti
     if (!enabled) return
     if (typeof window === 'undefined' || !('Notification' in window)) return
 
-    const check = () => {
+    const check = async () => {
       const now = Date.now()
       const threshold = minutesBefore * 60_000
-      todos.forEach((t) => {
+      for (const t of todos) {
         if (!t.dueDate) return
         if (t.status === 'DONE') return
         const due = new Date(t.dueDate).getTime()
@@ -53,25 +53,34 @@ export function useDeadlineNotifications(todos: Todo[], opts: DeadlineNotifyOpti
         if (diff <= threshold && diff > -5 * 60_000) { // 期限直後5分まで許容
           if (!notifiedRef.current.has(t.id)) {
             try {
-              const n = new Notification('⏰ 期限が近づいています', {
-                body: `${t.title}（${minutesBefore}分以内）`,
-                tag: `todo-deadline-${t.id}`,
-                // ここでdataを付けておくと将来Service Worker移行時に活用可能
-                data: { todoId: t.id }
-              } as NotificationOptions)
-              n.onclick = () => {
-                try {
-                  // 既存タブにフォーカスし、対象タスクへ移動
-                  window.focus()
-                  const target = `/dashboard?focus=${encodeURIComponent(t.id)}`
-                  // 同タブ遷移（ユーザー意図に沿って即移動）
-                  window.location.href = target
-                  n.close()
-                } catch {}
+              if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+                const reg = await navigator.serviceWorker.ready
+                await reg.showNotification('⏰ 期限が近づいています', {
+                  body: `${t.title}（${minutesBefore}分以内）`,
+                  tag: `todo-deadline-${t.id}`,
+                  data: { todoId: t.id },
+                  requireInteraction: false,
+                })
+              } else {
+                const n = new Notification('⏰ 期限が近づいています', {
+                  body: `${t.title}（${minutesBefore}分以内）`,
+                  tag: `todo-deadline-${t.id}`,
+                  data: { todoId: t.id }
+                } as NotificationOptions)
+                n.onclick = () => {
+                  try {
+                    window.focus()
+                    const target = `/dashboard?focus=${encodeURIComponent(t.id)}`
+                    if (document.visibilityState === 'visible') {
+                      window.location.assign(target)
+                    } else {
+                      window.open(target, '_blank', 'noopener,noreferrer')
+                    }
+                    n.close()
+                  } catch {}
+                }
               }
-            } catch {
-              // ignore
-            }
+            } catch { /* ignore */ }
             // トーストでも通知（権限なし/視認性向上）
             try {
               const mins = Math.max(0, Math.round(diff / 60000))
@@ -80,12 +89,12 @@ export function useDeadlineNotifications(todos: Todo[], opts: DeadlineNotifyOpti
             notifiedRef.current.add(t.id)
           }
         }
-      })
+      }
     }
 
     // 初回即時チェック＋インターバル
-    check()
-    const id = setInterval(check, intervalMs)
+    check().catch(() => {})
+    const id = setInterval(() => { check().catch(() => {}) }, intervalMs)
     return () => clearInterval(id)
   }, [enabled, todos, minutesBefore, intervalMs])
 
