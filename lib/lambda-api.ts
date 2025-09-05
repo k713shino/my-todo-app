@@ -18,7 +18,7 @@ import type {
 
 export class LambdaAPI {
   private readonly baseURL: string;
-  private readonly defaultTimeout: number = 30000; // 30秒
+  private readonly defaultTimeout: number = Number(process.env.LAMBDA_API_TIMEOUT_MS || 8000); // 8秒既定
 
   constructor() {
     this.baseURL = process.env.LAMBDA_API_URL || 
@@ -55,36 +55,24 @@ export class LambdaAPI {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      console.log(`🚀🟠 === Lambda API request START ===`);
-      console.log(`🟠1️⃣ URL: ${url}`);
-      console.log('🟠2️⃣ Request details:', {
-        method: finalOptions.method || 'GET',
-        headers: finalOptions.headers,
-        body: finalOptions.body ? JSON.parse(finalOptions.body as string) : null,
-        timeout: timeout
-      });
-      
-      console.log('🟠3️⃣ Making fetch request...');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`🚀🟠 Lambda API START`, { url, timeout, method: finalOptions.method || 'GET' });
+      }
       const response = await fetch(url, {
         ...finalOptions,
         signal: controller.signal,
       });
       
-      console.log('🟠4️⃣ Fetch completed, HTTP response:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        url: response.url,
-        type: response.type,
-        redirected: response.redirected
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🟠 Resp:', { status: response.status, ok: response.ok });
+      }
 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        console.log('🟠5️⃣ Response not OK, reading error text...');
+        if (process.env.NODE_ENV !== 'production') console.log('🟠 Non-OK, read error text');
         const errorText = await response.text();
-        console.log('🟠❌ Error text:', errorText);
+        if (process.env.NODE_ENV !== 'production') console.log('🟠❌ Error text:', errorText);
         
         const error: LambdaAPIError = new Error(
           `HTTP error! status: ${response.status}, message: ${errorText}`
@@ -92,38 +80,26 @@ export class LambdaAPI {
         error.status = response.status;
         error.statusText = response.statusText;
         
-        console.log('🟠❌ Throwing HTTP error:', {
-          message: error.message,
-          status: error.status,
-          statusText: error.statusText
-        });
+        if (process.env.NODE_ENV !== 'production') console.log('🟠❌ Throw HTTP error', { status: error.status });
         throw error;
       }
 
-      console.log('🟠6️⃣ Response OK, parsing JSON...');
       const data: T = await response.json();
-      console.log(`🟠✅ Lambda API response parsed:`, data);
+      if (process.env.NODE_ENV !== 'production') console.log(`🟠✅ Parsed`);
       
       return data;
     } catch (error) {
       clearTimeout(timeoutId);
-      
-      console.error('🟠💥 Lambda API request catch block:', {
-        error,
-        errorType: typeof error,
-        errorConstructor: error instanceof Error ? error.constructor.name : 'Unknown',
-        errorMessage: error instanceof Error ? error.message : 'Unknown',
-        errorName: error instanceof Error ? error.name : 'Unknown',
-        errorStack: error instanceof Error ? error.stack : 'No stack',
-        fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
-      });
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('🟠💥 Lambda API catch:', error);
+      }
       
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          console.log('🟠💥 Request timeout detected');
+          if (process.env.NODE_ENV !== 'production') console.log('🟠 Timeout');
           throw new Error(`Request timeout after ${timeout}ms`);
         }
-        console.error(`🟠💥 Lambda API error:`, error);
+        if (process.env.NODE_ENV !== 'production') console.error(`🟠 Lambda API error:`, error);
       }
       throw error;
     }

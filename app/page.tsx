@@ -17,6 +17,11 @@ export default function Home() {
     }
   }, [session, router])
 
+  // 先読み：ダッシュボードを事前プリフェッチして遷移体感を短縮
+  useEffect(() => {
+    try { router.prefetch('/dashboard') } catch {}
+  }, [router])
+
   // ローディング中
   if (status === 'loading') {
     return (

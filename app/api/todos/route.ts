@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     // 🚀 最適化されたユーザー専用エンドポイント使用（認証方法別ユーザーID変換）
     const actualUserId = extractUserIdFromPrefixed(authResult.user!.id)
     console.log('🚀 Lambda最適化エンドポイント呼び出し:', `/todos/user/${actualUserId} (元ID: ${authResult.user!.id})`)
-    const lambdaResponse = await lambdaAPI.get(`/todos/user/${encodeURIComponent(actualUserId)}`)
+    const lambdaResponse = await lambdaAPI.get(`/todos/user/${encodeURIComponent(actualUserId)}`, { timeout: 8000 })
     
     console.log('📡 Lambda API レスポンス:', {
       success: lambdaResponse.success,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, memo } from 'react'
 import { format, isAfter } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Status } from '@prisma/client'
@@ -112,7 +112,7 @@ const getNextStatus = (currentStatus: Status): Status => {
  * - 期限切れの表示
  * - ローディング状態の制御
  */
-export default function TodoItem({
+function TodoItem({
   todo, 
   onUpdate, 
   onEdit, 
@@ -762,3 +762,5 @@ export default function TodoItem({
     </>
   )
 }
+
+export default memo(TodoItem)

@@ -359,7 +359,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       const response = await retryWithBackoff(async () => {
         const fetchStart = performance.now()
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 10_000)
+        const timer = setTimeout(() => controller.abort(), 6_000)
         const res = await fetch(url, {
           ...(bypassCache ? {
             cache: 'no-store',
@@ -491,7 +491,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
     try {
       // 1) キャッシュのみ（サーバーRedis）を短タイムアウトで取得
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 2000)
+      const timer = setTimeout(() => controller.abort(), 1200)
       const res = await fetch('/api/todos/user?cache=true', { signal: controller.signal })
       clearTimeout(timer)
       if (res.ok) {
@@ -541,7 +541,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
     try {
       const response = await retryWithBackoff(async () => {
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 10_000)
+        const timer = setTimeout(() => controller.abort(), 6_000)
         try {
           return await fetch('/api/todos', {
             method: 'POST',
