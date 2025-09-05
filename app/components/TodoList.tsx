@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { format } from 'date-fns'
 import { ja } from 'date-fns/locale'
@@ -216,31 +216,80 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
 
   const { enabled: deadlineNotifyEnabled, requestPermission: requestDeadlinePermission } = useDeadlineNotifications(todos, { minutesBefore: notifyMinutes, intervalMs: 60_000 })
 
-  // 通知からのディープリンク（?focus=<id>）に対応: 対象タスクにスクロール＆ハイライト
+  // 通知からのディープリンク（?focus=<id>）に対応: 高信頼のスクロール＆ハイライト（リトライ付き）
+  const lastFocusedRef = useRef<string | null>(null)
+  const focusTodoById = useCallback((id: string, maxAttempts = 30, interval = 100) => {
+    let attempts = 0
+    const tryOnce = () => {
+      attempts++
+      const sel = `[data-todo-id="${CSS.escape(id)}"]`
+      const el = document.querySelector(sel) as HTMLElement | null
+      if (el) {
+        try {
+          // 即時スクロール（高速化）→ 視覚効果
+          el.scrollIntoView({ behavior: attempts <= 2 ? 'auto' : 'smooth', block: 'center' })
+          const origOutline = el.style.outline
+          el.style.outline = '3px solid #facc15'
+          el.style.outlineOffset = '2px'
+          setTimeout(() => {
+            el.style.outline = origOutline
+            el.style.outlineOffset = ''
+          }, 1600)
+          lastFocusedRef.current = id
+          // URLのfocusを除去
+          try {
+            const sp = new URLSearchParams(window.location.search)
+            if (sp.get('focus') === id) {
+              sp.delete('focus')
+              const newUrl = window.location.pathname + (sp.toString() ? `?${sp.toString()}` : '')
+              window.history.replaceState(null, '', newUrl)
+            }
+          } catch {}
+          return true
+        } catch { /* ignore */ }
+      }
+      if (attempts < maxAttempts) {
+        setTimeout(tryOnce, interval)
+      }
+      return false
+    }
+    return tryOnce()
+  }, [])
+
+  const scheduleFocusFromURL = useCallback(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search)
+      const focusId = sp.get('focus')
+      if (focusId && focusId !== lastFocusedRef.current) {
+        focusTodoById(focusId)
+      }
+    } catch {}
+  }, [focusTodoById])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const sp = new URLSearchParams(window.location.search)
-    const focusId = sp.get('focus')
-    if (!focusId) return
-    // 対象要素が描画された後に処理
-    const el = document.querySelector(`[data-todo-id="${CSS.escape(focusId)}"]`) as HTMLElement | null
-    if (el) {
+    // todos更新のたびに再試行（要素がまだ描画されていない可能性のため）
+    scheduleFocusFromURL()
+  }, [todos, scheduleFocusFromURL])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onPop = () => scheduleFocusFromURL()
+    const onMsg = (e: MessageEvent) => {
       try {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        const origOutline = el.style.outline
-        el.style.outline = '3px solid #facc15' // amber-400
-        el.style.outlineOffset = '2px'
-        setTimeout(() => {
-          el.style.outline = origOutline
-          el.style.outlineOffset = ''
-        }, 2000)
-        // 一度処理したらURLからパラメータを除去（履歴は汚さない）
-        sp.delete('focus')
-        const newUrl = window.location.pathname + (sp.toString() ? `?${sp.toString()}` : '')
-        window.history.replaceState(null, '', newUrl)
+        if (e && e.data && e.data.type === 'focus-todo' && e.data.todoId) {
+          const id = String(e.data.todoId)
+          focusTodoById(id)
+        }
       } catch {}
     }
-  }, [todos])
+    window.addEventListener('popstate', onPop)
+    window.addEventListener('message', onMsg)
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      window.removeEventListener('message', onMsg)
+    }
+  }, [focusTodoById, scheduleFocusFromURL])
 
   // クライアント側の簡易キャッシュ（localStorage）
   const loadClientCache = () => {
