@@ -121,7 +121,10 @@ export async function GET(request: NextRequest) {
     
     if (!lambdaResponse.success || !Array.isArray(lambdaResponse.data)) {
       console.error('❌ Lambda API失敗:', lambdaResponse.error)
-      return NextResponse.json([], { status: 200 })
+      return NextResponse.json({
+        error: 'Failed to fetch todos from upstream',
+        details: lambdaResponse.error || 'Unknown error'
+      }, { status: 502 })
     }
     
     // 🛡️ データサニタイズ (Date オブジェクトに変換) + サブタスク数計算
@@ -237,6 +240,9 @@ export async function GET(request: NextRequest) {
     const totalTime = performance.now() - startTime
     console.error(`❌ ユーザー専用Todo取得エラー (${totalTime.toFixed(2)}ms):`, error)
     
-    return NextResponse.json([], { status: 200 })
+    return NextResponse.json({
+      error: 'Internal Server Error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }

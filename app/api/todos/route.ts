@@ -109,15 +109,20 @@ export async function GET(request: NextRequest) {
       
     } else {
       console.log('⚠️ Lambda API 失敗:', lambdaResponse.error)
-      return NextResponse.json([], { status: 200 })
+      return NextResponse.json({
+        error: 'Failed to fetch todos from upstream',
+        details: lambdaResponse.error || 'Unknown error'
+      }, { status: 502 })
     }
 
   } catch (error) {
     console.error('❌ Todo取得で例外発生:', error);
     console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
     
-    // ネットワークエラーやその他の例外でも空配列を返す
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({
+      error: 'Internal Server Error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
