@@ -7,6 +7,7 @@ import TodoList from '@/app/components/TodoList'
 import DashboardHeader from '@/app/components/DashboardHeader'
 import TodoStatsDisplay from '@/app/components/TodoStatsDisplay'
 import type { TodoStats } from '@/types/todo'
+import { useMemo } from 'react'
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
@@ -24,6 +25,7 @@ export default function Dashboard() {
 
   // ダッシュボード統計の取得（最小）
   const [stats, setStats] = useState<TodoStats | null>(null)
+  const [timeSummary, setTimeSummary] = useState<{ todaySeconds: number; weekSeconds: number } | null>(null)
   useEffect(() => {
     let mounted = true
     const fetchStats = async () => {
@@ -46,6 +48,30 @@ export default function Dashboard() {
     }
     return () => { mounted = false; clearInterval(id); if (typeof window !== 'undefined') window.removeEventListener('todo:changed', onChanged) }
   }, [])
+
+  // 時間サマリの取得（MVP）
+  useEffect(() => {
+    let mounted = true
+    const fetchSummary = async () => {
+      try {
+        const res = await fetch('/api/time-entries/summary')
+        if (!res.ok) return
+        const data = await res.json()
+        if (mounted) setTimeSummary(data)
+      } catch {}
+    }
+    fetchSummary()
+    const id = setInterval(fetchSummary, 60 * 1000)
+    return () => { mounted = false; clearInterval(id) }
+  }, [])
+
+  const formatHM = (sec: number) => {
+    const h = Math.floor(sec / 3600)
+    const m = Math.floor((sec % 3600) / 60)
+    if (h <= 0) return `${m}分`
+    if (m <= 0) return `${h}時間`
+    return `${h}時間${m}分`
+  }
 
   // 認証チェック
   if (status === 'loading') {
@@ -96,6 +122,19 @@ export default function Dashboard() {
             <div className="mb-6 max-w-4xl mx-auto space-y-4">
               {/* コンパクト統計 */}
               <TodoStatsDisplay stats={stats} variant="compact" showTimestamp={false} />
+              {/* 時間サマリ（MVP） */}
+              {timeSummary && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 border border-gray-200 dark:border-gray-700 text-center">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">今日の合計</div>
+                    <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{formatHM(timeSummary.todaySeconds)}</div>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 border border-gray-200 dark:border-gray-700 text-center">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">今週の合計</div>
+                    <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{formatHM(timeSummary.weekSeconds)}</div>
+                  </div>
+                </div>
+              )}
               {/* 詳細分析（折りたたみ） */}
               <details className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 <summary className="cursor-pointer select-none px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex items-center justify-between">

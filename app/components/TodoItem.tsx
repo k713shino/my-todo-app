@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback, memo } from 'react'
+import { useState, useCallback, memo, useEffect } from 'react'
+import { toast } from 'react-hot-toast'
 import { format, isAfter } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { Status } from '@prisma/client'
@@ -124,6 +125,7 @@ function TodoItem({
   onSubtaskChange
 }: TodoItemProps) {
   const [isUpdating, setIsUpdating] = useState(false)
+  const [isTracking, setIsTracking] = useState<boolean>(false)
   const [isSubtasksOpen, setIsSubtasksOpen] = useState(false)
   const [subtasks, setSubtasks] = useState<Todo[] | null>(null)
   const [isSubtasksLoading, setIsSubtasksLoading] = useState(false)
@@ -171,6 +173,43 @@ function TodoItem({
       onDelete(todo.id)
     }
   }
+
+  // === MVP: 時間計測（開始/停止） ===
+  useEffect(() => {
+    try {
+      const runId = localStorage.getItem('time:runningTodoId')
+      setIsTracking(runId === todo.id)
+    } catch {}
+  }, [todo.id])
+
+  const startTracking = useCallback(async () => {
+    try {
+      const res = await fetch('/api/time-entries/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ todoId: todo.id })
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      try { localStorage.setItem('time:runningTodoId', todo.id) } catch {}
+      setIsTracking(true)
+      toast.success('⏱️ 計測を開始しました')
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
+    } catch (e) {
+      toast.error('計測開始に失敗しました')
+    }
+  }, [todo.id])
+
+  const stopTracking = useCallback(async () => {
+    try {
+      const res = await fetch('/api/time-entries/stop', { method: 'POST' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      try { localStorage.removeItem('time:runningTodoId') } catch {}
+      setIsTracking(false)
+      toast('⏹️ 計測を停止しました')
+      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
+    } catch (e) {
+      toast.error('計測停止に失敗しました')
+    }
+  }, [])
 
   // サブタスク詳細モーダルは廃止
 
@@ -495,6 +534,14 @@ function TodoItem({
           </div>
           
           <div className="flex space-x-1 sm:space-x-2 flex-shrink-0 ml-2">
+            <button
+              onClick={() => (isTracking ? stopTracking() : startTracking())}
+              disabled={isLoading}
+              className={`text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 transition-colors p-1 sm:p-1 min-w-[32px] min-h-[32px] flex items-center justify-center ${isTracking ? 'animate-pulse' : ''}`}
+              title={isTracking ? '停止' : '開始'}
+            >
+              <span className="text-base sm:text-lg">{isTracking ? '⏹️' : '▶️'}</span>
+            </button>
             <button
               onClick={() => onEdit(todo)}
               disabled={isLoading}
