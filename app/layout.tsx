@@ -8,6 +8,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="color-scheme" content="light dark" />
+        <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
       </head>
       <body className="antialiased">
         <ThemeProvider

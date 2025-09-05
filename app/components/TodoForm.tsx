@@ -141,7 +141,12 @@ export default function TodoForm({
   return (
     <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md space-y-3 sm:space-y-4">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-        {initialData ? '✏️ Todoを編集' : '✨ 新しいTodoを作成'}
+        {initialData ? '✏️ Todoを編集' : (
+          <>
+            <img src="/icons/todo-icon-circle.svg" alt="" className="inline-block w-5 h-5 mr-2 align-[-0.2em]" />
+            新しいTodoを作成
+          </>
+        )}
       </h3>
 
       {/* タイトル */}

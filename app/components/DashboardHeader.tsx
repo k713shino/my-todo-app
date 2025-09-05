@@ -639,7 +639,8 @@ export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps)
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center min-w-0 flex-1">
               <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
-                ✨ <span className="hidden sm:inline">{isAuthenticated ? `${session.user?.name}専用` : ''}</span>Todo<span className="hidden xs:inline">アプリ</span>
+                <img src="/icons/todo-icon-circle.svg" alt="" className="inline-block w-6 h-6 mr-2 align-[-0.2em]" />
+                <span className="hidden sm:inline">{isAuthenticated ? `${session.user?.name}専用` : ''}</span>Todo<span className="hidden xs:inline">アプリ</span>
               </h1>
             </div>
 

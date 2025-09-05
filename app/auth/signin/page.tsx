@@ -166,7 +166,8 @@ function SignInContent() {
             <ThemeToggle />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-            ✨ 個人用Todoアプリ
+            <Image src="/icons/todo-icon-circle.svg" alt="" width={24} height={24} className="inline-block mr-2 align-[-0.2em]" />
+            個人用Todoアプリ
           </h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             タスク管理で優雅な毎日を
@@ -372,7 +373,8 @@ function SignInLoading() {
             <ThemeToggle />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
-            ✨ 個人用Todoアプリ
+            <Image src="/icons/todo-icon-circle.svg" alt="" width={24} height={24} className="inline-block mr-2 align-[-0.2em]" />
+            個人用Todoアプリ
           </h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             タスク管理で優雅な毎日を

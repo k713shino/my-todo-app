@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title>Todo App Icon</title>
+  <desc>Green circle with white check mark, transparent outer background.</desc>
+  <circle cx="128" cy="128" r="112" fill="#16a34a"/>
+  <path d="M76 132 L112 168 L180 96" fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
