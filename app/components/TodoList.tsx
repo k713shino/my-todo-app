@@ -198,7 +198,23 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
   // マウント後の判定（高度検索クリア時に通常一覧へ戻すため）
   const didMountRef = useRef(false)
   // 締切通知（ユーザーが許可すれば動作）
-  const { enabled: deadlineNotifyEnabled, requestPermission: requestDeadlinePermission } = useDeadlineNotifications(todos, { minutesBefore: 15, intervalMs: 60_000 })
+  // 通知タイミング（分）をローカル設定から読み込む
+  const [notifyMinutes, setNotifyMinutes] = useState<number>(15)
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem('notify:deadline:minutes')
+      if (m) setNotifyMinutes(Math.max(1, parseInt(m)))
+    } catch {}
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'notify:deadline:minutes' && e.newValue) {
+        setNotifyMinutes(Math.max(1, parseInt(e.newValue)))
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  const { enabled: deadlineNotifyEnabled, requestPermission: requestDeadlinePermission } = useDeadlineNotifications(todos, { minutesBefore: notifyMinutes, intervalMs: 60_000 })
 
   // クライアント側の簡易キャッシュ（localStorage）
   const loadClientCache = () => {

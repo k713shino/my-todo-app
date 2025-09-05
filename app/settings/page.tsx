@@ -7,6 +7,7 @@ import AccountEditor from '@/app/components/AccountEditor'
 import AuthMethodDisplay from '@/app/components/AuthMethodDisplay'
 import PasswordChangeForm from '@/app/components/PasswordChangeForm'
 import DataManagementForm from '@/app/components/DataManagementForm'
+import NotificationSettings from '@/app/components/NotificationSettings'
 import AccountDeletionForm from '@/app/components/AccountDeletionForm'
 
 export default async function SettingsPage() {
@@ -83,6 +84,9 @@ export default async function SettingsPage() {
             </h2>
             <DataManagementForm userId={session.user.id} />
           </section>
+
+          {/* 通知設定 */}
+          <NotificationSettings />
 
           {/* アカウント削除 */}
           <section className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">

@@ -1,5 +1,6 @@
 import './globals.css'
 import SessionWrapper from './components/SessionWrapper'
+import GlobalToaster from './components/GlobalToaster'
 import { ThemeProvider } from './components/ThemeProvider'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           <SessionWrapper>
             {children}
+            <GlobalToaster />
           </SessionWrapper>
         </ThemeProvider>
       </body>

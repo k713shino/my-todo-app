@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'react-hot-toast'
 import type { Todo } from '@/types/todo'
 
 export interface DeadlineNotifyOptions {
@@ -14,12 +15,27 @@ export function useDeadlineNotifications(todos: Todo[], opts: DeadlineNotifyOpti
   const { minutesBefore = 15, intervalMs = 60_000 } = opts
   const notifiedRef = useRef<Set<string>>(new Set())
   const [enabled, setEnabled] = useState<boolean>(false)
+  const USER_PREF_KEY = 'notify:deadline:enabled'
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return
 
-    // 自動で権限を求めず、初回のみ状態を確認
-    setEnabled(Notification.permission === 'granted')
+    // ユーザー設定と権限の両方が有効な場合のみ有効化
+    const loadPref = () => {
+      try { return localStorage.getItem(USER_PREF_KEY) } catch { return null }
+    }
+    const initialPref = loadPref()
+    const userEnabled = initialPref === null ? true : initialPref === 'true'
+    setEnabled(Notification.permission === 'granted' && userEnabled)
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === USER_PREF_KEY) {
+        const userEnabled = e.newValue === null ? true : e.newValue === 'true'
+        setEnabled(Notification.permission === 'granted' && userEnabled)
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
   }, [])
 
   useEffect(() => {
@@ -41,10 +57,15 @@ export function useDeadlineNotifications(todos: Todo[], opts: DeadlineNotifyOpti
                 body: `${t.title}（${minutesBefore}分以内）`,
                 tag: `todo-deadline-${t.id}`,
               })
-              notifiedRef.current.add(t.id)
             } catch {
               // ignore
             }
+            // トーストでも通知（権限なし/視認性向上）
+            try {
+              const mins = Math.max(0, Math.round(diff / 60000))
+              toast(`⏰ 期限が近づいています: ${t.title}（あと${mins}分）`)
+            } catch {}
+            notifiedRef.current.add(t.id)
           }
         }
       })
@@ -61,10 +82,15 @@ export function useDeadlineNotifications(todos: Todo[], opts: DeadlineNotifyOpti
     if (Notification.permission === 'granted') { setEnabled(true); return true }
     const perm = await Notification.requestPermission()
     const ok = perm === 'granted'
-    setEnabled(ok)
+    try {
+      const pref = localStorage.getItem(USER_PREF_KEY)
+      const userEnabled = pref === null ? true : pref === 'true'
+      setEnabled(ok && userEnabled)
+    } catch {
+      setEnabled(ok)
+    }
     return ok
   }
 
   return { enabled, requestPermission }
 }
-
