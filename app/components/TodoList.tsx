@@ -540,11 +540,18 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
     
     try {
       const response = await retryWithBackoff(async () => {
-        return await fetch('/api/todos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        })
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 10_000)
+        try {
+          return await fetch('/api/todos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            signal: controller.signal,
+          })
+        } finally {
+          clearTimeout(timer)
+        }
       }, {
         maxRetries: 2,
         shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
@@ -572,13 +579,10 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       // ダッシュボード統計の即時更新通知
       try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
-      // キャッシュをクリアして次回取得時に最新データを取得
+      // キャッシュはサーバー側でも無効化されるため、フロントでは非同期で実行（UIブロック回避）
       try {
-        await fetch('/api/cache?type=user', { method: 'DELETE' })
-        console.log('✨ キャッシュクリア完了')
-      } catch (error) {
-        console.log('⚠️ キャッシュクリア失敗:', error)
-      }
+        fetch('/api/cache?type=user', { method: 'DELETE' }).catch(() => {})
+      } catch {}
       
     } catch (error) {
       // エラー時は楽観的更新を取り消し
@@ -610,11 +614,18 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
     try {
       
       const response = await retryWithBackoff(async () => {
-        return await fetch(`/api/todos/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        })
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 10_000)
+        try {
+          return await fetch(`/api/todos/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            signal: controller.signal,
+          })
+        } finally {
+          clearTimeout(timer)
+        }
       }, {
         maxRetries: 2,
         shouldRetry: (error) => isTemporaryError(error as ErrorWithStatus)
@@ -644,13 +655,10 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       toast.success('✅ Todoを更新しました！')
       try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
-      // キャッシュをクリアして次回取得時に最新データを取得
+      // キャッシュはサーバー側でも無効化されるため、フロントでは非同期で実行（UIブロック回避）
       try {
-        await fetch('/api/cache?type=user', { method: 'DELETE' })
-        console.log('✨ キャッシュクリア完了')
-      } catch (error) {
-        console.log('⚠️ キャッシュクリア失敗:', error)
-      }
+        fetch('/api/cache?type=user', { method: 'DELETE' }).catch(() => {})
+      } catch {}
       
     } catch (error) {
       // エラー時は元の状態に戻す
