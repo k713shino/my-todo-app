@@ -29,7 +29,7 @@ export default function Dashboard() {
     const fetchStats = async () => {
       try {
         // 週数/週開始/タイムゾーンを指定（例: 12週・月曜開始・UTC）
-        const res = await fetch('/api/todos/stats?cache=false&refresh=true&weeks=12&weekStart=mon&tz=UTC')
+        const res = await fetch('/api/todos/stats?cache=false&refresh=true&weeks=12&months=6&weekStart=mon&tz=UTC')
         if (!res.ok) return
         const data = await res.json()
         // サーバがunavailableを示した場合は表示しない

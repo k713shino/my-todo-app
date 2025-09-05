@@ -121,6 +121,16 @@ export interface TodoStats {
     weekStart: 'mon' | 'sun'
     tz: 'UTC' | 'local'
   }
+  // 月次完了推移（直近Nか月）
+  monthlyTrend?: Array<{
+    label: string // 例: YYYY/MM or M月
+    count: number
+  }>
+  // 月次推移のメタ情報
+  monthMeta?: {
+    months: number
+    tz: 'UTC' | 'local'
+  }
   // 後方互換性のため
   completed: number
   active: number

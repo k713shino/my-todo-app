@@ -19,9 +19,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const useCache = searchParams.get('cache') !== 'false'
     const forceRefresh = searchParams.get('refresh') === 'true'
-    // パラメータ: 週数、週開始、タイムゾーン
+    // パラメータ: 週数、月数、週開始、タイムゾーン
     const weeksParam = parseInt(searchParams.get('weeks') || '0', 10)
     const weeks = isFinite(weeksParam) && weeksParam > 0 && weeksParam <= 52 ? weeksParam : 8
+    const monthsParam = parseInt(searchParams.get('months') || '0', 10)
+    const months = isFinite(monthsParam) && monthsParam > 0 && monthsParam <= 24 ? monthsParam : 6
     const weekStartParam = (searchParams.get('weekStart') || 'mon').toLowerCase()
     const weekStart: 'mon' | 'sun' = weekStartParam === 'sun' ? 'sun' : 'mon'
     const tzParam = (searchParams.get('tz') || '').toUpperCase()
@@ -128,6 +130,46 @@ export async function GET(request: NextRequest) {
             if (u >= b.start && u < b.end) { b.count++; break }
           }
         }
+
+        // 月次完了推移
+        const monthBuckets: Array<{ y: number; m: number; start: Date; end: Date; label: string; count: number }> = []
+        const startOfMonth = (src: Date) => {
+          const y = tz === 'UTC' ? src.getUTCFullYear() : src.getFullYear()
+          const m = tz === 'UTC' ? src.getUTCMonth() : src.getMonth()
+          return tz === 'UTC'
+            ? new Date(Date.UTC(y, m, 1, 0, 0, 0))
+            : new Date(y, m, 1, 0, 0, 0)
+        }
+        const addMonths = (src: Date, diff: number) => {
+          const d = new Date(src)
+          if (tz === 'UTC') {
+            d.setUTCMonth(d.getUTCMonth() + diff)
+            d.setUTCDate(1); d.setUTCHours(0,0,0,0)
+          } else {
+            d.setMonth(d.getMonth() + diff)
+            d.setDate(1); d.setHours(0,0,0,0)
+          }
+          return d
+        }
+        const fmtYM = (d: Date) => {
+          const y = tz === 'UTC' ? d.getUTCFullYear() : d.getFullYear()
+          const m = (tz === 'UTC' ? d.getUTCMonth() : d.getMonth()) + 1
+          return `${y}/${String(m).padStart(2,'0')}`
+        }
+        let monthCursor = startOfMonth(new Date())
+        for (let i = 0; i < months; i++) {
+          const start = addMonths(monthCursor, -i)
+          const end = addMonths(start, 1)
+          const label = fmtYM(start)
+          monthBuckets.unshift({ y: tz==='UTC'?start.getUTCFullYear():start.getFullYear(), m: (tz==='UTC'?start.getUTCMonth():start.getMonth())+1, start, end, label, count: 0 })
+        }
+        for (const t of sourceTodos) {
+          if ((t as any).status !== 'DONE') continue
+          const u = new Date((t as any).updatedAt)
+          for (const b of monthBuckets) {
+            if (u >= b.start && u < b.end) { b.count++; break }
+          }
+        }
         const categoryBreakdown: Record<string, number> = {}
         for (const t of sourceTodos) {
           const cat = (t as any).category || '未分類'
@@ -148,6 +190,8 @@ export async function GET(request: NextRequest) {
           unavailable: false,
           weeklyTrend: weekBuckets.map(b => ({ label: b.label, count: b.count })),
           trendMeta: { weeks, weekStart, tz },
+          monthlyTrend: monthBuckets.map(b => ({ label: b.label, count: b.count })),
+          monthMeta: { months, tz },
         }
 
         if (useCache) {
@@ -179,6 +223,8 @@ export async function GET(request: NextRequest) {
           unavailable: true, // 明示的に非表示対象にする
           weeklyTrend: Array.from({ length: weeks }).map((_, i) => ({ label: `W-${i+1}`, count: 0 })),
           trendMeta: { weeks, weekStart, tz },
+          monthlyTrend: Array.from({ length: months }).map((_, i) => ({ label: `M-${i+1}`, count: 0 })),
+          monthMeta: { months, tz },
         }
       }
     }

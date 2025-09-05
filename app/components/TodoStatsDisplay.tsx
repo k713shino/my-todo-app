@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { TodoStats } from '@/types/todo'
 
 type Variant = 'color' | 'neutral' | 'compact'
@@ -69,8 +69,12 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
   const priorityMax = Math.max(...priorityBars.map(b => b.value), 1)
   const [showPercent, setShowPercent] = useState(false)
 
-  // 週次折れ線グラフ
-  const trend = (stats.weeklyTrend || []).slice(-8)
+  // 折れ線グラフ（週次/月次切替）
+  const [trendMode, setTrendMode] = useState<'weekly'|'monthly'>('weekly')
+  const trend = useMemo(() => {
+    if (trendMode === 'monthly') return (stats.monthlyTrend || []).slice(-6)
+    return (stats.weeklyTrend || []).slice(-8)
+  }, [trendMode, stats.weeklyTrend, stats.monthlyTrend])
   const trendMax = Math.max(...trend.map(t => t.count), 1)
   const w = 260, h = 80, pad = 6
   const points = trend.length > 0
@@ -184,7 +188,13 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
 
         {/* 折れ線グラフ */}
         <div className={`${cardBg} rounded p-3`}>
-          <div className={`text-sm mb-2 ${mutedText}`}>週次完了推移</div>
+          <div className={`text-sm mb-2 ${mutedText} flex items-center justify-between`}>
+            <span>{trendMode === 'monthly' ? '月次完了推移' : '週次完了推移'}</span>
+            <div className="flex gap-1 text-xs">
+              <button onClick={() => setTrendMode('weekly')} className={`px-2 py-0.5 rounded ${trendMode==='weekly' ? 'bg-purple-600 text-white' : `${mutedText} bg-transparent border border-gray-300 dark:border-gray-600`}`}>週</button>
+              <button onClick={() => setTrendMode('monthly')} className={`px-2 py-0.5 rounded ${trendMode==='monthly' ? 'bg-purple-600 text-white' : `${mutedText} bg-transparent border border-gray-300 dark:border-gray-600`}`}>月</button>
+            </div>
+          </div>
           <div className="space-y-2">
             <svg viewBox={`0 0 ${w} ${h + 18}`} className="w-full h-28 overflow-visible">
               {/* 横グリッド（3本） */}
