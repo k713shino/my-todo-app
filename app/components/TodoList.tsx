@@ -1484,31 +1484,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
           <button onClick={requestDeadlinePermission} className="ml-3 px-3 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700">有効にする</button>
         </div>
       )}
-      {/* React Hot Toast通知システム */}
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#363636',
-            color: '#fff',
-          },
-          success: {
-            duration: 3000,
-            iconTheme: {
-              primary: '#10b981',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            duration: 6000,
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
+      {/* React Hot Toast は GlobalToaster に集約 */}
 
       {/* 統計の簡易カード（ダッシュボードに統合したため削除） */}
 

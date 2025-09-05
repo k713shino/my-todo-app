@@ -43,6 +43,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 })();`,
           }}
         />
+        {/* Toaster は最上位に配置して即マウント（重い子コンポーネントより前） */}
+        <GlobalToaster />
+
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
@@ -51,7 +54,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           <SessionWrapper>
             {children}
-            <GlobalToaster />
           </SessionWrapper>
         </ThemeProvider>
         {/* デプロイ直後に旧ハッシュのチャンクを参照して404になる場合の自己回復 */}
