@@ -11,6 +11,20 @@ export async function GET(_request: NextRequest) {
     }
     const userId = session.user.id
 
+    // テーブルが無い環境でも500にしないため、先に作成
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS time_entries (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        todo_id TEXT NOT NULL,
+        started_at TIMESTAMPTZ NOT NULL,
+        ended_at TIMESTAMPTZ,
+        seconds INTEGER,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`
+    )
+
     // 今日の開始と終了（ローカルタイムでOK/MVP）
     const todayRes = await prisma.$queryRawUnsafe<any[]>(
       `SELECT COALESCE(SUM(seconds),0) AS total
@@ -41,4 +55,3 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
-

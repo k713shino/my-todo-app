@@ -11,6 +11,20 @@ export async function POST(_request: NextRequest) {
     }
     const userId = session.user.id
 
+    // テーブルが未作成の場合に備えて作成（分割実行）
+    await prisma.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS time_entries (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        todo_id TEXT NOT NULL,
+        started_at TIMESTAMPTZ NOT NULL,
+        ended_at TIMESTAMPTZ,
+        seconds INTEGER,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`
+    )
+
     // 実行中の最新エントリを停止
     const running = await prisma.$queryRawUnsafe<any[]>(
       `SELECT id FROM time_entries WHERE user_id = $1 AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1`,
@@ -32,4 +46,3 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
-
