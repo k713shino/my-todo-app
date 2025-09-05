@@ -441,6 +441,34 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
   }
 
   /**
+   * SWR完全対応: まずキャッシュのみ（超高速）→ バックグラウンドで最新化
+   * - 先に /api/todos/user?cache=true を短いタイムアウトで叩いて即描画
+   * - その後 /api/todos/user?cache=false で最新化し、成功時に差し替え
+   */
+  const fetchTodosSWRFast = async () => {
+    try {
+      // 1) キャッシュのみ（サーバーRedis）を短タイムアウトで取得
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 2000)
+      const res = await fetch('/api/todos/user?cache=true', { signal: controller.signal })
+      clearTimeout(timer)
+      if (res.ok) {
+        const cachedData = await res.json()
+        if (Array.isArray(cachedData) && cachedData.length > 0) {
+          const parsed = cachedData.map((t: TodoResponse) => safeParseTodoDate(t))
+          setTodos(parsed)
+          setIsLoading(false)
+          // 2) バックグラウンドで最新化（失敗してもUXは維持）
+          setTimeout(() => { try { fetchTodos(true) } catch {} }, 0)
+          return
+        }
+      }
+    } catch {}
+    // キャッシュが無い/失敗時は通常ルート（SWR内蔵）へフォールバック
+    await fetchTodos(false)
+  }
+
+  /**
    * 新規Todoの作成
    * 改善されたエラーハンドリング付き
    */
@@ -1250,8 +1278,8 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
 
     if (!fetchedRef.current) {
       fetchedRef.current = true
-      // 初回読み込み開始（バックグラウンドでも）
-      fetchTodos()
+      // 初回読み込みはSWR完全対応の高速ルート
+      fetchTodosSWRFast()
     } else {
       // StrictModeなどによる二重発火を抑制
       console.log('ℹ️ 初回取得は既に実行済み（重複防止）')
