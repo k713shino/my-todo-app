@@ -402,27 +402,35 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
         warmupLambda()
       }
       
-      // キャッシュからのフォールバック取得を試行
-      if (!bypassCache) {
-        try {
-          console.log('🔄 キャッシュからのフォールバック取得を試行...')
-          const cachedResponse = await fetch('/api/todos/user?cache=true')
-          if (cachedResponse.ok) {
-            const cachedData = await cachedResponse.json()
-            if (cachedData.length > 0) {
-              const parsedTodos = cachedData.map((todo: TodoResponse) => {
-                const parsed = safeParseTodoDate(todo)
-                return parsed
-              })
-              setTodos(parsedTodos)
-              toast.success('📦 キャッシュからデータを復旧しました')
-              return
-            }
+      // キャッシュからのフォールバック取得を試行（バイパス指定時も試す）
+      try {
+        console.log('🔄 キャッシュからのフォールバック取得を試行...')
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 5000)
+        const cachedResponse = await fetch('/api/todos/user?cache=true', { signal: controller.signal })
+        clearTimeout(timer)
+        if (cachedResponse.ok) {
+          const cachedData = await cachedResponse.json()
+          if (Array.isArray(cachedData) && cachedData.length > 0) {
+            const parsedTodos = cachedData.map((todo: TodoResponse) => safeParseTodoDate(todo))
+            setTodos(parsedTodos)
+            toast.success('📦 キャッシュからデータを復旧しました')
+            return
           }
-        } catch (fallbackError) {
-          console.warn('キャッシュからの復旧も失敗:', fallbackError)
         }
+      } catch (fallbackError) {
+        console.warn('キャッシュからの復旧も失敗:', fallbackError)
       }
+
+      // さらにローカルキャッシュがあれば最後の砦として復旧
+      try {
+        const local = loadClientCache()
+        if (local && local.length > 0) {
+          setTodos(local)
+          toast.success('💾 ローカルキャッシュから復旧しました')
+          return
+        }
+      } catch {}
     } finally {
       setIsLoading(false)
     }
