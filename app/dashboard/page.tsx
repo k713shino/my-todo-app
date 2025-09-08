@@ -61,8 +61,16 @@ export default function Dashboard() {
       } catch {}
     }
     fetchSummary()
-    const id = setInterval(fetchSummary, 60 * 1000)
-    return () => { mounted = false; clearInterval(id) }
+    const id = setInterval(fetchSummary, 30 * 1000) // 30秒間隔に変更
+    const onChanged = () => fetchSummary()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('todo:changed', onChanged)
+    }
+    return () => { 
+      mounted = false
+      clearInterval(id)
+      if (typeof window !== 'undefined') window.removeEventListener('todo:changed', onChanged)
+    }
   }, [])
 
   const formatHM = (sec: number) => {
@@ -124,15 +132,42 @@ export default function Dashboard() {
               <TodoStatsDisplay stats={stats} variant="compact" showTimestamp={false} />
               {/* 時間サマリ（MVP） */}
               {timeSummary && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 border border-gray-200 dark:border-gray-700 text-center">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">今日の合計</div>
-                    <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{formatHM(timeSummary.todaySeconds)}</div>
+                <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      ⏱️ 時間追跡サマリ
+                    </h3>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                    </div>
                   </div>
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3 border border-gray-200 dark:border-gray-700 text-center">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">今週の合計</div>
-                    <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{formatHM(timeSummary.weekSeconds)}</div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center">
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">今日</div>
+                      <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                        {formatHM(timeSummary.todaySeconds)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {timeSummary.todaySeconds > 0 && `${Math.floor(timeSummary.todaySeconds / 60)}分`}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">今週</div>
+                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                        {formatHM(timeSummary.weekSeconds)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {timeSummary.weekSeconds > 0 && `${Math.floor(timeSummary.weekSeconds / 60)}分`}
+                      </div>
+                    </div>
                   </div>
+                  {(timeSummary.todaySeconds > 0 || timeSummary.weekSeconds > 0) && (
+                    <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
+                      <div className="text-xs text-gray-600 dark:text-gray-400 text-center">
+                        週平均: {formatHM(Math.floor(timeSummary.weekSeconds / 7))} / 日
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {/* 詳細分析（折りたたみ） */}

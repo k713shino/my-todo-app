@@ -534,13 +534,24 @@ function TodoItem({
           </div>
           
           <div className="flex space-x-1 sm:space-x-2 flex-shrink-0 ml-2">
+            {/* 時間追跡ボタン - 改善されたUI */}
             <button
               onClick={() => (isTracking ? stopTracking() : startTracking())}
               disabled={isLoading}
-              className={`text-gray-400 dark:text-gray-500 hover:text-green-600 dark:hover:text-green-400 transition-colors p-1 sm:p-1 min-w-[32px] min-h-[32px] flex items-center justify-center ${isTracking ? 'animate-pulse' : ''}`}
-              title={isTracking ? '停止' : '開始'}
+              className={`relative transition-all duration-200 p-2 rounded-full min-w-[36px] min-h-[36px] flex items-center justify-center ${
+                isTracking 
+                  ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 shadow-sm' 
+                  : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 shadow-sm'
+              } ${isTracking ? 'animate-pulse' : ''}`}
+              title={isTracking ? '⏹️ 時間計測を停止' : '▶️ 時間計測を開始'}
             >
-              <span className="text-base sm:text-lg">{isTracking ? '⏹️' : '▶️'}</span>
+              <span className="text-sm font-medium">
+                {isTracking ? '⏹️' : '▶️'}
+              </span>
+              {/* 計測中の視覚的インジケーター */}
+              {isTracking && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+              )}
             </button>
             <button
               onClick={() => onEdit(todo)}
