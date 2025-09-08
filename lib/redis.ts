@@ -41,9 +41,16 @@ const shouldConnectRedis = (): boolean => {
   if (process.env.NEXT_PHASE === 'phase-production-build') return false
   if (process.env.CI === 'true') return false
   
-  // Vercelビルド環境での判定
-  if (process.env.VERCEL === '1' && !process.env.REDIS_URL?.includes('upstash')) {
+  // REDIS_URLが設定されていない場合はモックを使用
+  if (!process.env.REDIS_URL) {
+    console.log('⚠️ REDIS_URL not set, using mock Redis')
     return false
+  }
+  
+  // Vercelビルド環境での判定（より緩和）
+  if (process.env.VERCEL === '1' && process.env.REDIS_URL?.includes('upstash.io')) {
+    console.log('✅ Vercel production environment detected with Upstash Redis')
+    return true
   }
   
   return true

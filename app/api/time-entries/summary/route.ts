@@ -6,6 +6,12 @@ import { redis } from '@/lib/redis'
 export async function GET(_request: NextRequest) {
   try {
     console.log('=== TIME SUMMARY API START ===')
+    console.log('Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      REDIS_URL: process.env.REDIS_URL ? 'SET' : 'NOT_SET',
+      isUpstash: process.env.REDIS_URL?.includes('upstash.io') || false
+    })
     
     // セッション認証
     const session = await getAuthSession()
@@ -26,12 +32,16 @@ export async function GET(_request: NextRequest) {
 
     // Redis接続テスト
     try {
-      await redis.ping()
-      console.log('✅ Redis ping successful')
+      const pongResult = await redis.ping()
+      console.log('✅ Redis ping successful, result:', pongResult)
+      console.log('Redis client status:', (redis as any).status || 'unknown')
+      console.log('Redis client type:', redis.constructor.name)
     } catch (pingError) {
       console.error('❌ Redis ping failed:', pingError)
+      console.error('Redis client type:', redis.constructor.name)
+      console.error('Is likely mock Redis?', redis.constructor.name !== 'Redis')
       // Redisが利用できない場合はデフォルト値を返す
-      return NextResponse.json({ todaySeconds: 0, weekSeconds: 0 })
+      return NextResponse.json({ todaySeconds: 0, weekSeconds: 0, fallback: true })
     }
 
     // Redisからデータ取得
