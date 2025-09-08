@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { prisma } from '@/lib/prisma'
+import { healthCheck } from '@/lib/db-init'
 
 // DB版: タスクの時間計測を開始
 export async function POST(request: NextRequest) {
@@ -33,6 +34,26 @@ export async function POST(request: NextRequest) {
     console.log('Starting time tracking:', { userId, todoId })
 
     try {
+      // データベース健全性チェック
+      const health = await healthCheck()
+      if (!health.connected) {
+        console.error('❌ Database connection failed:', health.error)
+        return NextResponse.json({ 
+          error: 'Database connection failed',
+          details: health.error 
+        }, { status: 503 })
+      }
+      
+      if (!health.schemaReady) {
+        console.error('❌ TimeEntry schema not ready')
+        return NextResponse.json({ 
+          error: 'Database schema not ready',
+          details: 'TimeEntry table may not exist' 
+        }, { status: 503 })
+      }
+      
+      console.log('✅ Database health check passed')
+
       // 既に進行中のタスクがある場合は停止
       const activeEntry = await prisma.timeEntry.findFirst({
         where: {
@@ -68,8 +89,22 @@ export async function POST(request: NextRequest) {
       console.log('✅ Started new tracking:', newEntry.id)
       return NextResponse.json({ success: true, entryId: newEntry.id })
     } catch (dbError) {
-      console.error('❌ Database error:', dbError)
-      return NextResponse.json({ error: 'Failed to start time tracking' }, { status: 500 })
+      console.error('❌ Database error details:', {
+        name: dbError instanceof Error ? dbError.name : 'Unknown',
+        message: dbError instanceof Error ? dbError.message : String(dbError),
+        stack: dbError instanceof Error ? dbError.stack : 'No stack',
+        code: (dbError as any)?.code,
+        meta: (dbError as any)?.meta
+      })
+      return NextResponse.json({ 
+        error: 'Failed to start time tracking',
+        details: dbError instanceof Error ? dbError.message : 'Unknown database error'
+      }, { status: 500 })
+    } finally {
+      // Vercel環境では接続を閉じない（レスポンス遅延を防ぐため）
+      if (process.env.NODE_ENV !== 'production') {
+        await prisma.$disconnect().catch(() => {})
+      }
     }
   } catch (error) {
     console.error('❌ TIME START API ERROR:', error)
