@@ -61,6 +61,7 @@ interface MockRedis {
   ttl(key: string): Promise<number>
   keys(pattern: string): Promise<string[]>
   incr(key: string): Promise<number>
+  incrby(key: string, increment: number): Promise<number>
   ping(): Promise<string>
   
   // 情報取得
@@ -261,6 +262,7 @@ class RedisClient {
       ttl: async (): Promise<number> => -1,
       keys: async (): Promise<string[]> => [],
       incr: async (): Promise<number> => 1,
+      incrby: async (): Promise<number> => 1,
       ping: async (): Promise<string> => 'PONG',
       
       // 情報取得

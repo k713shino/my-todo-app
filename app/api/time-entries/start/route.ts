@@ -45,17 +45,21 @@ async function addToAggregates(userId: string, startedAt: Date, seconds: number)
   try {
     const dayKey = (d: Date) => `time:sum:day:${userId}:${formatDate(d)}`
     const weekKey = (d: Date) => `time:sum:week:${userId}:${formatDate(startOfWeek(d))}`
-    // ioredisのincrbyは型定義に無い環境もあるため安全に実行
-    if ((redis as any).incrby) {
+    
+    // incrbyメソッドを安全に使用
+    try {
       await (redis as any).incrby(dayKey(startedAt), seconds)
       await (redis as any).incrby(weekKey(startedAt), seconds)
-    } else {
+    } catch (incrbyError) {
+      // incrbyが失敗した場合はget/setにフォールバック
       const curDay = parseInt((await redis.get(dayKey(startedAt))) || '0', 10)
       await redis.set(dayKey(startedAt), String(curDay + seconds))
       const curWeek = parseInt((await redis.get(weekKey(startedAt))) || '0', 10)
       await redis.set(weekKey(startedAt), String(curWeek + seconds))
     }
-  } catch {}
+  } catch (error) {
+    console.error('addToAggregates error:', error)
+  }
 }
 
 function startOfWeek(d: Date) {

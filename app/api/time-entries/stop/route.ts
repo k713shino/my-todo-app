@@ -34,16 +34,21 @@ async function addToAggregates(userId: string, startedAt: Date, seconds: number)
   try {
     const dayKey = (d: Date) => `time:sum:day:${userId}:${formatDate(d)}`
     const weekKey = (d: Date) => `time:sum:week:${userId}:${formatDate(startOfWeek(d))}`
-    if ((redis as any).incrby) {
+    
+    // incrbyメソッドを安全に使用
+    try {
       await (redis as any).incrby(dayKey(startedAt), seconds)
       await (redis as any).incrby(weekKey(startedAt), seconds)
-    } else {
+    } catch (incrbyError) {
+      // incrbyが失敗した場合はget/setにフォールバック
       const curDay = parseInt((await redis.get(dayKey(startedAt))) || '0', 10)
       await redis.set(dayKey(startedAt), String(curDay + seconds))
       const curWeek = parseInt((await redis.get(weekKey(startedAt))) || '0', 10)
       await redis.set(weekKey(startedAt), String(curWeek + seconds))
     }
-  } catch {}
+  } catch (error) {
+    console.error('addToAggregates error:', error)
+  }
 }
 function startOfWeek(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); const day = x.getDay(); const offset = (day + 6) % 7; x.setDate(x.getDate()-offset); return x }
 function formatDate(d: Date) { const y = d.getFullYear(); const m = (d.getMonth()+1).toString().padStart(2,'0'); const dd = d.getDate().toString().padStart(2,'0'); return `${y}-${m}-${dd}` }
