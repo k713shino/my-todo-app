@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         const sec = Math.max(0, Math.floor((now.getTime() - started.getTime()) / 1000))
         console.log('Stopping previous:', { prevTodoId, startedAt, seconds: sec })
         
-        await addToAggregates(userId, started, sec)
+        await addToAggregates(userId, started, sec, prevTodoId)
       } catch (prevError) {
         console.error('❌ Failed to process previous data:', prevError)
       }
@@ -60,6 +60,16 @@ export async function POST(request: NextRequest) {
     // 新規開始を保存
     const startData = { todoId, startedAt: new Date().toISOString() }
     await redis.set(runningKey, JSON.stringify(startData))
+    
+    // タスク開始回数をカウント
+    const taskStartKey = `time:task:starts:${userId}:${todoId}`
+    try {
+      await (redis as any).incr(taskStartKey)
+      await redis.expire(taskStartKey, 86400 * 365) // 1年間保持
+    } catch (countError) {
+      console.warn('Task start count failed:', countError)
+    }
+    
     console.log('✅ Started new tracking:', startData)
 
     return NextResponse.json({ success: true })
@@ -73,12 +83,12 @@ export async function POST(request: NextRequest) {
 }
 
 // ユーザー集計（Redis）: 日/週に加算
-async function addToAggregates(userId: string, startedAt: Date, seconds: number) {
+async function addToAggregates(userId: string, startedAt: Date, seconds: number, todoId?: string) {
   try {
     const dayKey = (d: Date) => `time:sum:day:${userId}:${formatDate(d)}`
     const weekKey = (d: Date) => `time:sum:week:${userId}:${formatDate(startOfWeek(d))}`
     
-    // incrbyメソッドを安全に使用
+    // 日次・週次集計
     try {
       await (redis as any).incrby(dayKey(startedAt), seconds)
       await (redis as any).incrby(weekKey(startedAt), seconds)
@@ -88,6 +98,27 @@ async function addToAggregates(userId: string, startedAt: Date, seconds: number)
       await redis.set(dayKey(startedAt), String(curDay + seconds))
       const curWeek = parseInt((await redis.get(weekKey(startedAt))) || '0', 10)
       await redis.set(weekKey(startedAt), String(curWeek + seconds))
+    }
+    
+    // タスク別時間集計
+    if (todoId && seconds > 0) {
+      const taskTimeKey = `time:task:total:${userId}:${todoId}`
+      try {
+        await (redis as any).incrby(taskTimeKey, seconds)
+        await redis.expire(taskTimeKey, 86400 * 365) // 1年間保持
+      } catch (taskError) {
+        console.warn('Task time aggregation failed:', taskError)
+      }
+      
+      // 時間帯別統計（生産性分析用）
+      const hour = startedAt.getHours()
+      const hourKey = `time:hour:${userId}:${hour}`
+      try {
+        await (redis as any).incrby(hourKey, seconds)
+        await redis.expire(hourKey, 86400 * 90) // 90日間保持
+      } catch (hourError) {
+        console.warn('Hourly stats failed:', hourError)
+      }
     }
   } catch (error) {
     console.error('addToAggregates error:', error)

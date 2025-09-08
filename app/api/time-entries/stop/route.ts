@@ -40,13 +40,13 @@ export async function POST(_request: NextRequest) {
     }
 
     try {
-      const { startedAt } = JSON.parse(prev)
+      const { todoId, startedAt } = JSON.parse(prev)
       const started = new Date(startedAt)
       const now = new Date()
       const sec = Math.max(0, Math.floor((now.getTime() - started.getTime()) / 1000))
-      console.log('Stopping timer:', { startedAt, seconds: sec })
+      console.log('Stopping timer:', { todoId, startedAt, seconds: sec })
       
-      await addToAggregates(userId, started, sec)
+      await addToAggregates(userId, started, sec, todoId)
     } catch (parseError) {
       console.error('❌ Failed to process stop data:', parseError)
     }
@@ -64,12 +64,12 @@ export async function POST(_request: NextRequest) {
   }
 }
 
-async function addToAggregates(userId: string, startedAt: Date, seconds: number) {
+async function addToAggregates(userId: string, startedAt: Date, seconds: number, todoId?: string) {
   try {
     const dayKey = (d: Date) => `time:sum:day:${userId}:${formatDate(d)}`
     const weekKey = (d: Date) => `time:sum:week:${userId}:${formatDate(startOfWeek(d))}`
     
-    // incrbyメソッドを安全に使用
+    // 日次・週次集計
     try {
       await (redis as any).incrby(dayKey(startedAt), seconds)
       await (redis as any).incrby(weekKey(startedAt), seconds)
@@ -79,6 +79,27 @@ async function addToAggregates(userId: string, startedAt: Date, seconds: number)
       await redis.set(dayKey(startedAt), String(curDay + seconds))
       const curWeek = parseInt((await redis.get(weekKey(startedAt))) || '0', 10)
       await redis.set(weekKey(startedAt), String(curWeek + seconds))
+    }
+    
+    // タスク別時間集計
+    if (todoId && seconds > 0) {
+      const taskTimeKey = `time:task:total:${userId}:${todoId}`
+      try {
+        await (redis as any).incrby(taskTimeKey, seconds)
+        await redis.expire(taskTimeKey, 86400 * 365) // 1年間保持
+      } catch (taskError) {
+        console.warn('Task time aggregation failed:', taskError)
+      }
+      
+      // 時間帯別統計（生産性分析用）
+      const hour = startedAt.getHours()
+      const hourKey = `time:hour:${userId}:${hour}`
+      try {
+        await (redis as any).incrby(hourKey, seconds)
+        await redis.expire(hourKey, 86400 * 90) // 90日間保持
+      } catch (hourError) {
+        console.warn('Hourly stats failed:', hourError)
+      }
     }
   } catch (error) {
     console.error('addToAggregates error:', error)

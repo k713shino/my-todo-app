@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import TodoList from '@/app/components/TodoList'
 import DashboardHeader from '@/app/components/DashboardHeader'
 import TodoStatsDisplay from '@/app/components/TodoStatsDisplay'
+import TimeTrackingDashboard from '@/app/components/TimeTrackingDashboard'
 import type { TodoStats } from '@/types/todo'
 import { useMemo } from 'react'
 
@@ -170,6 +171,9 @@ export default function Dashboard() {
                   )}
                 </div>
               )}
+              {/* 時間追跡ダッシュボード */}
+              <TimeTrackingDashboard />
+              
               {/* 詳細分析（折りたたみ） */}
               <details className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                 <summary className="cursor-pointer select-none px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex items-center justify-between">
