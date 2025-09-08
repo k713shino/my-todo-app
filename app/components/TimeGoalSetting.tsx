@@ -57,22 +57,36 @@ export default function TimeGoalSetting() {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'daily' })
+          }).catch(error => {
+            console.warn('Daily progress fetch error:', error)
+            return { ok: false }
           }),
           fetch('/api/time-entries/goals', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: 'weekly' })
+          }).catch(error => {
+            console.warn('Weekly progress fetch error:', error)
+            return { ok: false }
           })
         ])
 
-        if (dailyRes.ok) {
-          const dailyData = await dailyRes.json()
-          setDailyProgress(dailyData)
+        if (dailyRes?.ok && 'json' in dailyRes) {
+          try {
+            const dailyData = await dailyRes.json()
+            setDailyProgress(dailyData)
+          } catch (jsonError) {
+            console.warn('Failed to parse daily progress:', jsonError)
+          }
         }
 
-        if (weeklyRes.ok) {
-          const weeklyData = await weeklyRes.json()
-          setWeeklyProgress(weeklyData)
+        if (weeklyRes?.ok && 'json' in weeklyRes) {
+          try {
+            const weeklyData = await weeklyRes.json()
+            setWeeklyProgress(weeklyData)
+          } catch (jsonError) {
+            console.warn('Failed to parse weekly progress:', jsonError)
+          }
         }
       } catch (error) {
         console.error('目標データの取得に失敗:', error)
@@ -126,11 +140,12 @@ export default function TimeGoalSetting() {
     return 'bg-red-500'
   }
 
-  const getProgressMessage = (progress: Progress, type: string) => {
+  const getProgressMessage = (progress: Progress | null, type: string) => {
+    if (!progress) return '📊 データを読み込み中...'
     if (progress.achieved) {
       return `🎉 ${type}目標達成！`
     }
-    const remaining = formatSeconds(progress.remainingSeconds)
+    const remaining = formatSeconds(progress.remainingSeconds || 0)
     return `⏰ あと${remaining}で目標達成`
   }
 
@@ -243,13 +258,13 @@ export default function TimeGoalSetting() {
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium">今日の進捗</span>
                 <span className="text-sm text-gray-500">
-                  {formatSeconds(dailyProgress.currentSeconds)} / {formatTime(goals.dailyGoal)}
+                  {formatSeconds(dailyProgress?.currentSeconds || 0)} / {formatTime(goals?.dailyGoal || 480)}
                 </span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                 <div
-                  className={`h-3 rounded-full transition-all duration-500 ${getProgressColor(dailyProgress.progress)}`}
-                  style={{ width: `${Math.min(100, dailyProgress.progress)}%` }}
+                  className={`h-3 rounded-full transition-all duration-500 ${getProgressColor(dailyProgress?.progress || 0)}`}
+                  style={{ width: `${Math.min(100, dailyProgress?.progress || 0)}%` }}
                 ></div>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -264,13 +279,13 @@ export default function TimeGoalSetting() {
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium">今週の進捗</span>
                 <span className="text-sm text-gray-500">
-                  {formatSeconds(weeklyProgress.currentSeconds)} / {formatTime(goals.weeklyGoal)}
+                  {formatSeconds(weeklyProgress?.currentSeconds || 0)} / {formatTime(goals?.weeklyGoal || 2400)}
                 </span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                 <div
-                  className={`h-3 rounded-full transition-all duration-500 ${getProgressColor(weeklyProgress.progress)}`}
-                  style={{ width: `${Math.min(100, weeklyProgress.progress)}%` }}
+                  className={`h-3 rounded-full transition-all duration-500 ${getProgressColor(weeklyProgress?.progress || 0)}`}
+                  style={{ width: `${Math.min(100, weeklyProgress?.progress || 0)}%` }}
                 ></div>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -287,7 +302,7 @@ export default function TimeGoalSetting() {
                   日次目標
                 </div>
                 <div className="text-lg font-bold">
-                  {formatTime(goals.dailyGoal)}
+                  {formatTime(goals?.dailyGoal || 480)}
                 </div>
               </div>
               <div>
@@ -295,7 +310,7 @@ export default function TimeGoalSetting() {
                   週次目標
                 </div>
                 <div className="text-lg font-bold">
-                  {formatTime(goals.weeklyGoal)}
+                  {formatTime(goals?.weeklyGoal || 2400)}
                 </div>
               </div>
             </div>

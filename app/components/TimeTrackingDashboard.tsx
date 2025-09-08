@@ -162,13 +162,13 @@ export default function TimeTrackingDashboard() {
               <div className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-4">
                 <div className="text-sm text-purple-600 dark:text-purple-400">一貫性</div>
                 <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">
-                  {analytics.productivity.consistency.toFixed(0)}%
+                  {analytics.productivity?.consistency?.toFixed(0) || '0'}%
                 </div>
               </div>
               <div className="bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-4">
                 <div className="text-sm text-orange-600 dark:text-orange-400">最高の日</div>
                 <div className="text-lg font-bold text-orange-700 dark:text-orange-300">
-                  {analytics.productivity.bestDay || '記録なし'}
+                  {analytics.productivity?.bestDay || '記録なし'}
                 </div>
               </div>
             </div>
@@ -177,19 +177,19 @@ export default function TimeTrackingDashboard() {
             <div>
               <h3 className="text-lg font-semibold mb-4">📈 過去30日間の作業時間</h3>
               <div className="grid grid-cols-7 gap-1 text-xs">
-                {analytics.dailyStats.slice(-21).map((day, index) => {
-                  const maxSeconds = Math.max(...analytics.dailyStats.map(d => d.seconds))
-                  const height = maxSeconds > 0 ? Math.max(4, (day.seconds / maxSeconds) * 60) : 4
+                {(analytics.dailyStats || []).slice(-21).map((day, index) => {
+                  const maxSeconds = Math.max(...(analytics.dailyStats || []).map(d => d?.seconds || 0))
+                  const height = maxSeconds > 0 ? Math.max(4, ((day?.seconds || 0) / maxSeconds) * 60) : 4
                   
                   return (
                     <div key={index} className="flex flex-col items-center">
                       <div 
                         className="w-full bg-purple-200 dark:bg-purple-700 rounded-sm"
                         style={{ height: `${height}px` }}
-                        title={`${day.date}: ${formatTime(day.seconds)}`}
+                        title={`${day?.date || ''}: ${formatTime(day?.seconds || 0)}`}
                       ></div>
                       <span className="mt-1 text-gray-500 dark:text-gray-400">
-                        {new Date(day.date).getDate()}
+                        {day?.date ? new Date(day.date).getDate() : ''}
                       </span>
                     </div>
                   )
@@ -205,12 +205,12 @@ export default function TimeTrackingDashboard() {
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">🏆 作業時間ランキング</h3>
               <div className="text-sm text-gray-500 dark:text-gray-400">
-                {taskStats.workedTasks} / {taskStats.totalTasks} タスク
+                {taskStats?.workedTasks || 0} / {taskStats?.totalTasks || 0} タスク
               </div>
             </div>
             
             <div className="space-y-2">
-              {taskStats.taskStats.map((task, index) => (
+              {(taskStats.taskStats || []).length > 0 ? (taskStats.taskStats || []).map((task, index) => (
                 <div key={task.taskId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="flex items-center space-x-3 flex-1 min-w-0">
                     <div className="flex-shrink-0">
@@ -220,23 +220,29 @@ export default function TimeTrackingDashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        {task.taskTitle}
+                        {task?.taskTitle || 'タイトルなし'}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {task.sessions}セッション • 平均{formatTime(task.avgSessionTime)}
+                        {task?.sessions || 0}セッション • 平均{formatTime(task?.avgSessionTime || 0)}
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-semibold">
-                      {formatTime(task.totalSeconds)}
+                      {formatTime(task?.totalSeconds || 0)}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {task.taskCategory || 'カテゴリなし'}
+                      {task?.taskCategory || 'カテゴリなし'}
                     </div>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className="text-4xl mb-2">⏰</div>
+                  <div>まだ作業時間の記録がありません</div>
+                  <div className="text-sm">タスクの時間追跡を開始してみましょう</div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -247,25 +253,25 @@ export default function TimeTrackingDashboard() {
             <div>
               <h3 className="text-lg font-semibold mb-4">🕐 時間帯別生産性</h3>
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                最も生産的な時間: {formatHour(taskStats.mostProductiveHour.hour)} 
-                ({formatTime(taskStats.mostProductiveHour.seconds)})
+                最も生産的な時間: {formatHour(taskStats.mostProductiveHour?.hour || 9)} 
+                ({formatTime(taskStats.mostProductiveHour?.seconds || 0)})
               </div>
               
               {/* 時間帯バーチャート */}
               <div className="grid grid-cols-12 gap-1 text-xs">
-                {taskStats.hourlyProductivity.map((hourData) => {
-                  const maxSeconds = Math.max(...taskStats.hourlyProductivity.map(h => h.seconds))
-                  const height = maxSeconds > 0 ? Math.max(4, (hourData.seconds / maxSeconds) * 80) : 4
+                {(taskStats.hourlyProductivity || []).map((hourData) => {
+                  const maxSeconds = Math.max(...(taskStats.hourlyProductivity || []).map(h => h?.seconds || 0))
+                  const height = maxSeconds > 0 ? Math.max(4, ((hourData?.seconds || 0) / maxSeconds) * 80) : 4
                   
                   return (
-                    <div key={hourData.hour} className="flex flex-col items-center">
+                    <div key={hourData?.hour || 0} className="flex flex-col items-center">
                       <div 
                         className="w-full bg-gradient-to-t from-purple-400 to-purple-200 dark:from-purple-600 dark:to-purple-400 rounded-sm"
                         style={{ height: `${height}px` }}
-                        title={`${formatHour(hourData.hour)}: ${formatTime(hourData.seconds)}`}
+                        title={`${formatHour(hourData?.hour || 0)}: ${formatTime(hourData?.seconds || 0)}`}
                       ></div>
                       <span className="mt-1 text-gray-500 dark:text-gray-400">
-                        {hourData.hour}
+                        {hourData?.hour || 0}
                       </span>
                     </div>
                   )
