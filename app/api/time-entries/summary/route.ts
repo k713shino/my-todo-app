@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { redis } from '@/lib/redis'
+import { prisma } from '@/lib/prisma'
 
-// MVP: 今日/今週の合計時間（秒）を返す
+// DB版: 今日/今週の合計時間（秒）を返す
 export async function GET(_request: NextRequest) {
   try {
-    console.log('=== TIME SUMMARY API START ===')
+    console.log('=== TIME SUMMARY API START (DB VERSION) ===')
     console.log('Environment check:', {
       NODE_ENV: process.env.NODE_ENV,
       VERCEL: process.env.VERCEL,
-      REDIS_URL: process.env.REDIS_URL ? 'SET' : 'NOT_SET',
-      isUpstash: process.env.REDIS_URL?.includes('upstash.io') || false
+      DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT_SET'
     })
     
     // セッション認証
@@ -24,58 +23,93 @@ export async function GET(_request: NextRequest) {
 
     const userId = session.user.id
     const now = new Date()
-    const dayKey = `time:sum:day:${userId}:${formatDate(now)}`
-    const weekKey = `time:sum:week:${userId}:${formatDate(startOfWeek(now))}`
-    const runningKey = `time:run:${userId}`
+    
+    // 今日の開始時刻（00:00:00）
+    const todayStart = new Date(now)
+    todayStart.setHours(0, 0, 0, 0)
+    
+    // 今週の開始時刻（月曜日の00:00:00）
+    const weekStart = startOfWeek(now)
+    
+    console.log('Time ranges:', { 
+      userId, 
+      todayStart: todayStart.toISOString(), 
+      weekStart: weekStart.toISOString(),
+      now: now.toISOString()
+    })
 
-    console.log('Redis keys:', { dayKey, weekKey, runningKey })
-
-    // Redis接続テスト
     try {
-      const pongResult = await redis.ping()
-      console.log('✅ Redis ping successful, result:', pongResult)
-      console.log('Redis client status:', (redis as any).status || 'unknown')
-      console.log('Redis client type:', redis.constructor.name)
-    } catch (pingError) {
-      console.error('❌ Redis ping failed:', pingError)
-      console.error('Redis client type:', redis.constructor.name)
-      console.error('Is likely mock Redis?', redis.constructor.name !== 'Redis')
-      // Redisが利用できない場合はデフォルト値を返す
-      return NextResponse.json({ todaySeconds: 0, weekSeconds: 0, fallback: true })
-    }
+      // 今日の完了した作業時間を取得
+      const todayCompleted = await prisma.timeEntry.aggregate({
+        where: {
+          userId: userId,
+          startedAt: {
+            gte: todayStart,
+            lt: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000) // 明日の00:00:00まで
+          },
+          endedAt: {
+            not: null
+          }
+        },
+        _sum: {
+          duration: true
+        }
+      })
 
-    // Redisからデータ取得
-    const [dayStr, weekStr, running] = await Promise.all([
-      redis.get(dayKey),
-      redis.get(weekKey),
-      redis.get(runningKey),
-    ])
-    
-    console.log('Redis data:', { dayStr, weekStr, running })
+      // 今週の完了した作業時間を取得
+      const weekCompleted = await prisma.timeEntry.aggregate({
+        where: {
+          userId: userId,
+          startedAt: {
+            gte: weekStart
+          },
+          endedAt: {
+            not: null
+          }
+        },
+        _sum: {
+          duration: true
+        }
+      })
 
-    let today = parseInt(dayStr || '0', 10)
-    let week = parseInt(weekStr || '0', 10)
-    
-    // 進行中の計測があれば加算
-    if (running) {
-      try {
-        const { startedAt } = JSON.parse(running)
-        const started = new Date(startedAt)
-        const partial = Math.max(0, Math.floor((now.getTime() - started.getTime())/1000))
-        console.log('Running calculation:', { startedAt, partial })
+      // 現在進行中のタスクがあれば追加
+      const activeEntry = await prisma.timeEntry.findFirst({
+        where: {
+          userId: userId,
+          endedAt: null
+        }
+      })
+
+      let todaySeconds = todayCompleted._sum.duration || 0
+      let weekSeconds = weekCompleted._sum.duration || 0
+
+      if (activeEntry) {
+        const currentSessionDuration = Math.max(0, Math.floor((now.getTime() - activeEntry.startedAt.getTime()) / 1000))
+        console.log('Active session:', {
+          entryId: activeEntry.id,
+          startedAt: activeEntry.startedAt,
+          currentDuration: currentSessionDuration
+        })
+
+        // 今日開始されたセッションの場合、今日の合計に加算
+        if (activeEntry.startedAt >= todayStart) {
+          todaySeconds += currentSessionDuration
+        }
         
-        // 当日・当週に限り、進行中の分を加算（表示用）
-        if (formatDate(started) === formatDate(now)) today += partial
-        if (formatDate(startOfWeek(started)) === formatDate(startOfWeek(now))) week += partial
-      } catch (parseError) {
-        console.error('❌ Failed to parse running data:', parseError)
+        // 今週開始されたセッションの場合、今週の合計に加算
+        if (activeEntry.startedAt >= weekStart) {
+          weekSeconds += currentSessionDuration
+        }
       }
-    }
 
-    const result = { todaySeconds: today, weekSeconds: week }
-    console.log('✅ Summary result:', result)
-    
-    return NextResponse.json(result)
+      const result = { todaySeconds, weekSeconds }
+      console.log('✅ Summary result:', result)
+      
+      return NextResponse.json(result)
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError)
+      return NextResponse.json({ todaySeconds: 0, weekSeconds: 0, error: 'Database error' })
+    }
   } catch (error) {
     console.error('❌ TIME SUMMARY API ERROR:', error)
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
@@ -85,5 +119,11 @@ export async function GET(_request: NextRequest) {
   }
 }
 
-function startOfWeek(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); const day = x.getDay(); const offset = (day + 6) % 7; x.setDate(x.getDate()-offset); return x }
-function formatDate(d: Date) { const y = d.getFullYear(); const m = (d.getMonth()+1).toString().padStart(2,'0'); const dd = d.getDate().toString().padStart(2,'0'); return `${y}-${m}-${dd}` }
+function startOfWeek(d: Date): Date {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  const day = x.getDay() // 0=Sunday
+  const offset = (day + 6) % 7 // Monday start
+  x.setDate(x.getDate() - offset)
+  return x
+}

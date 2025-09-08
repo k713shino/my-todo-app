@@ -26,6 +26,8 @@ model User {
   searchHistory SearchHistory[]
   sessions      Session[]
   todos         Todo[]
+  timeEntries   TimeEntry[]
+  timeGoal      TimeGoal?
 
   @@map("users")
 }
@@ -93,6 +95,9 @@ model Todo {
   externalId     String?
   externalSource String? // 例: 'slack', 'github', 'email'
 
+  // 時間追跡関係
+  timeEntries TimeEntry[]
+
   @@index([userId])
   @@index([status])
   @@index([priority])
@@ -126,6 +131,53 @@ model SearchHistory {
   @@index([userId])
   @@index([timestamp])
   @@map("search_history")
+}
+
+// 時間追跡エントリー
+model TimeEntry {
+  id          String          @id @default(cuid())
+  userId      String
+  todoId      String?         // 関連するタスク（任意）
+  startedAt   DateTime
+  endedAt     DateTime?       // 進行中の場合はnull
+  duration    Int?            // 終了時に計算される秒数
+  description String?         // メモや詳細
+  category    String?         // 作業カテゴリ
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // リレーション
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  todo        Todo?           @relation(fields: [todoId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([todoId])
+  @@index([startedAt])
+  @@index([userId, startedAt])
+  @@index([userId, todoId])
+  @@map("time_entries")
+}
+
+// 時間追跡の目標設定
+model TimeGoal {
+  id              String          @id @default(cuid())
+  userId          String          @unique
+  dailyGoal       Int             @default(480)  // 分単位（デフォルト8時間）
+  weeklyGoal      Int             @default(2400) // 分単位（デフォルト40時間）
+  monthlyGoal     Int             @default(10080) // 分単位（デフォルト168時間）
+  
+  // 通知設定
+  dailyReminder   Boolean         @default(true)
+  progressAlert   Boolean         @default(true)
+  goalAchieved    Boolean         @default(true)
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // リレーション
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("time_goals")
 }
 
 enum Priority {

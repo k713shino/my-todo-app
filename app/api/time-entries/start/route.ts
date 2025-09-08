@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { redis } from '@/lib/redis'
+import { prisma } from '@/lib/prisma'
 
-// MVP: タスクの時間計測を開始
+// DB版: タスクの時間計測を開始
 export async function POST(request: NextRequest) {
   try {
-    console.log('=== TIME START API START ===')
+    console.log('=== TIME START API START (DB VERSION) ===')
     console.log('Environment:', {
       NODE_ENV: process.env.NODE_ENV,
       VERCEL: process.env.VERCEL,
-      REDIS_URL: process.env.REDIS_URL ? 'SET' : 'NOT_SET',
-      isRedisUpstash: process.env.REDIS_URL?.includes('upstash.io') || false
+      DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT_SET'
     })
     
     // セッション認証
@@ -31,121 +30,52 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = session.user.id
-    const runningKey = `time:run:${userId}`
+    console.log('Starting time tracking:', { userId, todoId })
 
-    console.log('Keys:', { userId, runningKey })
-
-    // Redis接続テスト
     try {
-      const pongResult = await redis.ping()
-      console.log('✅ Redis ping successful, result:', pongResult)
-      console.log('Redis client status:', (redis as any).status || 'unknown')
-      console.log('Redis client type:', redis.constructor.name)
-    } catch (pingError) {
-      console.error('❌ Redis ping failed:', pingError)
-      console.error('Redis client type:', redis.constructor.name)
-      console.error('Is mock Redis?', !process.env.REDIS_URL?.includes('upstash.io'))
-      // Redisが利用できない場合でも成功として返す（ローカルストレージで管理）
-      return NextResponse.json({ success: true, fallback: true })
-    }
+      // 既に進行中のタスクがある場合は停止
+      const activeEntry = await prisma.timeEntry.findFirst({
+        where: {
+          userId: userId,
+          endedAt: null
+        }
+      })
 
-    // 既に走っている計測があれば集計に反映してから上書き（冪等）
-    const prev = await redis.get(runningKey)
-    console.log('Previous running data:', prev)
-    
-    if (prev) {
-      try {
-        const { todoId: prevTodoId, startedAt } = JSON.parse(prev)
-        const started = new Date(startedAt)
-        const now = new Date()
-        const sec = Math.max(0, Math.floor((now.getTime() - started.getTime()) / 1000))
-        console.log('Stopping previous:', { prevTodoId, startedAt, seconds: sec })
+      if (activeEntry) {
+        console.log('Found active entry, stopping:', activeEntry.id)
+        const endedAt = new Date()
+        const duration = Math.max(0, Math.floor((endedAt.getTime() - activeEntry.startedAt.getTime()) / 1000))
         
-        await addToAggregates(userId, started, sec, prevTodoId)
-      } catch (prevError) {
-        console.error('❌ Failed to process previous data:', prevError)
+        await prisma.timeEntry.update({
+          where: { id: activeEntry.id },
+          data: { 
+            endedAt,
+            duration
+          }
+        })
       }
-    }
 
-    // 新規開始を保存
-    const startData = { todoId, startedAt: new Date().toISOString() }
-    await redis.set(runningKey, JSON.stringify(startData))
-    
-    // タスク開始回数をカウント
-    const taskStartKey = `time:task:starts:${userId}:${todoId}`
-    try {
-      await (redis as any).incr(taskStartKey)
-      await redis.expire(taskStartKey, 86400 * 365) // 1年間保持
-    } catch (countError) {
-      console.warn('Task start count failed:', countError)
-    }
-    
-    console.log('✅ Started new tracking:', startData)
+      // 新しい時間追跡を開始
+      const newEntry = await prisma.timeEntry.create({
+        data: {
+          userId: userId,
+          todoId: todoId,
+          startedAt: new Date(),
+          // description and category are optional for now
+        }
+      })
 
-    return NextResponse.json({ success: true })
+      console.log('✅ Started new tracking:', newEntry.id)
+      return NextResponse.json({ success: true, entryId: newEntry.id })
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError)
+      return NextResponse.json({ error: 'Failed to start time tracking' }, { status: 500 })
+    }
   } catch (error) {
     console.error('❌ TIME START API ERROR:', error)
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
     
-    // 緊急フォールバック - 成功として返す（クライアント側で処理）
-    return NextResponse.json({ success: true, fallback: true })
+    // エラー時のフォールバック
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-}
-
-// ユーザー集計（Redis）: 日/週に加算
-async function addToAggregates(userId: string, startedAt: Date, seconds: number, todoId?: string) {
-  try {
-    const dayKey = (d: Date) => `time:sum:day:${userId}:${formatDate(d)}`
-    const weekKey = (d: Date) => `time:sum:week:${userId}:${formatDate(startOfWeek(d))}`
-    
-    // 日次・週次集計
-    try {
-      await (redis as any).incrby(dayKey(startedAt), seconds)
-      await (redis as any).incrby(weekKey(startedAt), seconds)
-    } catch (incrbyError) {
-      // incrbyが失敗した場合はget/setにフォールバック
-      const curDay = parseInt((await redis.get(dayKey(startedAt))) || '0', 10)
-      await redis.set(dayKey(startedAt), String(curDay + seconds))
-      const curWeek = parseInt((await redis.get(weekKey(startedAt))) || '0', 10)
-      await redis.set(weekKey(startedAt), String(curWeek + seconds))
-    }
-    
-    // タスク別時間集計
-    if (todoId && seconds > 0) {
-      const taskTimeKey = `time:task:total:${userId}:${todoId}`
-      try {
-        await (redis as any).incrby(taskTimeKey, seconds)
-        await redis.expire(taskTimeKey, 86400 * 365) // 1年間保持
-      } catch (taskError) {
-        console.warn('Task time aggregation failed:', taskError)
-      }
-      
-      // 時間帯別統計（生産性分析用）
-      const hour = startedAt.getHours()
-      const hourKey = `time:hour:${userId}:${hour}`
-      try {
-        await (redis as any).incrby(hourKey, seconds)
-        await redis.expire(hourKey, 86400 * 90) // 90日間保持
-      } catch (hourError) {
-        console.warn('Hourly stats failed:', hourError)
-      }
-    }
-  } catch (error) {
-    console.error('addToAggregates error:', error)
-  }
-}
-
-function startOfWeek(d: Date) {
-  const x = new Date(d)
-  x.setHours(0,0,0,0)
-  const day = x.getDay() // 0=Sun
-  const offset = (day + 6) % 7 // Monday start
-  x.setDate(x.getDate() - offset)
-  return x
-}
-function formatDate(d: Date) {
-  const y = d.getFullYear()
-  const m = (d.getMonth()+1).toString().padStart(2,'0')
-  const dd = d.getDate().toString().padStart(2,'0')
-  return `${y}-${m}-${dd}`
 }

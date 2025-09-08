@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { redis } from '@/lib/redis'
+import { prisma } from '@/lib/prisma'
 
-// 時間追跡の詳細分析データを返す
+// DB版: 時間追跡の詳細分析データを返す
 export async function GET(request: NextRequest) {
   try {
-    console.log('=== TIME ANALYTICS API START ===')
+    console.log('=== TIME ANALYTICS API START (DB VERSION) ===')
     
     const session = await getAuthSession()
     if (!isAuthenticated(session)) {
@@ -13,83 +13,144 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const days = parseInt(searchParams.get('days') || '30', 10) // デフォルト30日
+    const days = parseInt(searchParams.get('days') || '30', 10)
     const userId = session.user.id
 
-    // Redis接続テスト
+    console.log('Analytics request:', { userId, days })
+
     try {
-      await redis.ping()
-    } catch (pingError) {
-      console.error('❌ Redis ping failed:', pingError)
+      const now = new Date()
+      const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+
+      // 過去N日間の時間エントリーを取得
+      const timeEntries = await prisma.timeEntry.findMany({
+        where: {
+          userId: userId,
+          startedAt: {
+            gte: startDate
+          },
+          endedAt: {
+            not: null
+          },
+          duration: {
+            not: null
+          }
+        },
+        include: {
+          todo: {
+            select: {
+              title: true,
+              category: true
+            }
+          }
+        },
+        orderBy: {
+          startedAt: 'desc'
+        }
+      })
+
+      console.log(`Found ${timeEntries.length} time entries`)
+
+      // 日次統計を計算
+      const dailyStats: Array<{ date: string; seconds: number }> = []
+      const dailyMap = new Map<string, number>()
+
+      timeEntries.forEach(entry => {
+        if (!entry.duration) return
+        const date = entry.startedAt.toISOString().split('T')[0]
+        dailyMap.set(date, (dailyMap.get(date) || 0) + entry.duration)
+      })
+
+      // 過去N日分の配列を作成（0の日も含む）
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+        const dateStr = date.toISOString().split('T')[0]
+        dailyStats.push({
+          date: dateStr,
+          seconds: dailyMap.get(dateStr) || 0
+        })
+      }
+
+      // タスク別統計
+      const taskMap = new Map<string, { title: string; totalSeconds: number; sessions: number }>()
+      timeEntries.forEach(entry => {
+        if (!entry.duration || !entry.todoId) return
+        const taskId = entry.todoId
+        const existing = taskMap.get(taskId) || { 
+          title: entry.todo?.title || 'Unknown Task', 
+          totalSeconds: 0, 
+          sessions: 0 
+        }
+        existing.totalSeconds += entry.duration
+        existing.sessions += 1
+        taskMap.set(taskId, existing)
+      })
+
+      const taskStats = Array.from(taskMap.entries()).map(([taskId, data]) => ({
+        taskId,
+        taskTitle: data.title,
+        taskStatus: 'unknown',
+        taskCategory: 'unknown',
+        totalSeconds: data.totalSeconds,
+        sessions: data.sessions,
+        avgSessionTime: Math.floor(data.totalSeconds / data.sessions),
+        efficiency: data.totalSeconds / data.sessions
+      })).sort((a, b) => b.totalSeconds - a.totalSeconds).slice(0, 10)
+
+      // 基本統計
+      const totalSeconds = timeEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0)
+      const weeklyAverage = Math.floor(totalSeconds / Math.min(days / 7, 1))
+
+      // 生産性分析
+      const nonZeroDays = dailyStats.filter(d => d.seconds > 0)
+      const bestDay = nonZeroDays.length > 0 
+        ? nonZeroDays.reduce((a, b) => a.seconds > b.seconds ? a : b).date 
+        : ''
+      const worstDay = nonZeroDays.length > 0 
+        ? nonZeroDays.reduce((a, b) => a.seconds < b.seconds ? a : b).date 
+        : ''
+
+      // 一貫性計算（標準偏差ベース）
+      const mean = nonZeroDays.length > 0 
+        ? nonZeroDays.reduce((sum, day) => sum + day.seconds, 0) / nonZeroDays.length 
+        : 0
+      const variance = nonZeroDays.length > 0 
+        ? nonZeroDays.reduce((sum, day) => sum + Math.pow(day.seconds - mean, 2), 0) / nonZeroDays.length 
+        : 0
+      const stdDev = Math.sqrt(variance)
+      const consistency = mean > 0 ? Math.max(0, Math.min(100, 100 - (stdDev / mean) * 100)) : 0
+
+      const result = {
+        totalSeconds,
+        dailyStats,
+        taskStats,
+        weeklyAverage,
+        productivity: {
+          bestDay,
+          worstDay,
+          consistency: Math.round(consistency)
+        }
+      }
+
+      console.log('✅ Analytics result:', {
+        totalSeconds: result.totalSeconds,
+        dailyStatsCount: result.dailyStats.length,
+        taskStatsCount: result.taskStats.length,
+        weeklyAverage: result.weeklyAverage
+      })
+
+      return NextResponse.json(result)
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError)
       return NextResponse.json({ 
         totalSeconds: 0, 
         dailyStats: [], 
         taskStats: [],
         weeklyAverage: 0,
-        fallback: true 
+        productivity: { bestDay: '', worstDay: '', consistency: 0 },
+        error: 'Database error'
       })
     }
-
-    const now = new Date()
-    const analytics = {
-      totalSeconds: 0,
-      dailyStats: [] as Array<{ date: string; seconds: number; tasks: string[] }>,
-      taskStats: [] as Array<{ taskId: string; taskTitle: string; totalSeconds: number; sessions: number }>,
-      weeklyAverage: 0,
-      peakHours: [] as Array<{ hour: number; seconds: number }>,
-      productivity: {
-        bestDay: '',
-        worstDay: '',
-        consistency: 0 // 0-100の一貫性スコア
-      }
-    }
-
-    // 過去N日分の日次データを取得
-    const dailyPromises = []
-    for (let i = 0; i < days; i++) {
-      const date = new Date(now)
-      date.setDate(date.getDate() - i)
-      const dayKey = `time:sum:day:${userId}:${formatDate(date)}`
-      dailyPromises.push(
-        redis.get(dayKey).then(seconds => ({
-          date: formatDate(date),
-          seconds: parseInt(seconds || '0', 10),
-          tasks: [] // TODO: 実装時にタスクIDも保存
-        }))
-      )
-    }
-
-    const dailyResults = await Promise.all(dailyPromises)
-    analytics.dailyStats = dailyResults.reverse() // 古い順に並び替え
-
-    // 合計時間計算
-    analytics.totalSeconds = dailyResults.reduce((sum, day) => sum + day.seconds, 0)
-
-    // 週平均計算
-    analytics.weeklyAverage = Math.floor(analytics.totalSeconds / Math.max(days / 7, 1))
-
-    // 生産性分析
-    const sortedDays = [...dailyResults].sort((a, b) => b.seconds - a.seconds)
-    if (sortedDays.length > 0) {
-      analytics.productivity.bestDay = sortedDays[0].date
-      analytics.productivity.worstDay = sortedDays[sortedDays.length - 1].date
-      
-      // 一貫性スコア（標準偏差ベース）
-      if (dailyResults.length > 1) {
-        const mean = analytics.totalSeconds / dailyResults.length
-        const variance = dailyResults.reduce((sum, day) => sum + Math.pow(day.seconds - mean, 2), 0) / dailyResults.length
-        const stdDev = Math.sqrt(variance)
-        analytics.productivity.consistency = Math.max(0, Math.min(100, 100 - (stdDev / mean) * 100))
-      }
-    }
-
-    console.log('✅ Analytics result:', {
-      totalSeconds: analytics.totalSeconds,
-      days: dailyResults.length,
-      weeklyAverage: analytics.weeklyAverage
-    })
-
-    return NextResponse.json(analytics)
   } catch (error) {
     console.error('❌ TIME ANALYTICS API ERROR:', error)
     return NextResponse.json({ 
@@ -97,14 +158,8 @@ export async function GET(request: NextRequest) {
       dailyStats: [], 
       taskStats: [],
       weeklyAverage: 0,
-      error: 'Analytics unavailable' 
+      productivity: { bestDay: '', worstDay: '', consistency: 0 },
+      error: 'Internal server error'
     })
   }
-}
-
-function formatDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = (d.getMonth() + 1).toString().padStart(2, '0')
-  const dd = d.getDate().toString().padStart(2, '0')
-  return `${y}-${m}-${dd}`
 }

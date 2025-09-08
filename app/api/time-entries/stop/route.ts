@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { redis } from '@/lib/redis'
+import { prisma } from '@/lib/prisma'
 
-// MVP: 時間計測の停止
-export async function POST(_request: NextRequest) {
+// DB版: 時間計測を停止
+export async function POST(request: NextRequest) {
   try {
-    console.log('=== TIME STOP API START ===')
+    console.log('=== TIME STOP API START (DB VERSION) ===')
+    console.log('Environment:', {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL: process.env.VERCEL,
+      DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT_SET'
+    })
     
     // セッション認証
     const session = await getAuthSession()
@@ -17,93 +22,73 @@ export async function POST(_request: NextRequest) {
     }
 
     const userId = session.user.id
-    const runningKey = `time:run:${userId}`
-    
-    console.log('Keys:', { userId, runningKey })
-
-    // Redis接続テスト
-    try {
-      await redis.ping()
-      console.log('✅ Redis ping successful')
-    } catch (pingError) {
-      console.error('❌ Redis ping failed:', pingError)
-      // Redisが利用できない場合でも成功として返す
-      return NextResponse.json({ success: true, stopped: false, fallback: true })
-    }
-
-    const prev = await redis.get(runningKey)
-    console.log('Previous running data:', prev)
-    
-    if (!prev) {
-      console.log('ℹ️ No running timer found')
-      return NextResponse.json({ success: true, stopped: false })
-    }
+    console.log('Stopping time tracking for user:', userId)
 
     try {
-      const { todoId, startedAt } = JSON.parse(prev)
-      const started = new Date(startedAt)
-      const now = new Date()
-      const sec = Math.max(0, Math.floor((now.getTime() - started.getTime()) / 1000))
-      console.log('Stopping timer:', { todoId, startedAt, seconds: sec })
-      
-      await addToAggregates(userId, started, sec, todoId)
-    } catch (parseError) {
-      console.error('❌ Failed to process stop data:', parseError)
-    }
+      // 進行中のタスクを検索
+      const activeEntry = await prisma.timeEntry.findFirst({
+        where: {
+          userId: userId,
+          endedAt: null
+        },
+        include: {
+          todo: {
+            select: {
+              title: true
+            }
+          }
+        }
+      })
 
-    await redis.del(runningKey)
-    console.log('✅ Timer stopped and cleared')
-    
-    return NextResponse.json({ success: true, stopped: true })
+      if (!activeEntry) {
+        console.log('❌ No active time tracking found')
+        return NextResponse.json({ success: true, stopped: false, message: 'No active time tracking found' })
+      }
+
+      // 終了時刻と継続時間を計算
+      const endedAt = new Date()
+      const duration = Math.max(0, Math.floor((endedAt.getTime() - activeEntry.startedAt.getTime()) / 1000))
+
+      // TimeEntryを更新
+      const updatedEntry = await prisma.timeEntry.update({
+        where: { id: activeEntry.id },
+        data: { 
+          endedAt,
+          duration
+        },
+        include: {
+          todo: {
+            select: {
+              title: true
+            }
+          }
+        }
+      })
+
+      console.log('✅ Stopped time tracking:', {
+        entryId: updatedEntry.id,
+        todoTitle: updatedEntry.todo?.title,
+        duration: duration,
+        durationMinutes: Math.floor(duration / 60)
+      })
+
+      return NextResponse.json({ 
+        success: true, 
+        stopped: true,
+        entryId: updatedEntry.id,
+        duration: duration,
+        durationMinutes: Math.floor(duration / 60),
+        todoTitle: updatedEntry.todo?.title
+      })
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError)
+      return NextResponse.json({ error: 'Failed to stop time tracking' }, { status: 500 })
+    }
   } catch (error) {
     console.error('❌ TIME STOP API ERROR:', error)
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
     
-    // 緊急フォールバック - 成功として返す
-    return NextResponse.json({ success: true, stopped: true, fallback: true })
+    // エラー時のフォールバック
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-
-async function addToAggregates(userId: string, startedAt: Date, seconds: number, todoId?: string) {
-  try {
-    const dayKey = (d: Date) => `time:sum:day:${userId}:${formatDate(d)}`
-    const weekKey = (d: Date) => `time:sum:week:${userId}:${formatDate(startOfWeek(d))}`
-    
-    // 日次・週次集計
-    try {
-      await (redis as any).incrby(dayKey(startedAt), seconds)
-      await (redis as any).incrby(weekKey(startedAt), seconds)
-    } catch (incrbyError) {
-      // incrbyが失敗した場合はget/setにフォールバック
-      const curDay = parseInt((await redis.get(dayKey(startedAt))) || '0', 10)
-      await redis.set(dayKey(startedAt), String(curDay + seconds))
-      const curWeek = parseInt((await redis.get(weekKey(startedAt))) || '0', 10)
-      await redis.set(weekKey(startedAt), String(curWeek + seconds))
-    }
-    
-    // タスク別時間集計
-    if (todoId && seconds > 0) {
-      const taskTimeKey = `time:task:total:${userId}:${todoId}`
-      try {
-        await (redis as any).incrby(taskTimeKey, seconds)
-        await redis.expire(taskTimeKey, 86400 * 365) // 1年間保持
-      } catch (taskError) {
-        console.warn('Task time aggregation failed:', taskError)
-      }
-      
-      // 時間帯別統計（生産性分析用）
-      const hour = startedAt.getHours()
-      const hourKey = `time:hour:${userId}:${hour}`
-      try {
-        await (redis as any).incrby(hourKey, seconds)
-        await redis.expire(hourKey, 86400 * 90) // 90日間保持
-      } catch (hourError) {
-        console.warn('Hourly stats failed:', hourError)
-      }
-    }
-  } catch (error) {
-    console.error('addToAggregates error:', error)
-  }
-}
-function startOfWeek(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); const day = x.getDay(); const offset = (day + 6) % 7; x.setDate(x.getDate()-offset); return x }
-function formatDate(d: Date) { const y = d.getFullYear(); const m = (d.getMonth()+1).toString().padStart(2,'0'); const dd = d.getDate().toString().padStart(2,'0'); return `${y}-${m}-${dd}` }
