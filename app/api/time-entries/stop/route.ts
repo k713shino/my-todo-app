@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { prisma } from '@/lib/prisma'
 
-// DB版: 時間計測を停止
-export async function POST(request: NextRequest) {
+// Lambda プロキシ版: 時間計測を停止
+export async function POST(_request: NextRequest) {
   try {
-    console.log('=== TIME STOP API START (DB VERSION) ===')
+    console.log('=== TIME STOP API PROXY (LAMBDA) ===')
     console.log('Environment:', {
       NODE_ENV: process.env.NODE_ENV,
       VERCEL: process.env.VERCEL,
-      DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT_SET'
+      LAMBDA_API_URL: process.env.LAMBDA_API_URL ? 'SET' : 'NOT_SET'
     })
     
     // セッション認証
@@ -22,70 +21,50 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = session.user.id
-    console.log('Stopping time tracking for user:', userId)
+    const lambdaApiUrl = process.env.LAMBDA_API_URL
+
+    if (!lambdaApiUrl) {
+      console.error('❌ LAMBDA_API_URL not configured')
+      return NextResponse.json({ error: 'Service configuration error' }, { status: 503 })
+    }
 
     try {
-      // 進行中のタスクを検索
-      const activeEntry = await prisma.timeEntry.findFirst({
-        where: {
-          userId: userId,
-          endedAt: null
+      console.log('🚀 Calling Lambda API for time tracking stop')
+      
+      const response = await fetch(`${lambdaApiUrl}/time-entries/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         },
-        include: {
-          todo: {
-            select: {
-              title: true
-            }
-          }
-        }
+        body: JSON.stringify({
+          userId
+        })
       })
 
-      if (!activeEntry) {
-        console.log('❌ No active time tracking found')
-        return NextResponse.json({ success: true, stopped: false, message: 'No active time tracking found' })
+      console.log('Lambda response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Lambda API error:', response.status, errorText)
+        return NextResponse.json({ 
+          error: 'Failed to stop time tracking',
+          details: `Lambda API returned ${response.status}`
+        }, { status: response.status })
       }
 
-      // 終了時刻と継続時間を計算
-      const endedAt = new Date()
-      const duration = Math.max(0, Math.floor((endedAt.getTime() - activeEntry.startedAt.getTime()) / 1000))
+      const result = await response.json()
+      console.log('✅ Lambda API response:', result)
 
-      // TimeEntryを更新
-      const updatedEntry = await prisma.timeEntry.update({
-        where: { id: activeEntry.id },
-        data: { 
-          endedAt,
-          duration
-        },
-        include: {
-          todo: {
-            select: {
-              title: true
-            }
-          }
-        }
-      })
-
-      console.log('✅ Stopped time tracking:', {
-        entryId: updatedEntry.id,
-        todoTitle: updatedEntry.todo?.title,
-        duration: duration,
-        durationMinutes: Math.floor(duration / 60)
-      })
-
+      return NextResponse.json(result)
+    } catch (fetchError) {
+      console.error('❌ Lambda API fetch error:', fetchError)
       return NextResponse.json({ 
-        success: true, 
-        stopped: true,
-        entryId: updatedEntry.id,
-        duration: duration,
-        durationMinutes: Math.floor(duration / 60),
-        todoTitle: updatedEntry.todo?.title
-      })
-    } catch (dbError) {
-      console.error('❌ Database error:', dbError)
-      return NextResponse.json({ error: 'Failed to stop time tracking' }, { status: 500 })
+        error: 'Failed to connect to time tracking service',
+        details: fetchError instanceof Error ? fetchError.message : 'Unknown fetch error'
+      }, { status: 503 })
     }
   } catch (error) {
-    console.error('❌ TIME STOP API ERROR:', error)
+    console.error('❌ TIME STOP API PROXY ERROR:', error)
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
     
     // エラー時のフォールバック
