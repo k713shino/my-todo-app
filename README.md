@@ -126,32 +126,13 @@ REDIS_COMMAND_TIMEOUT_MS=7000
 ---
 
 ## スクリーンショット
-以下のパスに画像を配置すると、このREADMEに自動で表示されます。
-
-```
-docs/screenshots/
-  ├─ dashboard-tasks.png        # タスクタブ(右カラムに時間サマリ/インジケータ)
-  ├─ dashboard-time.png         # 時間タブ(時間ダッシュボード + 要約)
-  └─ auth-signin.png            # サインイン画面
-```
-
-表示例:
-
+ダークモードのみ掲載
 ![Tasks](docs/screenshots/dashboard-tasks.png)
-
+タスクモード
 ![Time](docs/screenshots/dashboard-time.png)
-
+時間モード
 ![Signin](docs/screenshots/auth-signin.png)
-
-撮影の目安
-- 画面幅 1280px 以上でブラウザのUIを含めない(ページのみ)
-- ダッシュボードは右上の時間インジケータが見える状態
-- ダーク/ライト両テーマがあれば1枚ずつ
-
-各OSでの撮影ショートカット(例)
-- macOS: `Shift + Cmd + 4` → スペースでウィンドウ指定
-- Windows: `Win + Shift + S` (切り取り & スケッチ)
-- Linux(Gnome): `Print` / `Shift + Print` / `Alt + Print`
+サインイン画面
 
 ---
 
