@@ -13,6 +13,20 @@ import { useMemo } from 'react'
 export default function Dashboard() {
   const { data: session, status } = useSession()
   
+  // タイムゾーン選択（サマリ用）
+  const [timeZone, setTimeZone] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('time:tz')
+      if (saved) return saved
+    } catch {}
+    // ブラウザの推奨タイムゾーンがAsia/Tokyoならそれを既定に
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (tz === 'Asia/Tokyo') return 'Asia/Tokyo'
+    } catch {}
+    return 'UTC'
+  })
+  
   // モーダルからの検索値を管理する状態
   const [modalSearchValues, setModalSearchValues] = useState({
     keyword: '',
@@ -56,7 +70,7 @@ export default function Dashboard() {
     const fetchSummary = async () => {
       try {
         console.log('🕒 時間サマリ取得開始')
-        const res = await fetch('/api/time-entries/summary')
+        const res = await fetch(`/api/time-entries/summary${timeZone ? `?tz=${encodeURIComponent(timeZone)}` : ''}`)
         console.log('🕒 時間サマリAPI応答:', res.status, res.statusText)
         
         if (!res.ok) {
@@ -83,7 +97,7 @@ export default function Dashboard() {
       clearInterval(id)
       if (typeof window !== 'undefined') window.removeEventListener('todo:changed', onChanged)
     }
-  }, [])
+  }, [timeZone])
 
   const formatHM = (sec: number) => {
     const h = Math.floor(sec / 3600)
@@ -149,8 +163,19 @@ export default function Dashboard() {
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
                       ⏱️ 時間追跡サマリ
                     </h3>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={timeZone}
+                        onChange={(e) => { setTimeZone(e.target.value); try { localStorage.setItem('time:tz', e.target.value) } catch {} }}
+                        className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+                        title="タイムゾーンを選択"
+                      >
+                        <option value="UTC">UTC</option>
+                        <option value="Asia/Tokyo">Asia/Tokyo</option>
+                      </select>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', timeZone: timeZone as any })}
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">

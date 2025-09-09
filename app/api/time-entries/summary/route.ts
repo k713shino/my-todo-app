@@ -3,7 +3,7 @@ import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 
 // Lambda プロキシ版: 今日/今週の合計時間（秒）を返す
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     console.log('=== TIME SUMMARY API PROXY (LAMBDA) ===')
     console.log('Environment check:', {
@@ -34,11 +34,13 @@ export async function GET(_request: NextRequest) {
     }
 
     try {
+      const { searchParams } = new URL(request.url)
+      const tz = (searchParams.get('tz') || '').trim() || undefined
       console.log('🚀 Calling Lambda API for time summary')
-      console.log('🔍 Lambda API URL:', `${lambdaApiUrl}/time-entries/summary?userId=${encodeURIComponent(actualUserId)}`)
+      console.log('🔍 Lambda API URL:', `${lambdaApiUrl}/time-entries/summary?userId=${encodeURIComponent(actualUserId)}${tz ? `&tz=${encodeURIComponent(tz)}` : ''}`)
       console.log('👤 User ID:', actualUserId)
       
-      const response = await fetch(`${lambdaApiUrl}/time-entries/summary?userId=${encodeURIComponent(actualUserId)}`, {
+      const response = await fetch(`${lambdaApiUrl}/time-entries/summary?userId=${encodeURIComponent(actualUserId)}${tz ? `&tz=${encodeURIComponent(tz)}` : ''}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
