@@ -1,112 +1,159 @@
-# Todo管理システム
+# My Todo App – Next.js + Prisma + Redis + Lambda
 
-現代的な技術スタックで構築された個人用Todoリストアプリケーション
+フルスタックのTodoアプリケーションです。Next.js(App Router)をベースに、認証/タスク管理/時間計測ダッシュボードを備えています。時間計測・集計は AWS Lambda(API Gateway) を経由し、アプリ側ではプロキシAPIを提供します。Redis はキャッシュや目標/統計の補助に使用します。
 
-## 機能概要
+## 主な機能
+- 🔐 認証(NextAuth)とプロフィール管理
+- ✅ Todo管理(優先度/カテゴリ/タグ/サブタスク/期限)
+- ⏱ 時間計測(開始/停止)と分析/ランキング/目標(今日/週)
+- 🧭 ダッシュボードのタブ切替(タスク/時間) + 右カラムの要約/ライブインジケータ
+- 📤 データエクスポート(JSON/CSV) / 保存済み検索 / 検索履歴
 
-- 🔐 **セキュアな認証**: GitHub OAuth による安全なログイン
-- 📊 **優先度管理**: 4段階の優先度設定
-- 📅 **期限管理**: 日時指定とアラート機能
-- 🔍 **検索・フィルター**: 効率的なタスク検索
-- 📱 **レスポンシブデザイン**: 全デバイス対応
-- ⚡ **リアルタイム更新**: 即座にデータ反映
-- 🐳 **Docker対応**: 統一された開発環境
-- 🚀 **キャッシュ処理**: Redisによる高速なデータアクセス
+## 技術スタック
+- Frontend: Next.js 15(App Router), React 19, Tailwind CSS
+- API/Server: Next.js Route Handlers(一部 Lambda へプロキシ), Prisma ORM
+- DB: PostgreSQL
+- Cache/PubSub: Redis(ioredis)
+- External: AWS API Gateway + Lambda(時間追跡・集計)
 
-## 技術仕様
-
-- **フロントエンド**: Next.js 15 + TypeScript + Tailwind CSS
-- **バックエンド**: Next.js API Routes
-- **データベース**: PostgreSQL + Prisma ORM
-- **キャッシュ/セッション管理**: Redis
-- **認証**: NextAuth.js + GitHub OAuth
-- **コンテナ化**: Docker + Docker Compose
-- **デプロイ**: Vercel
-
-## セットアップ手順
-
-### 前提条件
-
-- Windows 10/11 + WSL2
-- Docker Desktop
-- Node.js 20+
-- Redis（Docker経由で起動可）
-- Git
-
-### インストール
-
-1. **リポジトリクローン**
-   ```bash
-   git clone https://github.com/k713shino/my-todo-app.git
-   cd my-todo-app
-   ```
-
-2. **依存関係インストール**
-   ```bash
-   npm install
-   ```
-
-3. **Redisのセットアップ**
-   - Docker経由でRedisを起動する場合:
-     ```bash
-     docker run --name my-redis -p 6379:6379 -d redis
-     ```
-
-4. **環境変数設定**
-   ```bash
-   cp .env.example .env.local
-   # .env.localを編集して必要な値を設定
-   ```
-   Redis関連の環境変数例:
-   ```
-   REDIS_HOST=localhost
-   REDIS_PORT=6379
-   ```
-
-5. **開発環境起動**
-   ```bash
-   ./start-dev.sh
-   ```
-
-6. **ブラウザでアクセス**
-   ```
-   http://localhost:3000
-   ```
-
-## API仕様
-
-- `GET /api/todos` - Todo一覧取得
-- `POST /api/todos` - Todo作成
-- `PUT /api/todos/[id]` - Todo更新
-- `DELETE /api/todos/[id]` - Todo削除
-- `GET /api/health` - ヘルスチェック
-
-## データベーススキーマ
-
-```prisma
-model User {
-  id       String @id @default(cuid())
-  name     String?
-  email    String @unique
-  todos    Todo[]
-}
-
-model Todo {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  completed   Boolean  @default(false)
-  priority    Priority @default(MEDIUM)
-  dueDate     DateTime?
-  user        User     @relation(fields: [userId], references: [id])
-}
-```
-
-## Redisの利用例
-
-- セッション管理やタスク一覧のキャッシュ処理にRedisを活用しています。
-- Redisの設定は`.env.local`で行い、必要に応じて`REDIS_HOST`や`REDIS_PORT`を変更してください。
+## ディレクトリ
+- `app/` … 画面/Route Handlers(API)
+- `lib/` … Prisma/Redis/認証/ユーティリティ
+- `lambda-js/` … Lambda ハンドラー(index.js)
+- `prisma/` … Prisma スキーマ(schema.prisma)
+- `docker-compose.yml` … Postgres/Redis/ツール/本番ビルド用app
 
 ---
 
-何か追加情報やご要望があればご連絡ください！
+## クイックセットアップ(推奨)
+前提: Node.js 18+, Docker(任意), Git
+
+1) 依存関係の導入
+```bash
+npm i
+```
+
+2) 環境変数を設定
+```bash
+cp .env.example .env.local
+# .env.local を編集して必要値を設定
+# 例: DATABASE_URL, REDIS_URL, LAMBDA_API_URL, NEXTAUTH_SECRET, NEXTAUTH_URL
+```
+
+3) ローカルDB/Redisを起動(任意)
+```bash
+docker-compose up -d postgres redis
+```
+
+4) DBスキーマを反映
+```bash
+npx prisma db push
+```
+
+5) 開発サーバを起動
+```bash
+npm run dev
+# http://localhost:3000
+```
+
+補助スクリプト(一括)
+```bash
+./start-local-dev.sh
+# Postgres/Redis の起動 → Prisma db push → dev 起動
+```
+
+> 時間計測機能/ダッシュボードは `LAMBDA_API_URL` が必須です。未設定のときはサマリ/分析が簡易表示(0など)になります。
+
+---
+
+## Dockerでまとめて実行(本番ビルド相当)
+```bash
+docker-compose up -d
+# app コンテナが next build → next start(3000) を行います
+```
+
+---
+
+## 環境変数(.env.local の例)
+```env
+# DB
+DATABASE_URL=postgresql://todouser:todopass123@localhost:5432/todoapp
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# Lambda(API Gateway)ベースURL
+LAMBDA_API_URL=https://xxxx.execute-api.ap-northeast-1.amazonaws.com/prod
+
+# NextAuth
+NEXTAUTH_SECRET=your-super-secret-key
+NEXTAUTH_URL=http://localhost:3000
+
+# 任意のタイムアウト調整
+LAMBDA_API_TIMEOUT_MS=8000
+REDIS_CONNECT_TIMEOUT_MS=7000
+REDIS_COMMAND_TIMEOUT_MS=7000
+```
+
+---
+
+## よくある質問
+- Q. Lambdaを用意しなくても動きますか?
+  - A. Todoの表示/作成など基本機能は動きますが、時間サマリ/分析などはフォールバック(0や簡易表示)になります。
+- Q. Redisは必須ですか?
+  - A. なくても最低限は動作します(モックへフェイルオーバー)。ただしキャッシュ/統計/UIの一部が劣化します。
+- Q. Prismaは何をしていますか?
+  - A. スキーマ管理と型安全なDBアクセスの基盤で、`lib/prisma.ts` にLambda環境向けの最適化が入っています。
+
+---
+
+## スクリプト
+- `npm run dev` … 開発サーバ
+- `npm run build && npm start` … 本番起動
+- `npm run type-check` … TypeScriptチェック
+- `npx prisma db push` … スキーマ反映
+
+---
+
+## トラブルシューティング
+- 右カラムの時間インジケータが出ない/0のまま:
+  - `LAMBDA_API_URL` の設定/疎通をご確認ください。
+- Redis接続エラーが続く:
+  - `REDIS_URL` が正しいか、ポート(6379)の競合がないか確認。接続不可時は自動的にモックへ切替(ログ参照)。
+- Dockerのポート競合:
+  - 3000, 5432, 6379, 5050(pgAdmin), 8081(Redis Commander) の使用状況を確認。
+
+---
+
+## スクリーンショット
+以下のパスに画像を配置すると、このREADMEに自動で表示されます。
+
+```
+docs/screenshots/
+  ├─ dashboard-tasks.png        # タスクタブ(右カラムに時間サマリ/インジケータ)
+  ├─ dashboard-time.png         # 時間タブ(時間ダッシュボード + 要約)
+  └─ auth-signin.png            # サインイン画面
+```
+
+表示例:
+
+![Tasks](docs/screenshots/dashboard-tasks.png)
+
+![Time](docs/screenshots/dashboard-time.png)
+
+![Signin](docs/screenshots/auth-signin.png)
+
+撮影の目安
+- 画面幅 1280px 以上でブラウザのUIを含めない(ページのみ)
+- ダッシュボードは右上の時間インジケータが見える状態
+- ダーク/ライト両テーマがあれば1枚ずつ
+
+各OSでの撮影ショートカット(例)
+- macOS: `Shift + Cmd + 4` → スペースでウィンドウ指定
+- Windows: `Win + Shift + S` (切り取り & スケッチ)
+- Linux(Gnome): `Print` / `Shift + Print` / `Alt + Print`
+
+---
+
+## ライセンス
+私用/検証目的
