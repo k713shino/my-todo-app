@@ -177,7 +177,7 @@ export default function TimeTrackingDashboard() {
             <div>
               <h3 className="text-lg font-semibold mb-4">📈 過去30日間の作業時間</h3>
               <div className="grid grid-cols-7 gap-1 text-xs">
-                {(analytics.dailyStats || []).slice(-21).map((day, index) => {
+                {(analytics.dailyStats || []).slice(-30).map((day, index) => {
                   const maxSeconds = Math.max(...(analytics.dailyStats || []).map(d => d?.seconds || 0))
                   const height = maxSeconds > 0 ? Math.max(4, ((day?.seconds || 0) / maxSeconds) * 60) : 4
                   

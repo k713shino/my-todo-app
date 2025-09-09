@@ -142,13 +142,8 @@ export default function Dashboard() {
             <div className="mb-6 max-w-4xl mx-auto space-y-4">
               {/* コンパクト統計 */}
               <TodoStatsDisplay stats={stats} variant="compact" showTimestamp={false} />
-              {/* 時間サマリ（MVP） - デバッグ用に常に表示 */}
-              <div className="bg-gradient-to-r from-red-50 to-yellow-50 dark:from-red-900/20 dark:to-yellow-900/20 rounded-lg p-4 border border-red-200 dark:border-red-700 mb-2">
-                <div className="text-sm text-red-600 dark:text-red-400">
-                  🐛 デバッグ: timeSummary = {timeSummary ? JSON.stringify(timeSummary) : 'null/undefined'}
-                </div>
-              </div>
-              {(timeSummary || true) && (
+              {/* 時間サマリ（取得に成功した場合のみ表示） */}
+              {Boolean(timeSummary) && (
                 <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
