@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import TimeGoalSetting from './TimeGoalSetting'
 
@@ -46,6 +46,8 @@ export default function TimeTrackingDashboard() {
   const { data: session } = useSession()
   const [analytics, setAnalytics] = useState<TimeAnalytics | null>(null)
   const [taskStats, setTaskStats] = useState<TaskTimeStats | null>(null)
+  const [summary, setSummary] = useState<{ todaySeconds: number; weekSeconds: number } | null>(null)
+  const [runningTodoId, setRunningTodoId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'productivity' | 'goals'>('overview')
   const [loading, setLoading] = useState(true)
 
@@ -56,9 +58,10 @@ export default function TimeTrackingDashboard() {
     const fetchData = async () => {
       setLoading(true)
       try {
-        const [analyticsRes, taskStatsRes] = await Promise.all([
+        const [analyticsRes, taskStatsRes, summaryRes] = await Promise.all([
           fetch('/api/time-entries/analytics?days=30'),
-          fetch('/api/time-entries/tasks?limit=10&sortBy=totalTime')
+          fetch('/api/time-entries/tasks?limit=10&sortBy=totalTime'),
+          fetch('/api/time-entries/summary')
         ])
 
         if (analyticsRes.ok) {
@@ -70,6 +73,11 @@ export default function TimeTrackingDashboard() {
           const taskStatsData = await taskStatsRes.json()
           setTaskStats(taskStatsData)
         }
+
+        if (summaryRes.ok) {
+          const summaryData = await summaryRes.json()
+          setSummary(summaryData)
+        }
       } catch (error) {
         console.error('時間追跡データの取得に失敗:', error)
       } finally {
@@ -80,12 +88,19 @@ export default function TimeTrackingDashboard() {
     fetchData()
 
     // 計測開始/停止などのイベントで即時更新
-    const onChanged = () => fetchData()
+    const onChanged = () => {
+      try {
+        const runId = typeof window !== 'undefined' ? localStorage.getItem('time:runningTodoId') : null
+        setRunningTodoId(runId)
+      } catch {}
+      fetchData()
+    }
     const onVisibility = () => { if (!document.hidden) fetchData() }
     if (typeof window !== 'undefined') {
       window.addEventListener('todo:changed', onChanged)
       // タブ復帰時にも更新
       window.addEventListener('visibilitychange', onVisibility)
+      try { setRunningTodoId(localStorage.getItem('time:runningTodoId')) } catch {}
     }
     
     // 更新間隔を短縮（60秒）
@@ -99,17 +114,38 @@ export default function TimeTrackingDashboard() {
     }
   }, [session])
 
-  // タスク統計のフォールバック（analytics に taskStats がある場合に活用）
-  const effectiveTaskStats: TaskTimeStats | null = (() => {
-    if (taskStats && Array.isArray(taskStats.taskStats) && taskStats.taskStats.length > 0) {
-      return taskStats
+  // 概要タブ向け: 進行中分の“見える化”オーバーレイ
+  const overlayedAnalytics = useMemo((): TimeAnalytics | null => {
+    if (!analytics) return null
+    const a = { ...analytics }
+    if (!summary) return a
+    const todayStr = new Date().toISOString().split('T')[0]
+    const endedToday = (a.dailyStats || []).find(d => d.date === todayStr)?.seconds || 0
+    const addSec = Math.max(0, (summary.todaySeconds || 0) - endedToday)
+    if (addSec > 0) {
+      // dailyStats を更新
+      const newDaily = [...(a.dailyStats || [])]
+      const idx = newDaily.findIndex(d => d.date === todayStr)
+      if (idx >= 0) newDaily[idx] = { ...newDaily[idx], seconds: newDaily[idx].seconds + addSec }
+      else newDaily.push({ date: todayStr, seconds: addSec })
+      a.dailyStats = newDaily
+      a.totalSeconds = (a.totalSeconds || 0) + addSec
+      // 週平均は概算のまま維持（必要なら厳密計算に変更可）
     }
-    const a = analytics
+    return a
+  }, [analytics, summary])
+
+  // タスク統計のフォールバック（analytics に taskStats がある場合に活用）
+  const effectiveTaskStats: TaskTimeStats | null = useMemo(() => {
+    const base = (taskStats && Array.isArray(taskStats.taskStats) && taskStats.taskStats.length > 0)
+      ? taskStats
+      : null
+    const a = overlayedAnalytics || analytics
     if (a && Array.isArray(a.taskStats) && a.taskStats.length > 0) {
       const worked = a.taskStats.filter(t => (t?.totalSeconds || 0) > 0)
       const totalWorkTime = worked.reduce((s, t) => s + (t.totalSeconds || 0), 0)
       const totalSessions = worked.reduce((s, t) => s + (t.sessions || 0), 0)
-      return {
+      const overlay: TaskTimeStats = base || {
         taskStats: a.taskStats as any,
         totalTasks: a.taskStats.length,
         workedTasks: worked.length,
@@ -118,9 +154,32 @@ export default function TimeTrackingDashboard() {
         hourlyProductivity: [],
         mostProductiveHour: { hour: 9, seconds: 0 }
       }
+      // 進行中セッションの見える化（今日分の差分を当該タスクに加算）
+      if (runningTodoId && summary) {
+        const todayStr = new Date().toISOString().split('T')[0]
+        const endedToday = (overlayedAnalytics || analytics)?.dailyStats?.find(d => d.date === todayStr)?.seconds || 0
+        const addSec = Math.max(0, (summary.todaySeconds || 0) - endedToday)
+        if (addSec > 0) {
+          const list = [...(overlay.taskStats || [])]
+          const idx = list.findIndex(t => t.taskId === runningTodoId)
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], totalSeconds: (list[idx].totalSeconds || 0) + addSec }
+          }
+          overlay.taskStats = list
+          overlay.totalWorkTime = (overlay.totalWorkTime || 0) + addSec
+          // 時間帯別の概算オーバーレイ（現在時刻に加算）
+          const hour = new Date().getHours()
+          const hp = overlay.hourlyProductivity?.length ? [...overlay.hourlyProductivity] : Array.from({ length: 24 }, (_, h) => ({ hour: h, seconds: 0 }))
+          const hidx = hp.findIndex(h => h.hour === hour)
+          if (hidx >= 0) hp[hidx] = { ...hp[hidx], seconds: (hp[hidx].seconds || 0) + addSec }
+          overlay.hourlyProductivity = hp
+          overlay.mostProductiveHour = hp.reduce((best, cur) => cur.seconds > best.seconds ? cur : best, { hour: 9, seconds: 0 })
+        }
+      }
+      return overlay
     }
-    return null
-  })()
+    return base
+  }, [taskStats, analytics, overlayedAnalytics, runningTodoId, summary])
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600)
@@ -181,32 +240,32 @@ export default function TimeTrackingDashboard() {
 
       <div className="p-6">
         {/* 概要タブ */}
-        {activeTab === 'overview' && analytics && (
+        {activeTab === 'overview' && overlayedAnalytics && (
           <div className="space-y-6">
             {/* KPI カード */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4">
                 <div className="text-sm text-blue-600 dark:text-blue-400">総作業時間</div>
                 <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                  {formatTime(analytics.totalSeconds)}
+                  {formatTime(overlayedAnalytics.totalSeconds)}
                 </div>
               </div>
               <div className="bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-4">
                 <div className="text-sm text-green-600 dark:text-green-400">週平均</div>
                 <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-                  {formatTime(analytics.weeklyAverage)}
+                  {formatTime(overlayedAnalytics.weeklyAverage)}
                 </div>
               </div>
               <div className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-4">
                 <div className="text-sm text-purple-600 dark:text-purple-400">一貫性</div>
                 <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">
-                  {analytics.productivity?.consistency?.toFixed(0) || '0'}%
+                  {overlayedAnalytics.productivity?.consistency?.toFixed(0) || '0'}%
                 </div>
               </div>
               <div className="bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-4">
                 <div className="text-sm text-orange-600 dark:text-orange-400">最高の日</div>
                 <div className="text-lg font-bold text-orange-700 dark:text-orange-300">
-                  {analytics.productivity?.bestDay || '記録なし'}
+                  {overlayedAnalytics.productivity?.bestDay || '記録なし'}
                 </div>
               </div>
             </div>
@@ -215,8 +274,8 @@ export default function TimeTrackingDashboard() {
             <div>
               <h3 className="text-lg font-semibold mb-4">📈 過去30日間の作業時間</h3>
               <div className="grid grid-cols-7 gap-1 text-xs">
-                {(analytics.dailyStats || []).slice(-30).map((day, index) => {
-                  const maxSeconds = Math.max(...(analytics.dailyStats || []).map(d => d?.seconds || 0))
+                {(overlayedAnalytics.dailyStats || []).slice(-30).map((day, index) => {
+                  const maxSeconds = Math.max(...(overlayedAnalytics.dailyStats || []).map(d => d?.seconds || 0))
                   const height = maxSeconds > 0 ? Math.max(4, ((day?.seconds || 0) / maxSeconds) * 60) : 4
                   
                   return (
@@ -286,19 +345,19 @@ export default function TimeTrackingDashboard() {
         )}
 
         {/* 生産性タブ */}
-        {activeTab === 'productivity' && taskStats && (
+        {activeTab === 'productivity' && effectiveTaskStats && (
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold mb-4">🕐 時間帯別生産性</h3>
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                最も生産的な時間: {formatHour(taskStats.mostProductiveHour?.hour || 9)} 
-                ({formatTime(taskStats.mostProductiveHour?.seconds || 0)})
+                最も生産的な時間: {formatHour(effectiveTaskStats.mostProductiveHour?.hour || 9)} 
+                ({formatTime(effectiveTaskStats.mostProductiveHour?.seconds || 0)})
               </div>
               
               {/* 時間帯バーチャート */}
               <div className="grid grid-cols-12 gap-1 text-xs">
-                {(taskStats.hourlyProductivity || []).map((hourData) => {
-                  const maxSeconds = Math.max(...(taskStats.hourlyProductivity || []).map(h => h?.seconds || 0))
+                {(effectiveTaskStats.hourlyProductivity || []).map((hourData) => {
+                  const maxSeconds = Math.max(...(effectiveTaskStats.hourlyProductivity || []).map(h => h?.seconds || 0))
                   const height = maxSeconds > 0 ? Math.max(4, ((hourData?.seconds || 0) / maxSeconds) * 80) : 4
                   
                   return (

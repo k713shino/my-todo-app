@@ -48,11 +48,21 @@ export default function TimeGoalSetting() {
         const goalsRes = await fetch('/api/time-entries/goals')
         if (goalsRes.ok) {
           const goalsData = await goalsRes.json()
-          setGoals(goalsData)
+          // 取得データを正規化（欠損をデフォルトで補完）
+          const normalized: TimeGoals = {
+            dailyGoal: typeof goalsData?.dailyGoal === 'number' ? goalsData.dailyGoal : 480,
+            weeklyGoal: typeof goalsData?.weeklyGoal === 'number' ? goalsData.weeklyGoal : 2400,
+            notifications: {
+              dailyReminder: !!goalsData?.notifications?.dailyReminder,
+              progressAlert: !!goalsData?.notifications?.progressAlert,
+              goalAchieved: !!goalsData?.notifications?.goalAchieved,
+            }
+          }
+          setGoals(normalized)
         }
 
         // プログレス取得
-        const [dailyRes, weeklyRes] = await Promise.all([
+        const [dailyRes, weeklyRes, summaryRes] = await Promise.all([
           fetch('/api/time-entries/goals', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -67,6 +77,10 @@ export default function TimeGoalSetting() {
             body: JSON.stringify({ type: 'weekly' })
           }).catch(error => {
             console.warn('Weekly progress fetch error:', error)
+            return { ok: false }
+          }),
+          fetch('/api/time-entries/summary').catch(error => {
+            console.warn('Summary fetch error:', error)
             return { ok: false }
           })
         ])
@@ -86,6 +100,33 @@ export default function TimeGoalSetting() {
             setWeeklyProgress(weeklyData)
           } catch (jsonError) {
             console.warn('Failed to parse weekly progress:', jsonError)
+          }
+        }
+
+        // フォールバック: summary から進捗を算出
+        if ((!dailyRes?.ok || !weeklyRes?.ok) && summaryRes?.ok) {
+          try {
+            const summary = await summaryRes.json()
+            const dTarget = (goals?.dailyGoal || 480) * 60
+            const wTarget = (goals?.weeklyGoal || 2400) * 60
+            const dCurrent = Math.max(0, summary.todaySeconds || 0)
+            const wCurrent = Math.max(0, summary.weekSeconds || 0)
+            setDailyProgress({
+              progress: dTarget > 0 ? Math.round(Math.min(100, (dCurrent / dTarget) * 100)) : 0,
+              achieved: dCurrent >= dTarget,
+              currentSeconds: dCurrent,
+              targetSeconds: dTarget,
+              remainingSeconds: Math.max(0, dTarget - dCurrent)
+            })
+            setWeeklyProgress({
+              progress: wTarget > 0 ? Math.round(Math.min(100, (wCurrent / wTarget) * 100)) : 0,
+              achieved: wCurrent >= wTarget,
+              currentSeconds: wCurrent,
+              targetSeconds: wTarget,
+              remainingSeconds: Math.max(0, wTarget - wCurrent)
+            })
+          } catch (e) {
+            console.warn('Fallback progress compute failed:', e)
           }
         }
       } catch (error) {
@@ -180,7 +221,7 @@ export default function TimeGoalSetting() {
               min="0.5"
               max="24"
               step="0.5"
-              value={goals.dailyGoal / 60}
+              value={Math.max(0, (goals.dailyGoal || 0) / 60)}
               onChange={(e) =>
                 setGoals({
                   ...goals,
@@ -200,7 +241,7 @@ export default function TimeGoalSetting() {
               min="2"
               max="168"
               step="1"
-              value={goals.weeklyGoal / 60}
+              value={Math.max(0, (goals.weeklyGoal || 0) / 60)}
               onChange={(e) =>
                 setGoals({
                   ...goals,

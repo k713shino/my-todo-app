@@ -23,7 +23,24 @@ export async function GET(request: NextRequest) {
     const actualUserId = extractUserIdFromPrefixed(userId)
     console.log('🔄 User ID mapping for tasks API:', { userId, actualUserId })
 
-    // Redis接続テスト
+    // まずは Lambda の集計APIが使えるなら優先して利用（DB由来の正確な集計）
+    const lambdaApiUrl = process.env.LAMBDA_API_URL
+    if (lambdaApiUrl) {
+      try {
+        const url = `${lambdaApiUrl}/time-entries/tasks?userId=${encodeURIComponent(actualUserId)}&limit=${limit}&sortBy=${encodeURIComponent(sortBy)}`
+        const resp = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
+        if (resp.ok) {
+          const data = await resp.json()
+          console.log('✅ Using Lambda tasks aggregation')
+          return NextResponse.json(data)
+        }
+        console.warn('⚠️ Lambda tasks aggregation returned non-OK:', resp.status)
+      } catch (e) {
+        console.warn('⚠️ Lambda tasks aggregation failed, falling back to Redis logic:', e)
+      }
+    }
+
+    // フォールバック: Redisを用いた簡易集計
     try {
       await redis.ping()
     } catch (pingError) {
