@@ -78,11 +78,49 @@ export default function TimeTrackingDashboard() {
     }
 
     fetchData()
+
+    // 計測開始/停止などのイベントで即時更新
+    const onChanged = () => fetchData()
+    const onVisibility = () => { if (!document.hidden) fetchData() }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('todo:changed', onChanged)
+      // タブ復帰時にも更新
+      window.addEventListener('visibilitychange', onVisibility)
+    }
     
-    // 5分ごとに更新
-    const interval = setInterval(fetchData, 5 * 60 * 1000)
-    return () => clearInterval(interval)
+    // 更新間隔を短縮（60秒）
+    const interval = setInterval(fetchData, 60 * 1000)
+    return () => {
+      clearInterval(interval)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('todo:changed', onChanged)
+        window.removeEventListener('visibilitychange', onVisibility)
+      }
+    }
   }, [session])
+
+  // タスク統計のフォールバック（analytics に taskStats がある場合に活用）
+  const effectiveTaskStats: TaskTimeStats | null = (() => {
+    if (taskStats && Array.isArray(taskStats.taskStats) && taskStats.taskStats.length > 0) {
+      return taskStats
+    }
+    const a = analytics
+    if (a && Array.isArray(a.taskStats) && a.taskStats.length > 0) {
+      const worked = a.taskStats.filter(t => (t?.totalSeconds || 0) > 0)
+      const totalWorkTime = worked.reduce((s, t) => s + (t.totalSeconds || 0), 0)
+      const totalSessions = worked.reduce((s, t) => s + (t.sessions || 0), 0)
+      return {
+        taskStats: a.taskStats as any,
+        totalTasks: a.taskStats.length,
+        workedTasks: worked.length,
+        totalWorkTime,
+        totalSessions,
+        hourlyProductivity: [],
+        mostProductiveHour: { hour: 9, seconds: 0 }
+      }
+    }
+    return null
+  })()
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600)
@@ -200,17 +238,17 @@ export default function TimeTrackingDashboard() {
         )}
 
         {/* タスク別タブ */}
-        {activeTab === 'tasks' && taskStats && (
+        {activeTab === 'tasks' && effectiveTaskStats && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">🏆 作業時間ランキング</h3>
               <div className="text-sm text-gray-500 dark:text-gray-400">
-                {taskStats?.workedTasks || 0} / {taskStats?.totalTasks || 0} タスク
+                {effectiveTaskStats?.workedTasks || 0} / {effectiveTaskStats?.totalTasks || 0} タスク
               </div>
             </div>
             
             <div className="space-y-2">
-              {(taskStats.taskStats || []).length > 0 ? (taskStats.taskStats || []).map((task, index) => (
+              {(effectiveTaskStats.taskStats || []).length > 0 ? (effectiveTaskStats.taskStats || []).map((task, index) => (
                 <div key={task.taskId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="flex items-center space-x-3 flex-1 min-w-0">
                     <div className="flex-shrink-0">
