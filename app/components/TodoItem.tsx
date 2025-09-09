@@ -204,7 +204,17 @@ function TodoItem({
         body: JSON.stringify({ todoId: todo.id })
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      try { localStorage.setItem('time:runningTodoId', String(todo.id)) } catch {}
+      // startedAtを保存（経過タイマーのローカルフォールバック用）
+      try {
+        const data = await res.clone().json().catch(() => null)
+        if (data && data.startedAt) {
+          localStorage.setItem('time:startedAt', String(data.startedAt))
+        }
+      } catch {}
+      try {
+        localStorage.setItem('time:runningTodoId', String(todo.id))
+        if (todo?.title) localStorage.setItem('time:runningTitle', String(todo.title))
+      } catch {}
       setIsTracking(true)
       toast.success('⏱️ 計測を開始しました')
       try { 
@@ -222,7 +232,11 @@ function TodoItem({
     try {
       const res = await fetch('/api/time-entries/stop', { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      try { localStorage.removeItem('time:runningTodoId') } catch {}
+      try { 
+        localStorage.removeItem('time:runningTodoId')
+        localStorage.removeItem('time:startedAt')
+        localStorage.removeItem('time:runningTitle')
+      } catch {}
       setIsTracking(false)
       toast('⏹️ 計測を停止しました')
       try { 
