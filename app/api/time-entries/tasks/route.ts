@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '10', 10)
     const sortBy = searchParams.get('sortBy') || 'totalTime' // totalTime, sessions, efficiency
+    const tz = (searchParams.get('tz') || '').trim() || undefined
     const userId = session.user.id
     
     // OAuth認証ユーザーIDから実際のデータベースユーザーIDを抽出
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     const lambdaApiUrl = process.env.LAMBDA_API_URL
     if (lambdaApiUrl) {
       try {
-        const url = `${lambdaApiUrl}/time-entries/tasks?userId=${encodeURIComponent(actualUserId)}&limit=${limit}&sortBy=${encodeURIComponent(sortBy)}`
+        const url = `${lambdaApiUrl}/time-entries/tasks?userId=${encodeURIComponent(actualUserId)}&limit=${limit}&sortBy=${encodeURIComponent(sortBy)}${tz ? `&tz=${encodeURIComponent(tz)}` : ''}`
         const resp = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
         if (resp.ok) {
           const data = await resp.json()

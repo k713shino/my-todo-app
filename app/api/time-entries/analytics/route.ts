@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const days = parseInt(searchParams.get('days') || '30', 10)
+    const tz = (searchParams.get('tz') || '').trim() || undefined
     const userId = session.user.id
     // OAuth認証ユーザーIDから実際のデータベースユーザーIDを抽出
     const actualUserId = extractUserIdFromPrefixed(userId)
@@ -28,9 +29,9 @@ export async function GET(request: NextRequest) {
 
     try {
       console.log('🚀 Calling Lambda API for time analytics')
-      console.log('🔍 Lambda API URL:', `${lambdaApiUrl}/time-entries/analytics?userId=${encodeURIComponent(actualUserId)}&days=${days}`)
+      console.log('🔍 Lambda API URL:', `${lambdaApiUrl}/time-entries/analytics?userId=${encodeURIComponent(actualUserId)}&days=${days}${tz ? `&tz=${encodeURIComponent(tz)}` : ''}`)
       
-      const response = await fetch(`${lambdaApiUrl}/time-entries/analytics?userId=${encodeURIComponent(actualUserId)}&days=${days}`, {
+      const response = await fetch(`${lambdaApiUrl}/time-entries/analytics?userId=${encodeURIComponent(actualUserId)}&days=${days}${tz ? `&tz=${encodeURIComponent(tz)}` : ''}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'

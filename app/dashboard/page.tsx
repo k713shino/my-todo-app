@@ -166,7 +166,13 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2">
                       <select
                         value={timeZone}
-                        onChange={(e) => { setTimeZone(e.target.value); try { localStorage.setItem('time:tz', e.target.value) } catch {} }}
+                        onChange={(e) => { 
+                          setTimeZone(e.target.value); 
+                          try { 
+                            localStorage.setItem('time:tz', e.target.value);
+                            if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('time:tz-changed', { detail: e.target.value }))
+                          } catch {}
+                        }}
                         className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
                         title="タイムゾーンを選択"
                       >

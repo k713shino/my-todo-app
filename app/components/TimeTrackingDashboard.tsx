@@ -48,6 +48,13 @@ export default function TimeTrackingDashboard() {
   const [taskStats, setTaskStats] = useState<TaskTimeStats | null>(null)
   const [summary, setSummary] = useState<{ todaySeconds: number; weekSeconds: number } | null>(null)
   const [runningTodoId, setRunningTodoId] = useState<string | null>(null)
+  const [timeZone, setTimeZone] = useState<string>(() => {
+    try {
+      return localStorage.getItem('time:tz') || 'UTC'
+    } catch {
+      return 'UTC'
+    }
+  })
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'productivity' | 'goals'>('overview')
   const [loading, setLoading] = useState(true)
 
@@ -58,10 +65,12 @@ export default function TimeTrackingDashboard() {
     const fetchData = async () => {
       setLoading(true)
       try {
+        const tzQ = timeZone ? `&tz=${encodeURIComponent(timeZone)}` : ''
+        const tzQ2 = timeZone ? `?tz=${encodeURIComponent(timeZone)}` : ''
         const [analyticsRes, taskStatsRes, summaryRes] = await Promise.all([
-          fetch('/api/time-entries/analytics?days=30'),
-          fetch('/api/time-entries/tasks?limit=10&sortBy=totalTime'),
-          fetch('/api/time-entries/summary')
+          fetch(`/api/time-entries/analytics?days=30${tzQ}`),
+          fetch(`/api/time-entries/tasks?limit=10&sortBy=totalTime${tzQ}`),
+          fetch(`/api/time-entries/summary${tzQ2}`)
         ])
 
         if (analyticsRes.ok) {
@@ -112,7 +121,18 @@ export default function TimeTrackingDashboard() {
         window.removeEventListener('visibilitychange', onVisibility)
       }
     }
-  }, [session])
+  }, [session, timeZone])
+
+  // タイムゾーン変更イベントを購読
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onTzChanged = (e: any) => {
+      const tz = e?.detail || ((): string => { try { return localStorage.getItem('time:tz') || 'UTC' } catch { return 'UTC' } })()
+      setTimeZone(tz)
+    }
+    window.addEventListener('time:tz-changed', onTzChanged)
+    return () => window.removeEventListener('time:tz-changed', onTzChanged)
+  }, [])
 
   // 概要タブ向け: 進行中分の“見える化”オーバーレイ
   const overlayedAnalytics = useMemo((): TimeAnalytics | null => {
