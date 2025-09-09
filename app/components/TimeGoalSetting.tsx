@@ -104,7 +104,7 @@ export default function TimeGoalSetting() {
         }
 
         // フォールバック: summary から進捗を算出
-        if ((!dailyRes?.ok || !weeklyRes?.ok) && summaryRes?.ok) {
+        if ((!dailyRes?.ok || !weeklyRes?.ok) && summaryRes && 'ok' in summaryRes && 'json' in summaryRes && summaryRes.ok) {
           try {
             const summary = await summaryRes.json()
             const dTarget = (goals?.dailyGoal || 480) * 60
