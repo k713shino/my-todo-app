@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import { prisma } from '@/lib/prisma'
+import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 
-// DB版: 時間追跡の詳細分析データを返す
+// Lambda プロキシ版: 時間追跡の詳細分析データを返す
 export async function GET(request: NextRequest) {
   try {
-    console.log('=== TIME ANALYTICS API START (DB VERSION) ===')
+    console.log('=== TIME ANALYTICS API START (LAMBDA VERSION) ===')
     
     const session = await getAuthSession()
     if (!isAuthenticated(session)) {
@@ -15,151 +15,76 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const days = parseInt(searchParams.get('days') || '30', 10)
     const userId = session.user.id
+    // OAuth認証ユーザーIDから実際のデータベースユーザーIDを抽出
+    const actualUserId = extractUserIdFromPrefixed(userId)
+    const lambdaApiUrl = process.env.LAMBDA_API_URL
 
-    console.log('Analytics request:', { userId, days })
+    console.log('Analytics request:', { userId, actualUserId, days })
+
+    if (!lambdaApiUrl) {
+      console.error('❌ LAMBDA_API_URL not configured')
+      return NextResponse.json({ error: 'Service configuration error' }, { status: 503 })
+    }
 
     try {
-      const now = new Date()
-      const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-
-      // 過去N日間の時間エントリーを取得
-      const timeEntries = await prisma.timeEntry.findMany({
-        where: {
-          userId: userId,
-          startedAt: {
-            gte: startDate
-          },
-          endedAt: {
-            not: null
-          },
-          duration: {
-            not: null
-          }
-        },
-        include: {
-          todo: {
-            select: {
-              title: true,
-              category: true
-            }
-          }
-        },
-        orderBy: {
-          startedAt: 'desc'
+      console.log('🚀 Calling Lambda API for time analytics')
+      console.log('🔍 Lambda API URL:', `${lambdaApiUrl}/time-entries/analytics?userId=${encodeURIComponent(actualUserId)}&days=${days}`)
+      
+      const response = await fetch(`${lambdaApiUrl}/time-entries/analytics?userId=${encodeURIComponent(actualUserId)}&days=${days}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
         }
       })
 
-      console.log(`Found ${timeEntries.length} time entries`)
+      console.log('Lambda response status:', response.status)
 
-      // 日次統計を計算
-      const dailyStats: Array<{ date: string; seconds: number }> = []
-      const dailyMap = new Map<string, number>()
-
-      timeEntries.forEach(entry => {
-        if (!entry.duration) return
-        const date = entry.startedAt.toISOString().split('T')[0]
-        dailyMap.set(date, (dailyMap.get(date) || 0) + entry.duration)
-      })
-
-      // 過去N日分の配列を作成（0の日も含む）
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-        const dateStr = date.toISOString().split('T')[0]
-        dailyStats.push({
-          date: dateStr,
-          seconds: dailyMap.get(dateStr) || 0
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Lambda API error:', response.status, errorText)
+        return NextResponse.json({ 
+          totalSeconds: 0, 
+          dailyStats: [], 
+          taskStats: [],
+          weeklyAverage: 0,
+          productivity: { bestDay: '', worstDay: '', consistency: 0 },
+          error: 'Failed to get analytics data',
+          details: `Lambda API returned ${response.status}`
         })
       }
 
-      // タスク別統計
-      const taskMap = new Map<string, { title: string; totalSeconds: number; sessions: number }>()
-      timeEntries.forEach(entry => {
-        if (!entry.duration || !entry.todoId) return
-        const taskId = entry.todoId
-        const existing = taskMap.get(taskId) || { 
-          title: entry.todo?.title || 'Unknown Task', 
-          totalSeconds: 0, 
-          sessions: 0 
-        }
-        existing.totalSeconds += entry.duration
-        existing.sessions += 1
-        taskMap.set(taskId, existing)
-      })
-
-      const taskStats = Array.from(taskMap.entries()).map(([taskId, data]) => ({
-        taskId,
-        taskTitle: data.title,
-        taskStatus: 'unknown',
-        taskCategory: 'unknown',
-        totalSeconds: data.totalSeconds,
-        sessions: data.sessions,
-        avgSessionTime: Math.floor(data.totalSeconds / data.sessions),
-        efficiency: data.totalSeconds / data.sessions
-      })).sort((a, b) => b.totalSeconds - a.totalSeconds).slice(0, 10)
-
-      // 基本統計
-      const totalSeconds = timeEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0)
-      const weeklyAverage = Math.floor(totalSeconds / Math.min(days / 7, 1))
-
-      // 生産性分析
-      const nonZeroDays = dailyStats.filter(d => d.seconds > 0)
-      const bestDay = nonZeroDays.length > 0 
-        ? nonZeroDays.reduce((a, b) => a.seconds > b.seconds ? a : b).date 
-        : ''
-      const worstDay = nonZeroDays.length > 0 
-        ? nonZeroDays.reduce((a, b) => a.seconds < b.seconds ? a : b).date 
-        : ''
-
-      // 一貫性計算（標準偏差ベース）
-      const mean = nonZeroDays.length > 0 
-        ? nonZeroDays.reduce((sum, day) => sum + day.seconds, 0) / nonZeroDays.length 
-        : 0
-      const variance = nonZeroDays.length > 0 
-        ? nonZeroDays.reduce((sum, day) => sum + Math.pow(day.seconds - mean, 2), 0) / nonZeroDays.length 
-        : 0
-      const stdDev = Math.sqrt(variance)
-      const consistency = mean > 0 ? Math.max(0, Math.min(100, 100 - (stdDev / mean) * 100)) : 0
-
-      const result = {
-        totalSeconds,
-        dailyStats,
-        taskStats,
-        weeklyAverage,
-        productivity: {
-          bestDay,
-          worstDay,
-          consistency: Math.round(consistency)
-        }
-      }
-
-      console.log('✅ Analytics result:', {
+      const result = await response.json()
+      console.log('✅ Lambda API analytics response:', {
         totalSeconds: result.totalSeconds,
-        dailyStatsCount: result.dailyStats.length,
-        taskStatsCount: result.taskStats.length,
+        dailyStatsCount: result.dailyStats?.length || 0,
+        taskStatsCount: result.taskStats?.length || 0,
         weeklyAverage: result.weeklyAverage
       })
 
       return NextResponse.json(result)
-    } catch (dbError) {
-      console.error('❌ Database error:', dbError)
+    } catch (fetchError) {
+      console.error('❌ Lambda API fetch error:', fetchError)
       return NextResponse.json({ 
         totalSeconds: 0, 
         dailyStats: [], 
         taskStats: [],
         weeklyAverage: 0,
         productivity: { bestDay: '', worstDay: '', consistency: 0 },
-        error: 'Database error'
+        error: 'Failed to connect to analytics service',
+        details: fetchError instanceof Error ? fetchError.message : 'Unknown fetch error'
       })
     }
   } catch (error) {
-    console.error('❌ TIME ANALYTICS API ERROR:', error)
+    console.error('❌ TIME ANALYTICS API PROXY ERROR:', error)
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack')
+    
+    // 緊急フォールバック - 常にデフォルト値を返す
     return NextResponse.json({ 
       totalSeconds: 0, 
       dailyStats: [], 
       taskStats: [],
       weeklyAverage: 0,
-      productivity: { bestDay: '', worstDay: '', consistency: 0 },
-      error: 'Internal server error'
+      productivity: { bestDay: '', worstDay: '', consistency: 0 }
     })
   }
 }

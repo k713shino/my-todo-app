@@ -55,14 +55,25 @@ export default function Dashboard() {
     let mounted = true
     const fetchSummary = async () => {
       try {
+        console.log('🕒 時間サマリ取得開始')
         const res = await fetch('/api/time-entries/summary')
-        if (!res.ok) return
+        console.log('🕒 時間サマリAPI応答:', res.status, res.statusText)
+        
+        if (!res.ok) {
+          const errorText = await res.text()
+          console.error('❌ 時間サマリAPI エラー:', res.status, errorText)
+          return
+        }
+        
         const data = await res.json()
+        console.log('✅ 時間サマリデータ:', data)
         if (mounted) setTimeSummary(data)
-      } catch {}
+      } catch (error) {
+        console.error('❌ 時間サマリ取得エラー:', error)
+      }
     }
     fetchSummary()
-    const id = setInterval(fetchSummary, 30 * 1000) // 30秒間隔に変更
+    const id = setInterval(fetchSummary, 10 * 1000) // 10秒間隔に短縮してテスト
     const onChanged = () => fetchSummary()
     if (typeof window !== 'undefined') {
       window.addEventListener('todo:changed', onChanged)
@@ -131,8 +142,13 @@ export default function Dashboard() {
             <div className="mb-6 max-w-4xl mx-auto space-y-4">
               {/* コンパクト統計 */}
               <TodoStatsDisplay stats={stats} variant="compact" showTimestamp={false} />
-              {/* 時間サマリ（MVP） */}
-              {timeSummary && (
+              {/* 時間サマリ（MVP） - デバッグ用に常に表示 */}
+              <div className="bg-gradient-to-r from-red-50 to-yellow-50 dark:from-red-900/20 dark:to-yellow-900/20 rounded-lg p-4 border border-red-200 dark:border-red-700 mb-2">
+                <div className="text-sm text-red-600 dark:text-red-400">
+                  🐛 デバッグ: timeSummary = {timeSummary ? JSON.stringify(timeSummary) : 'null/undefined'}
+                </div>
+              </div>
+              {(timeSummary || true) && (
                 <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
@@ -146,26 +162,26 @@ export default function Dashboard() {
                     <div className="text-center">
                       <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">今日</div>
                       <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                        {formatHM(timeSummary.todaySeconds)}
+                        {formatHM(timeSummary?.todaySeconds || 0)}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {timeSummary.todaySeconds > 0 && `${Math.floor(timeSummary.todaySeconds / 60)}分`}
+                        {(timeSummary?.todaySeconds || 0) > 0 && `${Math.floor((timeSummary?.todaySeconds || 0) / 60)}分`}
                       </div>
                     </div>
                     <div className="text-center">
                       <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">今週</div>
                       <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {formatHM(timeSummary.weekSeconds)}
+                        {formatHM(timeSummary?.weekSeconds || 0)}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {timeSummary.weekSeconds > 0 && `${Math.floor(timeSummary.weekSeconds / 60)}分`}
+                        {(timeSummary?.weekSeconds || 0) > 0 && `${Math.floor((timeSummary?.weekSeconds || 0) / 60)}分`}
                       </div>
                     </div>
                   </div>
-                  {(timeSummary.todaySeconds > 0 || timeSummary.weekSeconds > 0) && (
+                  {((timeSummary?.todaySeconds || 0) > 0 || (timeSummary?.weekSeconds || 0) > 0) && (
                     <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
                       <div className="text-xs text-gray-600 dark:text-gray-400 text-center">
-                        週平均: {formatHM(Math.floor(timeSummary.weekSeconds / 7))} / 日
+                        週平均: {formatHM(Math.floor((timeSummary?.weekSeconds || 0) / 7))} / 日
                       </div>
                     </div>
                   )}

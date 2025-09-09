@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
+import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 
 // Lambda プロキシ版: 時間計測を停止
 export async function POST(_request: NextRequest) {
@@ -21,6 +22,10 @@ export async function POST(_request: NextRequest) {
     }
 
     const userId = session.user.id
+    // OAuth認証ユーザーIDから実際のデータベースユーザーIDを抽出
+    const actualUserId = extractUserIdFromPrefixed(userId)
+    console.log('🔄 User ID mapping for time stop:', { userId, actualUserId })
+    
     const lambdaApiUrl = process.env.LAMBDA_API_URL
 
     if (!lambdaApiUrl) {
@@ -37,7 +42,7 @@ export async function POST(_request: NextRequest) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          userId
+          userId: actualUserId
         })
       })
 

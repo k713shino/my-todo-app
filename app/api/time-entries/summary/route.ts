@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
+import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
 
 // Lambda プロキシ版: 今日/今週の合計時間（秒）を返す
 export async function GET(_request: NextRequest) {
@@ -21,6 +22,10 @@ export async function GET(_request: NextRequest) {
     }
 
     const userId = session.user.id
+    // OAuth認証ユーザーIDから実際のデータベースユーザーIDを抽出
+    const actualUserId = extractUserIdFromPrefixed(userId)
+    console.log('🔄 User ID mapping for time summary:', { userId, actualUserId })
+    
     const lambdaApiUrl = process.env.LAMBDA_API_URL
 
     if (!lambdaApiUrl) {
@@ -30,8 +35,10 @@ export async function GET(_request: NextRequest) {
 
     try {
       console.log('🚀 Calling Lambda API for time summary')
+      console.log('🔍 Lambda API URL:', `${lambdaApiUrl}/time-entries/summary?userId=${encodeURIComponent(actualUserId)}`)
+      console.log('👤 User ID:', actualUserId)
       
-      const response = await fetch(`${lambdaApiUrl}/time-entries/summary?userId=${encodeURIComponent(userId)}`, {
+      const response = await fetch(`${lambdaApiUrl}/time-entries/summary?userId=${encodeURIComponent(actualUserId)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
