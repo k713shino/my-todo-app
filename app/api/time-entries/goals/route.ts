@@ -121,9 +121,11 @@ export async function PUT(request: NextRequest) {
 
     const now = new Date()
     let currentSeconds = 0
-    let targetSeconds = 480 * 60 // デフォルト8時間
+    // デフォルト目標（分）: 日次=480分(8h), 週次=2400分(40h) を秒に換算
+    let targetSeconds = 0
 
     if (type === 'daily') {
+      targetSeconds = 480 * 60
       const dayKey = `time:sum:day:${userId}:${formatDate(now)}`
       const dayStr = await redis.get(dayKey)
       currentSeconds = parseInt(dayStr || '0', 10)
@@ -136,6 +138,7 @@ export async function PUT(request: NextRequest) {
         targetSeconds = goals.dailyGoal * 60
       }
     } else if (type === 'weekly') {
+      targetSeconds = 2400 * 60
       const weekKey = `time:sum:week:${userId}:${formatDate(startOfWeek(now))}`
       const weekStr = await redis.get(weekKey)
       currentSeconds = parseInt(weekStr || '0', 10)

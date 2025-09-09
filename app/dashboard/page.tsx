@@ -7,11 +7,15 @@ import TodoList from '@/app/components/TodoList'
 import DashboardHeader from '@/app/components/DashboardHeader'
 import TodoStatsDisplay from '@/app/components/TodoStatsDisplay'
 import TimeTrackingDashboard from '@/app/components/TimeTrackingDashboard'
+import RunningTimeSync from '@/app/components/RunningTimeSync'
+import RunningTimerBanner from '@/app/components/RunningTimerBanner'
 import type { TodoStats } from '@/types/todo'
 import { useMemo } from 'react'
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
+  // ホームタブ（時間/タスク）
+  const [homeTab, setHomeTab] = useState<'time' | 'tasks'>('tasks')
   
   // タイムゾーン選択（サマリ用）
   const [timeZone, setTimeZone] = useState<string>(() => {
@@ -147,90 +151,144 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       {/* ヘッダー */}
       <DashboardHeader onModalSearch={handleModalSearch} />
+      {/* 計測中タスクのサーバ同期（非表示コンポーネント）*/}
+      <RunningTimeSync />
 
-      {/* メインコンテンツ - 固定ヘッダー分の上余白を追加（1カラム） */}
+      {/* メインコンテンツ - 固定ヘッダー分の上余白 */}
       <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pt-20 sm:pt-24">
-        <div className="max-w-7xl mx-auto">
-          {/* 統計カード（コンパクト常時表示＋詳細は折りたたみ） */}
-          {stats && (
-            <div className="mb-6 max-w-4xl mx-auto space-y-4">
-              {/* コンパクト統計 */}
-              <TodoStatsDisplay stats={stats} variant="compact" showTimestamp={false} />
-              {/* 時間サマリ（取得に成功した場合のみ表示） */}
-              {Boolean(timeSummary) && (
-                <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      ⏱️ 時間追跡サマリ
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={timeZone}
-                        onChange={(e) => { 
-                          setTimeZone(e.target.value); 
-                          try { 
-                            localStorage.setItem('time:tz', e.target.value);
-                            if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('time:tz-changed', { detail: e.target.value }))
-                          } catch {}
-                        }}
-                        className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
-                        title="タイムゾーンを選択"
-                      >
-                        <option value="UTC">UTC</option>
-                        <option value="Asia/Tokyo">Asia/Tokyo</option>
-                      </select>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {new Date().toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', timeZone: timeZone as any })}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center">
-                      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">今日</div>
-                      <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                        {formatHM(timeSummary?.todaySeconds || 0)}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {(timeSummary?.todaySeconds || 0) > 0 && `${Math.floor((timeSummary?.todaySeconds || 0) / 60)}分`}
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">今週</div>
-                      <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {formatHM(timeSummary?.weekSeconds || 0)}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {(timeSummary?.weekSeconds || 0) > 0 && `${Math.floor((timeSummary?.weekSeconds || 0) / 60)}分`}
-                      </div>
-                    </div>
-                  </div>
-                  {((timeSummary?.todaySeconds || 0) > 0 || (timeSummary?.weekSeconds || 0) > 0) && (
-                    <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
-                      <div className="text-xs text-gray-600 dark:text-gray-400 text-center">
-                        週平均: {formatHM(Math.floor((timeSummary?.weekSeconds || 0) / 7))} / 日
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* ホームタブ切替 */}
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <nav className="-mb-px flex gap-2">
+              {[
+                { id: 'time', label: '⏱ 時間' },
+                { id: 'tasks', label: '🧾 タスク' }
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setHomeTab(t.id as any)}
+                  className={`py-2.5 px-4 text-sm font-medium border-b-2 rounded-t-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
+                    homeTab === t.id
+                      ? 'border-purple-500 text-purple-600 dark:text-purple-300'
+                      : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                  }`}
+                >{t.label}</button>
+              ))}
+            </nav>
+          </div>
+
+          {homeTab === 'time' && (
+            <>
+              {/* 上段: 左=時間ダッシュボード / 右=要約（統計＋時間サマリ＋詳細分析） */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <TimeTrackingDashboard />
+                </div>
+                <aside className="space-y-4">
+                  {/* 計測中バナー */}
+                  <RunningTimerBanner />
+                  {stats && (
+                    <div className="card">
+                      <div className="card-section">
+                        <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
                       </div>
                     </div>
                   )}
-                </div>
-              )}
-              {/* 時間追跡ダッシュボード */}
-              <TimeTrackingDashboard />
-              
-              {/* 詳細分析（折りたたみ） */}
-              <details className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <summary className="cursor-pointer select-none px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex items-center justify-between">
-                  <span>📈 詳細分析</span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500">開閉</span>
-                </summary>
-                <div className="p-3">
-                  <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
-                </div>
-              </details>
-            </div>
+                  {Boolean(timeSummary) && (
+                    <div className="card">
+                      <div className="card-section">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">⏱️ 時間サマリ</h3>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={timeZone}
+                              onChange={(e) => { setTimeZone(e.target.value); try { localStorage.setItem('time:tz', e.target.value); if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('time:tz-changed', { detail: e.target.value })) } catch {} }}
+                              className="select-base text-xs"
+                              title="タイムゾーンを選択"
+                            >
+                              <option value="UTC">UTC</option>
+                              <option value="Asia/Tokyo">Asia/Tokyo</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="text-center">
+                            <div className="text-[11px] muted mb-1">今日</div>
+                            <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{formatHM(timeSummary?.todaySeconds || 0)}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[11px] muted mb-1">今週</div>
+                            <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{formatHM(timeSummary?.weekSeconds || 0)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </aside>
+              </div>
+            </>
           )}
 
-          {/* Todoリスト */}
-          <TodoList modalSearchValues={modalSearchValues} advancedSearchParams={advancedParams} />
+          {homeTab === 'tasks' && (
+            <>
+              {/* タスクビュー: 左=ツールバー+一覧 / 右=統計 */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-3">
+                  <div className="toolbar justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">🧾 Todo</span>
+                      <span className="text-xs muted hidden sm:inline">一覧と操作</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* 将来: 選択モード/新規作成ボタン */}
+                    </div>
+                  </div>
+                  <TodoList modalSearchValues={modalSearchValues} advancedSearchParams={advancedParams} />
+                </div>
+                <aside className="space-y-4">
+                  {/* 計測中バナー */}
+                  <RunningTimerBanner />
+                  {stats && (
+                    <div className="card">
+                      <div className="card-section">
+                        <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
+                      </div>
+                    </div>
+                  )}
+                  {Boolean(timeSummary) && (
+                    <div className="card">
+                      <div className="card-section">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">⏱️ 時間サマリ</h3>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={timeZone}
+                              onChange={(e) => { setTimeZone(e.target.value); try { localStorage.setItem('time:tz', e.target.value); if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('time:tz-changed', { detail: e.target.value })) } catch {} }}
+                              className="select-base text-xs"
+                              title="タイムゾーンを選択"
+                            >
+                              <option value="UTC">UTC</option>
+                              <option value="Asia/Tokyo">Asia/Tokyo</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="text-center">
+                            <div className="text-[11px] muted mb-1">今日</div>
+                            <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{formatHM(timeSummary?.todaySeconds || 0)}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-[11px] muted mb-1">今週</div>
+                            <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{formatHM(timeSummary?.weekSeconds || 0)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </aside>
+              </div>
+            </>
+          )}
         </div>
       </main>
     </div>

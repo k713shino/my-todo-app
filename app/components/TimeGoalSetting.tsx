@@ -24,6 +24,9 @@ interface Progress {
 
 export default function TimeGoalSetting() {
   const { data: session } = useSession()
+  const [timeZone, setTimeZone] = useState<string>(() => {
+    try { return localStorage.getItem('time:tz') || 'UTC' } catch { return 'UTC' }
+  })
   const [goals, setGoals] = useState<TimeGoals>({
     dailyGoal: 480, // 8時間
     weeklyGoal: 2400, // 40時間
@@ -61,52 +64,11 @@ export default function TimeGoalSetting() {
           setGoals(normalized)
         }
 
-        // プログレス取得
-        const [dailyRes, weeklyRes, summaryRes] = await Promise.all([
-          fetch('/api/time-entries/goals', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'daily' })
-          }).catch(error => {
-            console.warn('Daily progress fetch error:', error)
-            return { ok: false }
-          }),
-          fetch('/api/time-entries/goals', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'weekly' })
-          }).catch(error => {
-            console.warn('Weekly progress fetch error:', error)
-            return { ok: false }
-          }),
-          fetch('/api/time-entries/summary').catch(error => {
-            console.warn('Summary fetch error:', error)
-            return { ok: false }
-          })
-        ])
-
-        if (dailyRes?.ok && 'json' in dailyRes) {
+        // 進捗はサマリを優先（TZを考慮）
+        const summaryRes = await fetch(`/api/time-entries/summary?tz=${encodeURIComponent(timeZone)}`).catch(err => ({ ok: false } as any))
+        if (summaryRes && 'ok' in summaryRes && (summaryRes as any).ok && 'json' in summaryRes) {
           try {
-            const dailyData = await dailyRes.json()
-            setDailyProgress(dailyData)
-          } catch (jsonError) {
-            console.warn('Failed to parse daily progress:', jsonError)
-          }
-        }
-
-        if (weeklyRes?.ok && 'json' in weeklyRes) {
-          try {
-            const weeklyData = await weeklyRes.json()
-            setWeeklyProgress(weeklyData)
-          } catch (jsonError) {
-            console.warn('Failed to parse weekly progress:', jsonError)
-          }
-        }
-
-        // フォールバック: summary から進捗を算出
-        if ((!dailyRes?.ok || !weeklyRes?.ok) && summaryRes && 'ok' in summaryRes && 'json' in summaryRes && summaryRes.ok) {
-          try {
-            const summary = await summaryRes.json()
+            const summary = await (summaryRes as Response).json()
             const dTarget = (goals?.dailyGoal || 480) * 60
             const wTarget = (goals?.weeklyGoal || 2400) * 60
             const dCurrent = Math.max(0, summary.todaySeconds || 0)
@@ -126,7 +88,23 @@ export default function TimeGoalSetting() {
               remainingSeconds: Math.max(0, wTarget - wCurrent)
             })
           } catch (e) {
-            console.warn('Fallback progress compute failed:', e)
+            console.warn('Summary progress compute failed:', e)
+          }
+        } else {
+          // フォールバックとして既存のPUT進捗APIを利用
+          const [dailyRes, weeklyRes] = await Promise.all([
+            fetch('/api/time-entries/goals', {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'daily' })
+            }).catch(() => ({ ok: false } as any)),
+            fetch('/api/time-entries/goals', {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'weekly' })
+            }).catch(() => ({ ok: false } as any)),
+          ])
+          if (dailyRes && 'ok' in dailyRes && (dailyRes as any).ok && 'json' in dailyRes) {
+            try { setDailyProgress(await (dailyRes as Response).json()) } catch {}
+          }
+          if (weeklyRes && 'ok' in weeklyRes && (weeklyRes as any).ok && 'json' in weeklyRes) {
+            try { setWeeklyProgress(await (weeklyRes as Response).json()) } catch {}
           }
         }
       } catch (error) {
@@ -139,7 +117,18 @@ export default function TimeGoalSetting() {
     // 30秒ごとに進捗を更新
     const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
-  }, [session])
+  }, [session, timeZone, goals.dailyGoal, goals.weeklyGoal])
+
+  // TZ変更イベントを購読
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onTzChanged = (e: any) => {
+      const tz = e?.detail || ((): string => { try { return localStorage.getItem('time:tz') || 'UTC' } catch { return 'UTC' } })()
+      setTimeZone(tz)
+    }
+    window.addEventListener('time:tz-changed', onTzChanged)
+    return () => window.removeEventListener('time:tz-changed', onTzChanged)
+  }, [])
 
   const handleSave = async () => {
     setSaving(true)

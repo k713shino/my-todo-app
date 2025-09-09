@@ -176,10 +176,25 @@ function TodoItem({
 
   // === MVP: 時間計測（開始/停止） ===
   useEffect(() => {
-    try {
-      const runId = localStorage.getItem('time:runningTodoId')
-      setIsTracking(runId === todo.id)
-    } catch {}
+    const read = () => {
+      try {
+        const runId = localStorage.getItem('time:runningTodoId')
+        setIsTracking((runId ?? '') === String(todo.id))
+      } catch {}
+    }
+    read()
+    // グローバルイベントで同期
+    const onSync = () => read()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('time:runningChanged', onSync)
+      window.addEventListener('todo:changed', onSync)
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('time:runningChanged', onSync)
+        window.removeEventListener('todo:changed', onSync)
+      }
+    }
   }, [todo.id])
 
   const startTracking = useCallback(async () => {
@@ -189,10 +204,15 @@ function TodoItem({
         body: JSON.stringify({ todoId: todo.id })
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      try { localStorage.setItem('time:runningTodoId', todo.id) } catch {}
+      try { localStorage.setItem('time:runningTodoId', String(todo.id)) } catch {}
       setIsTracking(true)
       toast.success('⏱️ 計測を開始しました')
-      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
+      try { 
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('time:runningChanged'))
+          window.dispatchEvent(new CustomEvent('todo:changed'))
+        }
+      } catch {}
     } catch (e) {
       toast.error('計測開始に失敗しました')
     }
@@ -205,7 +225,12 @@ function TodoItem({
       try { localStorage.removeItem('time:runningTodoId') } catch {}
       setIsTracking(false)
       toast('⏹️ 計測を停止しました')
-      try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
+      try { 
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('time:runningChanged'))
+          window.dispatchEvent(new CustomEvent('todo:changed'))
+        }
+      } catch {}
     } catch (e) {
       toast.error('計測停止に失敗しました')
     }
