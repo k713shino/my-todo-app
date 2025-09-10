@@ -590,7 +590,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
     try {
       const response = await retryWithBackoff(async () => {
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 6_000)
+        const timer = setTimeout(() => controller.abort(), 12_000)
         try {
           return await fetch('/api/todos', {
             method: 'POST',
@@ -674,7 +674,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       
       const response = await retryWithBackoff(async () => {
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 10_000)
+        const timer = setTimeout(() => controller.abort(), 15_000)
         try {
           return await fetch(`/api/todos/${id}`, {
             method: 'PUT',
