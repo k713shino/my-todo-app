@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         userId: actualUserId,
         currentPassword,
         newPassword
-      })
+      }, { timeout: 15000 })
 
       console.log('Lambda password change response:', response)
 

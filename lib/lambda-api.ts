@@ -349,7 +349,7 @@ export class LambdaAPI {
   /**
    * 汎用POSTリクエスト（VercelAPIResponse形式の戻り値用）
    */
-  async post<T = any>(endpoint: string, data: any): Promise<LambdaAPIResponse<T>> {
+  async post<T = any>(endpoint: string, data: any, options: RequestOptions = {}): Promise<LambdaAPIResponse<T>> {
     console.log('🚀🔵 === Lambda API POST START ===', { endpoint, data });
     
     try {
@@ -358,6 +358,7 @@ export class LambdaAPI {
       const response = await this.request<T>(endpoint, {
         method: 'POST',
         body: JSON.stringify(data),
+        ...(options?.timeout ? { timeout: options.timeout } : {}),
       });
       
       console.log('🔵2️⃣ Lambda API request successful, response:', response);

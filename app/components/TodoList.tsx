@@ -659,6 +659,16 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
         ? { ...todo, ...data, updatedAt: new Date() }
         : todo
     ))
+    // 楽観的更新: 進行中タイマーのタイトルも即時反映
+    try {
+      const runningId = (typeof window !== 'undefined') ? localStorage.getItem('time:runningTodoId') : null
+      if (runningId && String(runningId) === String(id) && (data as any)?.title) {
+        localStorage.setItem('time:runningTitle', String((data as any).title))
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('time:runningChanged'))
+        }
+      }
+    } catch {}
     
     try {
       
@@ -701,6 +711,19 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
         }
         return todo
       }))
+      // 進行中タイマーのタイトルを即時更新（編集前の名称が残らないように）
+      try {
+        const runningId = (typeof window !== 'undefined') ? localStorage.getItem('time:runningTodoId') : null
+        if (runningId && String(runningId) === String(id)) {
+          const newTitle = (updatedTodo as any)?.title || (data as any)?.title
+          if (newTitle) {
+            localStorage.setItem('time:runningTitle', String(newTitle))
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new Event('time:runningChanged'))
+            }
+          }
+        }
+      } catch {}
       toast.success('✅ Todoを更新しました！')
       try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}
       
