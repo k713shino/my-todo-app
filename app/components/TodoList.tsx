@@ -408,7 +408,7 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       const response = await retryWithBackoff(async () => {
         const fetchStart = performance.now()
         const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 6_000)
+        const timer = setTimeout(() => controller.abort(), 12_000)
         const res = await fetch(url, {
           ...(bypassCache ? {
             cache: 'no-store',

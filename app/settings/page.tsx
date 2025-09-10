@@ -9,6 +9,7 @@ import PasswordChangeForm from '@/app/components/PasswordChangeForm'
 import DataManagementForm from '@/app/components/DataManagementForm'
 import NotificationSettings from '@/app/components/NotificationSettings'
 import AccountDeletionForm from '@/app/components/AccountDeletionForm'
+import BackButton from '@/app/components/BackButton'
 
 export default async function SettingsPage() {
   const session = await getAuthSession()
@@ -23,14 +24,8 @@ export default async function SettingsPage() {
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/dashboard"
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-                title="ダッシュボードに戻る"
-              >
-                ← 戻る
-              </Link>
+            <div className="flex items-center gap-3">
+              <BackButton />
               <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white">
                 ⚙️ 設定
               </h1>
