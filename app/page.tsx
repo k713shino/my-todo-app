@@ -40,7 +40,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800 dark:from-slate-900 dark:via-purple-900 dark:to-slate-800 transition-all duration-500">
       {/* ヘッダー */}
-      <header className="bg-white/10 dark:bg-black/20 backdrop-blur-sm">
+      <header className="bg-white/10 dark:bg-black/20 backdrop-blur-sm safe-top">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <h1 className="text-lg sm:text-2xl font-bold text-white dark:text-gray-100">

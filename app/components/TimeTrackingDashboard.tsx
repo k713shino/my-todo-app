@@ -285,7 +285,7 @@ export default function TimeTrackingDashboard() {
         {activeTab === 'overview' && overlayedAnalytics && (
           <div className="space-y-6">
             {/* KPI カード（表示順を Today / Week / Total / Consistency に最適化） */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4">
               <div className="rounded-lg p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/30 shadow-sm">
                 <div className="text-sm text-purple-600 dark:text-purple-400">今日</div>
                 <div className="text-2xl font-bold text-purple-700 dark:text-purple-200">
@@ -313,7 +313,7 @@ export default function TimeTrackingDashboard() {
             </div>
 
             {/* 日次チャート + インサイト（2カラム） */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
               <div className="md:col-span-2 card">
                 <div className="card-section">
                   <h3 className="section-title mb-3">📈 過去30日間の作業時間</h3>

@@ -149,4 +149,15 @@ html.dark::-webkit-scrollbar-thumb:hover {
   .kpi {
     @apply rounded-lg p-4 border shadow-sm;
   }
+  /* モバイル安全領域（ノッチ等）対応 */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  /* タップターゲット最小サイズ（iOS/Android推奨 >=44px） */
+  .tap-target {
+    min-height: 44px;
+  }
 }

@@ -167,7 +167,7 @@ export default function Dashboard() {
                 <button
                   key={t.id}
                   onClick={() => setHomeTab(t.id as any)}
-                  className={`py-2.5 px-4 text-sm font-medium border-b-2 rounded-t-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
+                  className={`py-2.5 px-4 text-sm font-medium border-b-2 rounded-t-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 tap-target ${
                     homeTab === t.id
                       ? 'border-purple-500 text-purple-600 dark:text-purple-300'
                       : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
@@ -180,7 +180,7 @@ export default function Dashboard() {
           {homeTab === 'time' && (
             <>
               {/* 上段: 左=時間ダッシュボード / 右=要約（統計＋時間サマリ＋詳細分析） */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
                 <div className="lg:col-span-2">
                   <TimeTrackingDashboard />
                 </div>
@@ -232,7 +232,7 @@ export default function Dashboard() {
           {homeTab === 'tasks' && (
             <>
               {/* タスクビュー: 左=ツールバー+一覧 / 右=統計 */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
                 <div className="lg:col-span-2 space-y-3">
                   <div className="toolbar justify-between">
                     <div className="flex items-center gap-2">
