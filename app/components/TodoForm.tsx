@@ -79,8 +79,13 @@ export default function TodoForm({
   const [priority, setPriority] = useState<Priority>('MEDIUM')
   const [status, setStatus] = useState<Status>('TODO')
   const [dueDate, setDueDate] = useState('')
+  // ユーザーが編集中（ローカルで値を変更済み）かの判定
+  const [dirty, setDirty] = useState(false)
 
   useEffect(() => {
+    // 初期データが変わった時のみフォームを初期化する
+    // ただし、ユーザーが編集中（dirty）の場合は上書きしない
+    if (dirty) return
     if (initialData) {
       setTitle(initialData.title || '')
       setDescription(initialData.description || '')
@@ -98,7 +103,7 @@ export default function TodoForm({
       setCategory('')
       setTags('')
     }
-  }, [initialData])
+  }, [initialData, dirty])
 
   /**
    * フォーム送信処理
@@ -125,6 +130,8 @@ export default function TodoForm({
       category: category.trim() || undefined,
       tags: tags.trim() ? tags.split(',').map(tag => tag.trim()).filter(tag => tag) : undefined,
     })
+
+    // 送信後は親側でフォームが閉じられるため、ここではdirtyを維持して一時的な巻き戻りを防ぐ
 
     // リセット（新規作成時のみ）
     if (!initialData) {
@@ -157,7 +164,7 @@ export default function TodoForm({
         <input
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => { setTitle(e.target.value); setDirty(true) }}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           placeholder="何をしますか？"
           required
@@ -172,7 +179,7 @@ export default function TodoForm({
         </label>
         <textarea
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => { setDescription(e.target.value); setDirty(true) }}
           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           placeholder="詳細を入力してください（任意）"
           rows={3}
@@ -188,7 +195,7 @@ export default function TodoForm({
           </label>
           <select
             value={priority}
-            onChange={(e) => setPriority(e.target.value as Priority)}
+            onChange={(e) => { setPriority(e.target.value as Priority); setDirty(true) }}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             disabled={isLoading}
           >
@@ -210,7 +217,7 @@ export default function TodoForm({
           </label>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as Status)}
+            onChange={(e) => { setStatus(e.target.value as Status); setDirty(true) }}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             disabled={isLoading}
           >
@@ -235,7 +242,7 @@ export default function TodoForm({
           <input
             type="datetime-local"
             value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
+            onChange={(e) => { setDueDate(e.target.value); setDirty(true) }}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             disabled={isLoading}
           />
@@ -254,7 +261,7 @@ export default function TodoForm({
           <input
             type="text"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => { setCategory(e.target.value); setDirty(true) }}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="例: 学校, 家, 趣味"
             disabled={isLoading}
@@ -269,7 +276,7 @@ export default function TodoForm({
           <input
             type="text"
             value={tags}
-            onChange={(e) => setTags(e.target.value)}
+            onChange={(e) => { setTags(e.target.value); setDirty(true) }}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="カンマで区切って入力（例: 緊急, 楽しい）"
             disabled={isLoading}
@@ -285,6 +292,7 @@ export default function TodoForm({
             onClick={onCancel}
             className="w-full sm:w-auto px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-md transition-colors"
             disabled={isLoading}
+            onMouseDown={() => setDirty(false)}
           >
             キャンセル
           </button>

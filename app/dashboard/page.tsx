@@ -23,12 +23,12 @@ export default function Dashboard() {
       const saved = localStorage.getItem('time:tz')
       if (saved) return saved
     } catch {}
-    // ブラウザの推奨タイムゾーンがAsia/Tokyoならそれを既定に
+    // 既定は Asia/Tokyo（ブラウザ推奨も確認）
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
       if (tz === 'Asia/Tokyo') return 'Asia/Tokyo'
     } catch {}
-    return 'UTC'
+    return 'Asia/Tokyo'
   })
   
   // モーダルからの検索値を管理する状態
@@ -49,8 +49,9 @@ export default function Dashboard() {
     let mounted = true
     const fetchStats = async () => {
       try {
-        // 週数/週開始/タイムゾーンを指定（例: 12週・月曜開始・UTC）
-        const res = await fetch('/api/todos/stats?cache=false&refresh=true&weeks=12&months=6&weekStart=mon&tz=UTC')
+        // 週数/週開始/タイムゾーンを指定（例: 12週・月曜開始・Asia/Tokyo 既定）
+        const tz = encodeURIComponent(timeZone || 'Asia/Tokyo')
+        const res = await fetch(`/api/todos/stats?cache=false&refresh=true&weeks=12&months=6&weekStart=mon&tz=${tz}`)
         if (!res.ok) return
         const data = await res.json()
         // サーバがunavailableを示した場合は表示しない
@@ -66,7 +67,7 @@ export default function Dashboard() {
       window.addEventListener('todo:changed', onChanged)
     }
     return () => { mounted = false; clearInterval(id); if (typeof window !== 'undefined') window.removeEventListener('todo:changed', onChanged) }
-  }, [])
+  }, [timeZone])
 
   // 時間サマリの取得（MVP）
   useEffect(() => {

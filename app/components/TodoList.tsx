@@ -1481,7 +1481,29 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
       {typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted' && (
         <div className="p-3 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200 text-sm flex items-center justify-between">
           <span>⏰ 期限が近づいたら通知を受け取りますか？</span>
-          <button onClick={requestDeadlinePermission} className="ml-3 px-3 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700">有効にする</button>
+          <button
+            onClick={async () => {
+              try {
+                const ok = await requestDeadlinePermission()
+                if (ok) {
+                  try { toast.success('通知を有効にしました') } catch {}
+                } else {
+                  // ブロック（denied）か、その他の失敗
+                  const perm = typeof Notification !== 'undefined' ? Notification.permission : 'default'
+                  if (perm === 'denied') {
+                    try { toast.error('通知がブロックされました（ブラウザ設定を確認）') } catch {}
+                  } else {
+                    try { toast.error('通知を許可できませんでした') } catch {}
+                  }
+                }
+              } catch {
+                try { toast.error('通知の有効化でエラーが発生しました') } catch {}
+              }
+            }}
+            className="ml-3 px-3 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700"
+          >
+            有効にする
+          </button>
         </div>
       )}
       {/* React Hot Toast は GlobalToaster に集約 */}
@@ -2136,10 +2158,8 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
 
       {/* TodoフォームとTodoリスト */}
       {editingTodo ? (
-        <TodoForm
-          onSubmit={handleEditSubmit}
-          isLoading={isSubmitting}
-          initialData={{
+        (() => {
+          const init = {
             title: editingTodo.title,
             description: editingTodo.description || '',
             priority: editingTodo.priority,
@@ -2147,9 +2167,17 @@ export default function TodoList({ modalSearchValues, advancedSearchParams }: To
             dueDate: editingTodo.dueDate,
             category: editingTodo.category,
             tags: editingTodo.tags,
-          }}
-          onCancel={() => setEditingTodo(null)}
-        />
+          }
+          return (
+            <TodoForm
+              key={editingTodo.id}
+              onSubmit={handleEditSubmit}
+              isLoading={isSubmitting}
+              initialData={init}
+              onCancel={() => setEditingTodo(null)}
+            />
+          )
+        })()
       ) : (
         <TodoForm
           onSubmit={handleCreateTodo}

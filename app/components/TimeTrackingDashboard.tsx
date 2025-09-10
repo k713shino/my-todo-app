@@ -50,9 +50,9 @@ export default function TimeTrackingDashboard() {
   const [runningTodoId, setRunningTodoId] = useState<string | null>(null)
   const [timeZone, setTimeZone] = useState<string>(() => {
     try {
-      return localStorage.getItem('time:tz') || 'UTC'
+      return localStorage.getItem('time:tz') || 'Asia/Tokyo'
     } catch {
-      return 'UTC'
+      return 'Asia/Tokyo'
     }
   })
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'productivity' | 'goals'>('overview')
@@ -128,7 +128,7 @@ export default function TimeTrackingDashboard() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const onTzChanged = (e: any) => {
-      const tz = e?.detail || ((): string => { try { return localStorage.getItem('time:tz') || 'UTC' } catch { return 'UTC' } })()
+      const tz = e?.detail || ((): string => { try { return localStorage.getItem('time:tz') || 'Asia/Tokyo' } catch { return 'Asia/Tokyo' } })()
       setTimeZone(tz)
     }
     window.addEventListener('time:tz-changed', onTzChanged)

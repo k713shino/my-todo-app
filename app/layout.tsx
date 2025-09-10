@@ -12,6 +12,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
       </head>
       <body className="antialiased safe-bottom">
+        {/* 既定タイムゾーンの初期化（未設定時は Asia/Tokyo） */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => { try { if (!localStorage.getItem('time:tz')) localStorage.setItem('time:tz', 'Asia/Tokyo') } catch {} })();`
+          }}
+        />
         {/* Service Worker 登録とSW→ページのメッセージ受信（通知クリック対応） */}
         <script
           dangerouslySetInnerHTML={{

@@ -25,7 +25,7 @@ interface Progress {
 export default function TimeGoalSetting() {
   const { data: session } = useSession()
   const [timeZone, setTimeZone] = useState<string>(() => {
-    try { return localStorage.getItem('time:tz') || 'UTC' } catch { return 'UTC' }
+    try { return localStorage.getItem('time:tz') || 'Asia/Tokyo' } catch { return 'Asia/Tokyo' }
   })
   const [goals, setGoals] = useState<TimeGoals>({
     dailyGoal: 480, // 8時間
@@ -123,7 +123,7 @@ export default function TimeGoalSetting() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const onTzChanged = (e: any) => {
-      const tz = e?.detail || ((): string => { try { return localStorage.getItem('time:tz') || 'UTC' } catch { return 'UTC' } })()
+      const tz = e?.detail || ((): string => { try { return localStorage.getItem('time:tz') || 'Asia/Tokyo' } catch { return 'Asia/Tokyo' } })()
       setTimeZone(tz)
     }
     window.addEventListener('time:tz-changed', onTzChanged)
