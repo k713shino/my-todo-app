@@ -2,6 +2,7 @@ import './globals.css'
 import SessionWrapper from './components/SessionWrapper'
 import GlobalToaster from './components/GlobalToaster'
 import { ThemeProvider } from './components/ThemeProvider'
+import ScrollToTopButton from './components/ScrollToTopButton'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </SessionWrapper>
         </ThemeProvider>
+        <ScrollToTopButton />
         {/* デプロイ直後に旧ハッシュのチャンクを参照して404になる場合の自己回復 */}
         <script
           dangerouslySetInnerHTML={{
