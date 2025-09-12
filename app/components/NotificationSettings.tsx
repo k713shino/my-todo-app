@@ -55,52 +55,61 @@ export default function NotificationSettings() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">⏰ 通知設定</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4 flex items-center">
+        <span className="text-xl sm:text-2xl mr-2">⏰</span>
+        <span>通知設定</span>
+      </h2>
       {!supported ? (
         <p className="text-sm text-gray-600 dark:text-gray-400">このブラウザは通知をサポートしていません。</p>
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="space-y-4 sm:space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+            <div className="min-w-0 flex-1">
               <p className="text-gray-900 dark:text-white font-medium">期限通知を有効化</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">期限の{minutes}分前に通知（トースト + ブラウザ通知）</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">期限の{minutes}分前に通知（トースト + ブラウザ通知）</p>
             </div>
-            <button
-              onClick={() => handleToggle(!enabled)}
-              className={`px-3 py-1.5 rounded-md text-sm ${enabled ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}
-            >
-              {enabled ? 'ON' : 'OFF'}
-            </button>
+            <div className="flex-shrink-0 self-start sm:self-center">
+              <button
+                onClick={() => handleToggle(!enabled)}
+                className={`px-4 py-2 rounded-md text-sm font-medium tap-target ${enabled ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'}`}
+              >
+                {enabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+            <div className="min-w-0 flex-1">
               <p className="text-gray-900 dark:text-white font-medium">通知タイミング</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">期限の何分前に通知するかを選択</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">期限の何分前に通知するかを選択</p>
             </div>
-            <select
-              value={minutes}
-              onChange={(e) => handleMinutes(parseInt(e.target.value))}
-              className="px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            >
-              {[5,10,15,30,60].map(m => (
-                <option key={m} value={m}>{m} 分前</option>
-              ))}
-            </select>
+            <div className="flex-shrink-0 self-start sm:self-center">
+              <select
+                value={minutes}
+                onChange={(e) => handleMinutes(parseInt(e.target.value))}
+                className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 tap-target"
+              >
+                {[5,10,15,30,60].map(m => (
+                  <option key={m} value={m}>{m} 分前</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+            <div className="min-w-0 flex-1">
               <p className="text-gray-900 dark:text-white font-medium">ブラウザ通知の権限</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">現在: {permission}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">現在: {permission}</p>
             </div>
-            <button
-              onClick={requestPermission}
-              className="px-3 py-1.5 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700"
-            >
-              権限をリクエスト
-            </button>
+            <div className="flex-shrink-0 self-start sm:self-center">
+              <button
+                onClick={requestPermission}
+                className="px-4 py-2 rounded-md text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 tap-target"
+              >
+                権限をリクエスト
+              </button>
+            </div>
           </div>
         </div>
       )}

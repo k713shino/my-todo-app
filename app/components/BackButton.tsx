@@ -8,16 +8,21 @@ interface BackButtonProps {
   fallbackHref?: string
 }
 
+// 戻るボタンコンポーネント
+// ブラウザ履歴があれば前のページへ、なければfallbackHrefで指定されたページに遷移する
 export default function BackButton({ className = '', label = 'ダッシュボードに戻る', fallbackHref = '/dashboard' }: BackButtonProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault()
     try {
+      // ブラウザの履歴があるかチェック
       if (window.history.length > 1) {
         window.history.back()
       } else {
+        // 履歴がない場合はfallbackHrefにリダイレクト
         window.location.href = fallbackHref
       }
     } catch {
+      // エラー時はfallbackHrefにリダイレクト
       window.location.href = fallbackHref
     }
   }

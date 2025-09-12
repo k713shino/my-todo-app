@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 
+// トップへ戻るボタンコンポーネント
+// スクロール位置に応じて表示/非表示を切り替え、クリック時にページ上部へスムーススクロール
 export default function ScrollToTopButton() {
   const [visible, setVisible] = useState(false)
 
@@ -9,18 +11,21 @@ export default function ScrollToTopButton() {
     const onScroll = () => {
       try {
         const y = window.scrollY || document.documentElement.scrollTop || 0
+        // 300px以上スクロールしたらボタンを表示
         setVisible(y > 300)
       } catch {}
     }
-    onScroll()
+    onScroll() // 初回実行
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
   const scrollTop = () => {
     try {
+      // スムーススクロールでページトップへ
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch {
+      // スムーススクロールが使えない場合は即座に移動
       window.scrollTo(0, 0)
     }
   }

@@ -116,12 +116,13 @@ export default function PasswordChangeForm() {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-        🔐 パスワード変更
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4 flex items-center">
+        <span className="text-xl sm:text-2xl mr-2">🔐</span>
+        <span>パスワード変更</span>
       </h2>
       
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             現在のパスワード
@@ -239,7 +240,7 @@ export default function PasswordChangeForm() {
         <button
           type="submit"
           disabled={isLoading || !validatePassword(formData.newPassword).isValid}
-          className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-4 py-3 sm:py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed tap-target font-medium"
         >
           {isLoading ? '変更中...' : 'パスワードを変更'}
         </button>

@@ -2,6 +2,8 @@
 
 import { signOut } from 'next-auth/react'
 
+// ログアウトボタンコンポーネント
+// クリック時にユーザーをログアウトしてトップページにリダイレクトする
 export default function SignOutButton() {
   const handleSignOut = () => {
     signOut({ callbackUrl: '/' })

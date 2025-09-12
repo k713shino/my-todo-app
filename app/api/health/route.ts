@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { CacheManager } from '@/lib/cache'
 
+// ヘルスチェック API エンドポイント
+// データベースとRedisの接続状況、レスポンス時間、メモリ使用量などを監視
 export async function GET() {
   try {
     const startTime = Date.now()
