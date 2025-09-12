@@ -1,5 +1,8 @@
 # マルチステージビルドで最適化
-FROM node:20-alpine AS base
+FROM node:20-alpine3.20 AS base
+
+# ベースパッケージのセキュリティアップデートを適用（脆弱性軽減）
+RUN apk --no-cache update && apk --no-cache upgrade
 
 # 依存関係のインストール
 FROM base AS deps
@@ -22,16 +25,12 @@ COPY . .
 
 # 🔴 ビルド時環境変数の設定
 ENV NEXT_TELEMETRY_DISABLED=1
-# Prismaビルド用のダミーDATABASE_URL（実際の接続は実行時に行う）
-ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
-ENV NEXTAUTH_SECRET="dummy-secret-for-build"
-ENV NEXTAUTH_URL="http://localhost:3000"
 
-# Prismaクライアント生成（明示的に実行）
-RUN npx prisma generate
+# Prismaクライアント生成（必要なときのみ一時的に環境変数を付与）
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 
-# Next.jsアプリケーションビルド
-RUN npm run build
+# Next.jsアプリケーションビルド（必要に応じてダミーURLを一時的に付与）
+RUN NEXTAUTH_URL="http://localhost:3000" npm run build
 
 # ランナーステージ
 FROM base AS runner
@@ -60,8 +59,8 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# ヘルスチェック
+# ヘルスチェック（curl不要・Nodeのfetchで実施）
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]
