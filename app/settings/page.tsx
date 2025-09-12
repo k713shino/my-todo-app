@@ -39,7 +39,7 @@ export default async function SettingsPage() {
       </header>
 
       {/* メインコンテンツ（固定ヘッダー分の余白を確保） */}
-      <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pt-20 sm:pt-20">
+      <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pt-20 sm:pt-24 md:pt-28">
         <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 lg:space-y-8">
           
           {/* アカウント情報 */}
