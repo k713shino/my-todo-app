@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Priority, Status } from '@prisma/client'
 import { format } from 'date-fns'
+import Image from 'next/image'
 
 /**
  * Todoフォームコンポーネントのプロパティ定義
@@ -150,7 +151,7 @@ export default function TodoForm({
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
         {initialData ? '✏️ Todoを編集' : (
           <>
-            <img src="/icons/todo-icon-circle.svg" alt="" className="inline-block w-5 h-5 mr-2 align-[-0.2em]" />
+            <Image src="/icons/todo-icon-circle.svg" alt="" width={20} height={20} className="inline-block w-5 h-5 mr-2 align-[-0.2em]" />
             新しいTodoを作成
           </>
         )}

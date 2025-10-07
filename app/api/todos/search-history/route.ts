@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 }
 
 // DELETE: 検索履歴のクリア
-export async function DELETE(request: NextRequest) {
+export async function DELETE(_request: NextRequest) {
   try {
     const session = await getAuthSession()
     

@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import ThemeToggle from './components/ThemeToggle'
 
@@ -44,7 +45,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <h1 className="text-lg sm:text-2xl font-bold text-white dark:text-gray-100">
-              <img src="/icons/todo-icon-circle.svg" alt="" className="inline-block w-6 h-6 mr-2 align-[-0.2em]" />
+              <Image src="/icons/todo-icon-circle.svg" alt="" width={24} height={24} className="inline-block w-6 h-6 mr-2 align-[-0.2em]" />
               Todo管理システム
             </h1>
             <div className="flex items-center space-x-2 sm:space-x-4">

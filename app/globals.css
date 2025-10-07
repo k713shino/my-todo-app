@@ -4,8 +4,8 @@
 
 /* 基本的なテーマ設定 */
 :root {
-  --background: #ffffff;
-  --foreground: #0f0f0f;
+  --background: #f8fafc;
+  --foreground: #0f172a;
 }
 
 /* スクロール動作の最適化 - 自動スムーススクロールを無効化 */
@@ -14,8 +14,8 @@ html {
 }
 
 .dark {
-  --background: #0f0f0f;
-  --foreground: #ededed;
+  --background: #050a19;
+  --foreground: #e2e8f0;
 }
 
 /* 明示的なライトテーマクラス */
@@ -28,14 +28,18 @@ html {
 body {
   color: var(--foreground);
   background-color: var(--background);
-  background-image: radial-gradient(1200px 600px at 80% -10%, rgba(124, 58, 237, 0.07), rgba(0,0,0,0)),
-    radial-gradient(1000px 500px at -10% 10%, rgba(59, 130, 246, 0.06), rgba(0,0,0,0));
-  background-repeat: no-repeat;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
-  /* モバイル対応 */
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+}
+
+html.dark body {
+  background-image:
+    radial-gradient(1200px 800px at 80% -20%, rgba(59, 130, 246, 0.12), rgba(0,0,0,0)),
+    radial-gradient(1000px 600px at -10% 10%, rgba(168, 85, 247, 0.1), rgba(0,0,0,0)),
+    linear-gradient(180deg, rgba(2,6,23,0.98) 0%, rgba(2,6,23,1) 100%);
+  background-repeat: no-repeat;
 }
 
 /* フォーム要素のダークモード対応 */
@@ -117,37 +121,37 @@ html.dark::-webkit-scrollbar-thumb:hover {
     @apply max-w-7xl mx-auto px-3 sm:px-6 lg:px-8;
   }
   .card {
-    @apply bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700;
+    @apply rounded-3xl bg-white dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800/70 shadow-sm dark:shadow-xl dark:shadow-slate-950/40;
   }
   .card-soft {
-    @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-xl shadow-sm border border-gray-200/80 dark:border-gray-700/80;
+    @apply rounded-3xl bg-white/80 dark:bg-slate-900/50 backdrop-blur shadow-sm dark:shadow-lg border border-gray-200/70 dark:border-slate-800/60;
   }
   .card-section {
-    @apply p-4 sm:p-6;
+    @apply p-5 sm:p-6;
   }
   .section-title {
-    @apply text-lg font-semibold text-gray-900 dark:text-gray-100;
+    @apply text-lg font-semibold text-slate-900 dark:text-slate-100;
   }
   .muted {
-    @apply text-gray-500 dark:text-gray-400;
+    @apply text-slate-500 dark:text-slate-400;
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center px-3 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center px-3 py-2 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 transition-colors;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-full text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 transition-colors;
   }
   .input-base {
-    @apply w-full px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500;
+    @apply w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400;
   }
   .select-base {
-    @apply px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500;
+    @apply px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-400;
   }
   .toolbar {
-    @apply flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700;
+    @apply flex items-center gap-2 p-2 rounded-2xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/70;
   }
   .kpi {
-    @apply rounded-lg p-4 border shadow-sm;
+    @apply rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-lg;
   }
   /* モバイル安全領域（ノッチ等）対応 */
   .safe-top {
@@ -159,5 +163,89 @@ html.dark::-webkit-scrollbar-thumb:hover {
   /* タップターゲット最小サイズ（iOS/Android推奨 >=44px） */
   .tap-target {
     min-height: 44px;
+  }
+
+  /* ユーザーフレンドリーなアニメーション */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes celebration {
+    0%, 100% {
+      transform: scale(1) rotate(0deg);
+    }
+    25% {
+      transform: scale(1.2) rotate(5deg);
+    }
+    50% {
+      transform: scale(1.1) rotate(-5deg);
+    }
+    75% {
+      transform: scale(1.2) rotate(3deg);
+    }
+  }
+
+  @keyframes float {
+    0% {
+      opacity: 1;
+      transform: translateY(0) rotate(0deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-100vh) rotate(360deg);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s ease-out;
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+  }
+
+  .animate-celebration {
+    animation: celebration 2s ease-in-out;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-confetti {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
   }
 }

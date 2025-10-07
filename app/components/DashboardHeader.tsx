@@ -600,14 +600,21 @@ interface DashboardHeaderProps {
     priority?: string
     dateRange?: string
   }, advanced?: Record<string, string>) => void
+  className?: string
 }
 
-export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps) {
+export default function DashboardHeader({ onModalSearch, className }: DashboardHeaderProps) {
   const { data: session } = useSession()
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false)
 
   // 認証されていない場合でもヘッダーを表示（検索機能は無効）
   const isAuthenticated = !!session?.user
+
+  const triggerNewTodo = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('todo:new'))
+    }
+  }
 
   const handleSearch = (filters: {
     keyword: string
@@ -632,62 +639,76 @@ export default function DashboardHeader({ onModalSearch }: DashboardHeaderProps)
     return () => window.removeEventListener('search:open', openHandler)
   }, [session?.user])
 
+  const headerClassName = [
+    'flex items-center justify-between gap-4 px-5 py-4 rounded-3xl border border-slate-800/70 bg-slate-900/70 backdrop-blur',
+    'shadow-lg shadow-slate-950/40',
+    className || '',
+  ].join(' ').trim()
+
   return (
     <>
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 fixed top-0 left-0 right-0 z-50 safe-top">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-14 sm:h-16">
-            <div className="flex items-center min-w-0 flex-1">
-              <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
-                <img src="/icons/todo-icon-circle.svg" alt="" className="inline-block w-6 h-6 mr-2 align-[-0.2em]" />
-                <span className="hidden sm:inline">{isAuthenticated ? `${session.user?.name}専用` : ''}</span>Todo<span className="hidden xs:inline">アプリ</span>
-              </h1>
-            </div>
+      <header className={headerClassName}>
+        <div className="flex items-center min-w-0 gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-xl shadow-lg shadow-blue-900/40">
+            🗂
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm text-slate-400 leading-tight">ようこそ戻りました</p>
+            <h1 className="text-base sm:text-lg font-semibold text-slate-100 truncate">
+              {isAuthenticated ? `${session?.user?.name ?? 'あなた'}のワークスペース` : 'My Todo ワークスペース'}
+            </h1>
+          </div>
+        </div>
 
-            {/* 検索ボタンとプロファイル情報 */}
-            <div className="flex items-center gap-2 sm:gap-4">
-              {isAuthenticated && (
-                <button 
-                  onClick={() => setIsSearchModalOpen(true)}
-                  className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-                  title="Todo検索"
-                >
-                  🔍
-                </button>
-              )}
-              
-              {session?.user && (
-                <div className="flex items-center gap-2 sm:gap-3">
-                  {session.user.image && (
-                    <Image
-                      src={session.user.image}
-                      alt="Profile"
-                      width={28}
-                      height={28}
-                      className="w-7 h-7 rounded-full"
-                      unoptimized
-                    />
-                  )}
-                  <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-300 font-medium">
-                    {session.user.name}
-                  </span>
-                  <Link
-                    href="/settings"
-                    className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-1"
-                    title="アカウント設定"
-                  >
-                    ⚙️
-                  </Link>
-                  <button
-                    onClick={() => signOut()}
-                    className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-                  >
-                    ログアウト
-                  </button>
+        <div className="flex items-center gap-2 sm:gap-3">
+          {isAuthenticated && (
+            <button 
+              onClick={() => setIsSearchModalOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 text-slate-100 hover:bg-slate-700 transition-colors text-sm font-medium"
+              title="Todo検索"
+            >
+              🔍
+              <span>検索</span>
+            </button>
+          )}
+          {isAuthenticated && (
+            <button
+              onClick={triggerNewTodo}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-blue-900/40"
+            >
+              ✚ 新規タスク
+            </button>
+          )}
+          {session?.user && (
+            <div className="flex items-center gap-2">
+              {session.user.image ? (
+                <Image
+                  src={session.user.image}
+                  alt="Profile"
+                  width={36}
+                  height={36}
+                  className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-700"
+                  unoptimized
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-sm font-semibold text-slate-200">
+                  {(session.user.name || session.user.email || 'U').slice(0, 1).toUpperCase()}
                 </div>
               )}
+              <Link
+                href="/settings"
+                className="hidden sm:inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
+              >
+                ⚙️ 設定
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="text-xs text-slate-400 hover:text-red-300 transition-colors"
+              >
+                ログアウト
+              </button>
             </div>
-          </div>
+          )}
         </div>
       </header>
 

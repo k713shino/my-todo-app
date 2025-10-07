@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { extractUserIdFromPrefixed, getAuthMethodFromUserId } from '@/lib/user-id-utils'
-import bcrypt from 'bcryptjs'
 import { lambdaAPI } from '@/lib/lambda-api'
 
 export async function POST(request: NextRequest) {

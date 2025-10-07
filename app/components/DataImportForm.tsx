@@ -59,7 +59,7 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
       const formData = new FormData()
       formData.append('file', file)
 
-      // 新フロー: init -> parents (chunk loop) -> children (chunk loop)
+      // 新フロー: init -> parents (チャンク処理)
       const initRes = await fetch('/api/auth/import/init', { method: 'POST', body: formData })
       if (!initRes.ok) {
         // フォールバック: 旧APIで単発インポート（大容量ではタイムアウトの可能性）
@@ -95,27 +95,11 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
       let importedCount = 0
       let skippedCount = 0
 
-      // 親タスクをチャンク処理
+      // データをチャンク処理
       let cursor = 0
       const limit = Math.max(1, parseInt(process.env.NEXT_PUBLIC_IMPORT_CHUNK_SIZE || '100', 10))
       while (true) {
         const res = await fetch('/api/auth/import/parents', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify({ importId, cursor, limit })
-        })
-        if (!res.ok) break
-        const data = await res.json()
-        importedCount += data.imported || 0
-        skippedCount += data.skipped || 0
-        cursor = data.nextCursor || 0
-        if (data.done) break
-      }
-
-      // 子タスクをチャンク処理
-      cursor = 0
-      while (true) {
-        const res = await fetch('/api/auth/import/children', {
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
           body: JSON.stringify({ importId, cursor, limit })

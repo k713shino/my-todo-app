@@ -22,7 +22,6 @@ export interface Todo {
   createdAt: string;
   updatedAt: string;
   // Optional fields supported by backend but absent before
-  parentId?: string | null;
   status?: string; // e.g., 'TODO' | 'IN_PROGRESS' | 'DONE'
   priority?: string; // e.g., 'LOW' | 'MEDIUM' | 'HIGH'
   category?: string | null;
@@ -43,7 +42,6 @@ export interface CreateTodoRequest {
   category?: string;
   tags?: string[];
   dueDate?: string | null;
-  parentId?: string;
   // Additional metadata possibly sent by caller
   userEmail?: string;
   userName?: string;
@@ -61,7 +59,6 @@ export interface UpdateTodoRequest {
   category?: string;
   tags?: string[];
   dueDate?: string | null;
-  parentId?: string | null;
   externalId?: string | null;
   externalSource?: string | null;
 }

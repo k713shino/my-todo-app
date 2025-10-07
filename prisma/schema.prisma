@@ -85,12 +85,6 @@ model Todo {
   tags        String[]
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  // サブタスク関係
-  parentId    String?   // 親タスクのID（サブタスクの場合）
-  parent      Todo?     @relation("TodoSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
-  subtasks    Todo[]    @relation("TodoSubtasks")
-
   // 外部連携用ID（重複検知用）
   externalId     String?
   externalSource String? // 例: 'slack', 'github', 'email'
@@ -102,7 +96,6 @@ model Todo {
   @@index([status])
   @@index([priority])
   @@index([dueDate])
-  @@index([parentId])
   @@index([externalId])
   @@unique([userId, externalSource, externalId])
   @@map("todos")

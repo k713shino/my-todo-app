@@ -15,21 +15,6 @@ export interface Todo {
   // 外部連携ID（重複検知用）
   externalId?: string | null
   externalSource?: string | null
-  // サブタスク関連
-  parentId?: string | null
-  subtasks?: Todo[]
-  _count?: {
-    subtasks: number
-  }
-  // サブタスクのロールアップ情報（サーバー集計）
-  rollup?: {
-    total: number
-    done: number
-    inProgress: number
-    review: number
-    todo: number
-    percent: number // 0-100（小数点あり）
-  }
 }
 
 export interface CreateTodoData {
@@ -43,7 +28,6 @@ export interface CreateTodoData {
   // 外部連携ID（任意）。指定されると重複検知に使用されます。
   externalId?: string
   externalSource?: string
-  parentId?: string  // サブタスク作成時の親ID
 }
 
 export interface UpdateTodoData {
@@ -101,12 +85,6 @@ export interface TodoStats {
     high: number
     medium: number
     low: number
-  }
-  // サブタスク統計
-  subtasks: {
-    total: number
-    mainTasks: number  // 親タスク数
-    subTasks: number   // サブタスク数
   }
   // カテゴリ分布
   categoryBreakdown?: Record<string, number>

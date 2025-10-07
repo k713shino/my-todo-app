@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
     const workedTasks = taskStats.filter(task => task.totalSeconds > 0)
     
     // ソート
-    let sortedTasks = [...workedTasks]
+    const sortedTasks = [...workedTasks]
     switch (sortBy) {
       case 'sessions':
         sortedTasks.sort((a, b) => b.sessions - a.sessions)
@@ -135,12 +135,12 @@ export async function GET(request: NextRequest) {
           hour,
           seconds: parseInt(hourSeconds || '0', 10)
         })
-      } catch (hourError) {
+      } catch (_hourError) {
         hourlyStats.push({ hour, seconds: 0 })
       }
     }
 
-    const result = {
+    const _result = {
       taskStats: topTasks,
       totalTasks: todos.length,
       workedTasks: workedTasks.length,
@@ -154,12 +154,12 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('✅ Task stats result:', {
-      totalTasks: result.totalTasks,
-      workedTasks: result.workedTasks,
-      totalWorkTime: result.totalWorkTime
+      totalTasks: _result.totalTasks,
+      workedTasks: _result.workedTasks,
+      totalWorkTime: _result.totalWorkTime
     })
 
-    return NextResponse.json(result)
+    return NextResponse.json(_result)
   } catch (error) {
     console.error('❌ TASK TIME STATS API ERROR:', error)
     return NextResponse.json({ 

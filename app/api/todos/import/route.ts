@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
             throw new Error('CSV file must have at least a header and one data row')
           }
 
-          const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+          const _headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
           
           todos = lines.slice(1).map(line => {
             const values = line.split(',').map(v => v.trim().replace(/"/g, ''))

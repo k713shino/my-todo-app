@@ -3,11 +3,11 @@ import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { redis } from '@/lib/redis'
 
 // 時間目標の設定・取得・更新
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const session = await getAuthSession()
     if (!isAuthenticated(session)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ _error: 'Unauthorized' }, { status: 401 })
     }
 
     const userId = session.user.id
@@ -15,8 +15,8 @@ export async function GET(_request: NextRequest) {
 
     try {
       await redis.ping()
-    } catch (pingError) {
-      console.error('❌ Redis ping failed:', pingError)
+    } catch (_pingError) {
+      console.error('❌ Redis ping failed:', _pingError)
       return NextResponse.json({ 
         dailyGoal: 480, // デフォルト8時間
         weeklyGoal: 2400, // デフォルト40時間
@@ -46,9 +46,9 @@ export async function GET(_request: NextRequest) {
     }
 
     return NextResponse.json(defaultGoals)
-  } catch (error) {
-    console.error('❌ GET GOALS API ERROR:', error)
-    return NextResponse.json({ error: 'Goals unavailable' })
+  } catch (_error) {
+    console.error('❌ GET GOALS API ERROR:', _error)
+    return NextResponse.json({ _error: 'Goals unavailable' })
   }
 }
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getAuthSession()
     if (!isAuthenticated(session)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ _error: 'Unauthorized' }, { status: 401 })
     }
 
     const userId = session.user.id
@@ -96,9 +96,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, goals })
-  } catch (error) {
-    console.error('❌ POST GOALS API ERROR:', error)
-    return NextResponse.json({ error: 'Failed to save goals' }, { status: 500 })
+  } catch (_error) {
+    console.error('❌ POST GOALS API ERROR:', _error)
+    return NextResponse.json({ _error: 'Failed to save goals' }, { status: 500 })
   }
 }
 
@@ -107,7 +107,7 @@ export async function PUT(request: NextRequest) {
   try {
     const session = await getAuthSession()
     if (!isAuthenticated(session)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ _error: 'Unauthorized' }, { status: 401 })
     }
 
     const userId = session.user.id
@@ -115,7 +115,7 @@ export async function PUT(request: NextRequest) {
 
     try {
       await redis.ping()
-    } catch (pingError) {
+    } catch (_pingError) {
       return NextResponse.json({ progress: 0, achieved: false, fallback: true })
     }
 
@@ -162,9 +162,9 @@ export async function PUT(request: NextRequest) {
       targetSeconds,
       remainingSeconds: Math.max(0, targetSeconds - currentSeconds)
     })
-  } catch (error) {
-    console.error('❌ PUT PROGRESS API ERROR:', error)
-    return NextResponse.json({ progress: 0, achieved: false, error: 'Progress check failed' })
+  } catch (_error) {
+    console.error('❌ PUT PROGRESS API ERROR:', _error)
+    return NextResponse.json({ progress: 0, achieved: false, _error: 'Progress check failed' })
   }
 }
 

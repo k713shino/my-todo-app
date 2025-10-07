@@ -10,7 +10,6 @@ export const CacheKeys = {
   userSession: (sessionId: string) => `session:${sessionId}`,
   userActivity: (userId: string) => `activity:user:${userId}`,
   apiRateLimit: (identifier: string) => `ratelimit:${identifier}`,
-  subtaskOrder: (userId: string, parentId: string) => `subtasks:order:${userId}:${parentId}`,
 } as const
 
 // セッションデータの型定義
@@ -128,17 +127,6 @@ export class CacheManager {
       userId: todo.userId,
       category: todo.category ?? null,
       tags: Array.isArray(todo.tags) ? todo.tags : (typeof todo.tags === 'string' ? todo.tags.split(',').map((t: string)=>t.trim()).filter(Boolean) : []),
-      parentId: todo.parentId ?? null,
-      _count: todo._count && typeof todo._count.subtasks === 'number' ? { subtasks: todo._count.subtasks } : { subtasks: 0 },
-      // サブタスク進捗ロールアップ（存在する場合のみ保持）
-      rollup: todo.rollup ? {
-        total: Number(todo.rollup.total) || 0,
-        done: Number(todo.rollup.done) || 0,
-        inProgress: Number(todo.rollup.inProgress) || 0,
-        review: Number(todo.rollup.review) || 0,
-        todo: Number(todo.rollup.todo) || 0,
-        percent: Number(todo.rollup.percent) || 0,
-      } : undefined,
       // 説明文は長い場合は省略
       description: todo.description && typeof todo.description === 'string' && todo.description.length > 200 
         ? todo.description.slice(0, 200) + '...'
@@ -159,14 +147,6 @@ export class CacheManager {
       const pipeline = redis.pipeline()
       keys.forEach(key => pipeline.del(key))
       await pipeline.exec()
-      // サブタスク順序キーも削除
-      try {
-        const deleted = await this.deletePattern(CacheKeys.subtaskOrder(userId, '*'))
-        if (deleted > 0) {
-          console.log(`🧹 Deleted ${deleted} subtask order keys for user ${userId}`)
-        }
-      } catch {}
-      
       console.log(`🚀 Cache invalidated for user ${userId}: ${keys.length} keys`)
       return true
     } catch (error) {
@@ -256,15 +236,6 @@ export class CacheManager {
       console.error('Cleanup error:', error)
       return 0
     }
-  }
-
-  // サブタスク並び順の保存/取得
-  static async setSubtaskOrder(userId: string, parentId: string, order: string[], ttl = 86400 * 30): Promise<boolean> { // 30日
-    if (!Array.isArray(order)) return false
-    return this.set(CacheKeys.subtaskOrder(userId, parentId), order, ttl)
-  }
-  static async getSubtaskOrder(userId: string, parentId: string): Promise<string[] | null> {
-    return this.get<string[]>(CacheKeys.subtaskOrder(userId, parentId))
   }
 
   // ヘルスチェック

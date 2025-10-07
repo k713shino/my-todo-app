@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getAuthSession()
     if (!isAuthenticated(session)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ _error: 'Unauthorized' }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const lambdaApiUrl = process.env.LAMBDA_API_URL
 
     if (!lambdaApiUrl) {
-      return NextResponse.json({ error: 'Service configuration error' }, { status: 503 })
+      return NextResponse.json({ _error: 'Service configuration _error' }, { status: 503 })
     }
 
     const url = `${lambdaApiUrl}/time-entries/active?userId=${encodeURIComponent(actualUserId)}${tz ? `&tz=${encodeURIComponent(tz)}` : ''}`
@@ -27,8 +27,7 @@ export async function GET(request: NextRequest) {
     }
     const data = await resp.json()
     return NextResponse.json(data)
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({ running: false })
   }
 }
-

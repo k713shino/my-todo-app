@@ -69,10 +69,6 @@ export const normalizeTodos = (todoData: any[]): any[] => {
     }
     if (todo.completed !== undefined) normalized.completed = Boolean(todo.completed)
     if (todo.originalId || todo.id) normalized.originalId = todo.originalId || todo.id
-    if (todo.parentOriginalId) normalized.parentOriginalId = todo.parentOriginalId
-    if (!normalized.parentOriginalId && (todo.parentId || todo.parent_id)) {
-      normalized.parentOriginalId = todo.parentId || todo.parent_id
-    }
     if (todo.createdAt) normalized.originalCreatedAt = todo.createdAt
     if (todo.updatedAt) normalized.originalUpdatedAt = todo.updatedAt
     // 外部IDメタ
@@ -112,4 +108,3 @@ export const eqDay = (d1?: string | null, d2?: string | null) => {
 }
 
 export const eqNullable = (x?: string | null, y?: string | null) => (x || '') === (y || '')
-

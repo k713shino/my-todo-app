@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import toast from 'react-hot-toast'
+import { toast } from 'react-hot-toast'
 
 interface AccountDeletionProps {
   className?: string
@@ -11,7 +11,7 @@ interface AccountDeletionProps {
 
 export default function AccountDeletion({ className = '' }: AccountDeletionProps) {
   const { data: session } = useSession()
-  const router = useRouter()
+  const _router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmationText, setConfirmationText] = useState('')
   const [showConfirmation, setShowConfirmation] = useState(false)

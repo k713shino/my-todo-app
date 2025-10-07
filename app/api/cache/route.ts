@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { CacheManager } from '@/lib/cache'
-import { redis } from '@/lib/redis'
+import { redis as _redis } from '@/lib/redis'
 
 // キャッシュ統計取得
 export async function GET(_request: NextRequest) {

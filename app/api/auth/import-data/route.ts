@@ -231,11 +231,6 @@ export async function POST(request: NextRequest) {
                 case 'Tags':
                   todo.tags = value
                   break
-                case 'Parent ID':
-                case 'ParentId':
-                case 'ParentID':
-                  todo.parentOriginalId = value
-                  break
                 case 'Due Date':
                   todo.dueDate = value
                   break
@@ -320,14 +315,6 @@ export async function POST(request: NextRequest) {
       if (todo.originalId || todo.id) {
         normalized.originalId = todo.originalId || todo.id
       }
-      if (todo.parentOriginalId) {
-        normalized.parentOriginalId = todo.parentOriginalId
-      }
-      // JSONエクスポート由来の親参照（parentId）も受け入れる
-      if (!normalized.parentOriginalId && (todo.parentId || (todo as any).parent_id)) {
-        normalized.parentOriginalId = todo.parentId || (todo as any).parent_id
-      }
-      
       // タイムスタンプ情報の保持（参考情報として）
       if (todo.createdAt) {
         normalized.originalCreatedAt = todo.createdAt
@@ -394,10 +381,6 @@ export async function POST(request: NextRequest) {
         await Promise.all(workers)
       }
 
-      // 2パス方式で親→子の順に作成（親子関係を確実に復元）
-      const parents = uniqueTodos.filter(t => !t.parentOriginalId)
-      const children = uniqueTodos.filter(t => t.parentOriginalId)
-      const idMap = new Map<string, string>() // originalId -> newId
       let importedCount = 0
       let skippedCount = 0
 
@@ -413,7 +396,6 @@ export async function POST(request: NextRequest) {
           dueDate: payload.dueDate || undefined,
           category: payload.category || undefined,
           tags: Array.isArray(payload.tags) ? payload.tags : undefined,
-          parentId: payload.parentId || undefined,
         })
         if (res.success && res.data) {
           importedCount++
@@ -424,37 +406,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 親を並列作成（重複ならスキップし、既存IDへマップ）
-      await runWithConcurrency(parents, async (t) => {
+      await runWithConcurrency(uniqueTodos, async (t) => {
         const dup = isDuplicateOfExisting(t)
         if (dup) {
           skippedCount++
-          if (t.originalId) {
-            idMap.set(String(t.originalId), String(dup.id))
-          }
           return
         }
-        const created = await createOne(t)
-        if (created && t.originalId) idMap.set(String(t.originalId), String((created as any).id))
-      })
-
-      // 子を並列作成（親ID解決後、重複ならスキップ）
-      await runWithConcurrency(children, async (t) => {
-        const parentOrig = String(t.parentOriginalId)
-        const parentNewId = idMap.get(parentOrig)
-        const payload = { ...t, parentId: parentNewId }
-        const dup = isDuplicateOfExisting(payload)
-        if (dup) {
-          skippedCount++
-          if (t.originalId) idMap.set(String(t.originalId), String(dup.id))
-          return
-        }
-        const created = await createOne(payload)
-        if (created && t.originalId) idMap.set(String(t.originalId), String((created as any).id))
+        await createOne(t)
       })
 
       const totalCount = uniqueTodos.length
-      console.log('📈 Import results (2-pass, parallelized):', { importedCount, skippedCount, totalCount, concurrency: CONCURRENCY, parents: parents.length, children: children.length })
+      console.log('📈 Import results (parallelized):', { importedCount, skippedCount, totalCount, concurrency: CONCURRENCY })
 
       // キャッシュ無効化
       try { await CacheManager.invalidateUserTodos(session.user.id) } catch {}

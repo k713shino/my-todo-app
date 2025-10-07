@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import toast from 'react-hot-toast'
+import { toast as _toast } from 'react-hot-toast'
 import AccountDeletionResultModal from './AccountDeletionResultModal'
 
 export default function AccountDeletionForm() {
   const { data: session } = useSession()
-  const router = useRouter()
+  const _router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [formData, setFormData] = useState({

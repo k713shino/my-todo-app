@@ -23,6 +23,28 @@ export async function GET(request: NextRequest) {
   const actualUserId = extractUserIdFromPrefixed(userId)
   console.log('⚡ 高速ユーザー専用Todo取得開始:', { userId, actualUserId })
   
+  const normalizeTodo = (todo: any) => {
+    const normalizedTags = Array.isArray(todo.tags)
+      ? todo.tags
+      : (typeof todo.tags === 'string'
+          ? todo.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+          : [])
+
+    return {
+      id: todo.id,
+      title: todo.title,
+      description: todo.description || null,
+      status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
+      priority: todo.priority || 'MEDIUM',
+      dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
+      createdAt: new Date(todo.createdAt),
+      updatedAt: new Date(todo.updatedAt),
+      userId: todo.userId,
+      category: todo.category || null,
+      tags: normalizedTags,
+    }
+  }
+  
   try {
     // キャッシュバイパスチェック
     const { searchParams } = new URL(request.url)
@@ -34,68 +56,38 @@ export async function GET(request: NextRequest) {
       const cachedTodos = await CacheManager.getTodos(userId)
       
       if (cachedTodos && cachedTodos.length >= 0) {
-        // 互換性: 旧キャッシュには _count が無い可能性があるため検証
-        const hasCounts = cachedTodos.every((t: any) => t && t._count && typeof t._count.subtasks === 'number')
-        if (!hasCounts) {
-          console.log('⚠️ 旧キャッシュ検出（_countが不足）→ Lambdaから再構築します')
-        } else {
-          // SWR: キャッシュを即返しつつ、裏で最新化を試行
-          ;(async () => {
-            try {
-              const refreshStart = performance.now()
-              const latest = await lambdaAPI.get(`/todos/user/${encodeURIComponent(actualUserId)}`, { timeout: 8000 })
-              if (latest.success && Array.isArray(latest.data)) {
-                const allTodos = latest.data
-                const mainTodos = allTodos.filter((todo: any) => !todo.parentId)
-                const safeTodos = mainTodos.map((todo: any) => {
-                  const subtaskCount = allTodos.filter((t: any) => t.parentId && t.parentId.toString() === todo.id.toString()).length
-                  const normalizedTags = Array.isArray(todo.tags)
-                    ? todo.tags
-                    : (typeof todo.tags === 'string'
-                        ? todo.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-                        : [])
-                  return {
-                    id: todo.id,
-                    title: todo.title,
-                    description: todo.description || null,
-                    status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
-                    priority: todo.priority || 'MEDIUM',
-                    dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
-                    createdAt: new Date(todo.createdAt),
-                    updatedAt: new Date(todo.updatedAt),
-                    userId: todo.userId,
-                    category: todo.category || null,
-                    tags: normalizedTags,
-                    parentId: todo.parentId ? todo.parentId.toString() : null,
-                    _count: { subtasks: subtaskCount }
-                  }
-                })
-                await CacheManager.setTodos(userId, safeTodos, 300)
-                console.log(`🔄 SWRリフレッシュ完了 (${(performance.now()-refreshStart).toFixed(2)}ms):`, safeTodos.length)
-              }
-            } catch (e) {
-              console.log('⚠️ SWRリフレッシュ失敗:', e instanceof Error ? e.message : e)
+        // SWR: キャッシュを即返しつつ、裏で最新化を試行
+        ;(async () => {
+          try {
+            const refreshStart = performance.now()
+            const latest = await lambdaAPI.get(`/todos/user/${encodeURIComponent(actualUserId)}`, { timeout: 8000 })
+            if (latest.success && Array.isArray(latest.data)) {
+              const normalizedTodos = latest.data.map(normalizeTodo)
+              await CacheManager.setTodos(userId, normalizedTodos, 300)
+              console.log(`🔄 SWRリフレッシュ完了 (${(performance.now()-refreshStart).toFixed(2)}ms):`, normalizedTodos.length)
             }
-          })()
-          const cacheTime = performance.now() - startTime
-          console.log(`✅ Redis キャッシュヒット (${cacheTime.toFixed(2)}ms):`, cachedTodos.length, '件')
-          
-          const response = NextResponse.json(cachedTodos.map(todo => ({
-            ...todo,
-            dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString() : null,
-            createdAt: new Date(todo.createdAt).toISOString(),
-            updatedAt: new Date(todo.updatedAt).toISOString()
-          })))
-          
-          const securityHeaders = createSecurityHeaders()
-          Object.entries(securityHeaders).forEach(([key, value]) => {
-            response.headers.set(key, value)
-          })
-          response.headers.set('X-Cache-Status', 'stale')
-          response.headers.set('X-Response-Time', `${cacheTime.toFixed(2)}ms`)
-          
-          return response
-        }
+          } catch (e) {
+            console.log('⚠️ SWRリフレッシュ失敗:', e instanceof Error ? e.message : e)
+          }
+        })()
+        const cacheTime = performance.now() - startTime
+        console.log(`✅ Redis キャッシュヒット (${cacheTime.toFixed(2)}ms):`, cachedTodos.length, '件')
+        
+        const response = NextResponse.json(cachedTodos.map(todo => ({
+          ...todo,
+          dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString() : null,
+          createdAt: new Date(todo.createdAt).toISOString(),
+          updatedAt: new Date(todo.updatedAt).toISOString()
+        })))
+        
+        const securityHeaders = createSecurityHeaders()
+        Object.entries(securityHeaders).forEach(([key, value]) => {
+          response.headers.set(key, value)
+        })
+        response.headers.set('X-Cache-Status', 'stale')
+        response.headers.set('X-Response-Time', `${cacheTime.toFixed(2)}ms`)
+        
+        return response
       }
       console.log('❌ Redis キャッシュミス - Lambda API経由で取得')
     }
@@ -127,71 +119,8 @@ export async function GET(request: NextRequest) {
       }, { status: 502 })
     }
     
-    // 🛡️ データサニタイズ (Date オブジェクトに変換) + サブタスク数計算
-    const allTodos = lambdaResponse.data
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🔍 デバッグ - 全TodoのparentId:', allTodos.map((t: any) => ({ id: t.id, title: t.title, parentId: t.parentId })))
-    }
-    
-    // メインタスクのみをフィルタリング（parentIdがnullまたは未定義のもの）
-    const mainTodos = allTodos.filter((todo: any) => !todo.parentId)
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🔍 デバッグ - フィルタリング後のメインタスク:', mainTodos.length, '件', mainTodos.map((t: any) => ({ id: t.id, title: t.title, parentId: t.parentId })))
-    }
-    const safeTodos = mainTodos.map((todo: any) => {
-      // このTodoのサブタスク群と集計を計算
-      const relatedSubtasks = allTodos.filter((t: any) => 
-        t.parentId && t.parentId.toString() === todo.id.toString()
-      )
-      const subtaskCount = relatedSubtasks.length
-      const rollupCounts = {
-        total: subtaskCount,
-        todo: relatedSubtasks.filter((t: any) => (t.status || (t.completed ? 'DONE' : 'TODO')) === 'TODO').length,
-        inProgress: relatedSubtasks.filter((t: any) => (t.status || (t.completed ? 'DONE' : 'TODO')) === 'IN_PROGRESS').length,
-        review: relatedSubtasks.filter((t: any) => (t.status || (t.completed ? 'DONE' : 'TODO')) === 'REVIEW').length,
-        done: relatedSubtasks.filter((t: any) => (t.status || (t.completed ? 'DONE' : 'TODO')) === 'DONE').length,
-      }
-      const percent = rollupCounts.total > 0 ? (rollupCounts.done / rollupCounts.total) * 100 : 0
-      
-      if (process.env.NODE_ENV !== 'production') {
-        if (subtaskCount > 0) {
-          console.log('🔍 サブタスクあり:', { parentId: todo.id, title: todo.title, subtaskCount })
-        }
-      }
-      
-      // タグはCSV文字列/配列両対応
-      const normalizedTags = Array.isArray(todo.tags)
-        ? todo.tags
-        : (typeof todo.tags === 'string'
-            ? todo.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
-            : [])
-
-      return {
-        id: todo.id,
-        title: todo.title,
-        description: todo.description || null,
-        status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
-        priority: todo.priority || 'MEDIUM',
-        dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
-        createdAt: new Date(todo.createdAt),
-        updatedAt: new Date(todo.updatedAt),
-        userId: todo.userId,
-        category: todo.category || null,
-        tags: normalizedTags,
-        parentId: todo.parentId ? todo.parentId.toString() : null,
-        _count: {
-          subtasks: subtaskCount
-        },
-        rollup: {
-          total: rollupCounts.total,
-          done: rollupCounts.done,
-          inProgress: rollupCounts.inProgress,
-          review: rollupCounts.review,
-          todo: rollupCounts.todo,
-          percent,
-        }
-      }
-    })
+    // 🛡️ データサニタイズ (Date オブジェクトに変換)
+    const safeTodos = lambdaResponse.data.map(normalizeTodo)
     
     // ⚡ 高速キャッシュ保存 (非同期)
     if (safeTodos.length >= 0) {

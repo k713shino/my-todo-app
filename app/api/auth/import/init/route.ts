@@ -35,7 +35,6 @@ export async function POST(request: NextRequest) {
         if (t.Status && !t.status) t.status = t.Status
         if (t.Priority && !t.priority) t.priority = t.Priority
         if (t.Tags && !t.tags) t.tags = t.Tags
-        if (t['Parent ID'] && !t.parentOriginalId) t.parentOriginalId = t['Parent ID']
         if (t['Due Date'] && !t.dueDate) t.dueDate = t['Due Date']
         if (t.ID && !t.originalId) t.originalId = t.ID
         return t
@@ -43,8 +42,8 @@ export async function POST(request: NextRequest) {
     }
 
     const normalized = normalizeTodos(rows)
-    const parents = normalized.filter(t => !t.parentOriginalId)
-    const children = normalized.filter(t => t.parentOriginalId)
+    const parents = normalized
+    const children: any[] = []
 
     const userId = extractUserIdFromPrefixed(session.user.id)
 

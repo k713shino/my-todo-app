@@ -91,8 +91,6 @@ export async function GET(request: NextRequest) {
           medium: sourceTodos.filter((t: any) => t.priority === 'MEDIUM').length,
           low: sourceTodos.filter((t: any) => t.priority === 'LOW').length,
         }
-        const mainTaskCount = sourceTodos.filter((t: any) => !t.parentId).length
-        const subTaskCount = sourceTodos.filter((t: any) => t.parentId).length
         const weeklyDone = sourceTodos.filter((t: any) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= weekStartRef.getTime()).length
         const monthlyDone = sourceTodos.filter((t: any) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= monthStart.getTime()).length
         // 週次完了推移（可変週数・週開始・タイムゾーン）
@@ -181,7 +179,6 @@ export async function GET(request: NextRequest) {
           byStatus,
           overdue: overdueCount,
           byPriority,
-          subtasks: { total: subTaskCount, mainTasks: mainTaskCount, subTasks: subTaskCount },
           categoryBreakdown,
           completed: byStatus.done,
           active: totalCount - byStatus.done,
@@ -214,7 +211,6 @@ export async function GET(request: NextRequest) {
           byStatus: { todo: 0, inProgress: 0, review: 0, done: doneCount },
           overdue: 0,
           byPriority: { urgent: 0, high: 0, medium: 0, low: 0 },
-          subtasks: { total: 0, mainTasks: 0, subTasks: 0 },
           categoryBreakdown: {},
           completed: doneCount,
           active: Math.max(totalCount - doneCount, 0),

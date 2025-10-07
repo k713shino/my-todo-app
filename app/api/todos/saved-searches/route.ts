@@ -3,7 +3,7 @@ import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { lambdaAPI } from '@/lib/lambda-api'
 
 // GET: 保存済み検索一覧の取得
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     console.log('🔍 API: 保存済み検索一覧取得開始')
     const session = await getAuthSession()

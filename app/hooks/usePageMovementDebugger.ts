@@ -77,13 +77,16 @@ export function usePageMovementDebugger() {
       if (now - (domObserver as any).lastLogTime < 1000) return // 1秒以内は無視
       (domObserver as any).lastLogTime = now
 
-      const significantChanges = mutations.filter(mutation => 
-        mutation.type === 'childList' && 
+      const significantChanges = mutations.filter(mutation =>
+        mutation.type === 'childList' &&
         mutation.addedNodes.length > 0 &&
-        Array.from(mutation.addedNodes).some(node => 
-          node.nodeType === Node.ELEMENT_NODE &&
-          !(node as Element).className?.includes('toast') // トースト通知は除外
-        )
+        Array.from(mutation.addedNodes).some(node => {
+          if (node.nodeType !== Node.ELEMENT_NODE) return false
+          const element = node as Element
+          // SVG要素やその他の特殊要素に対応するため、getAttributeを使用
+          const classNames = element.getAttribute('class') || ''
+          return !classNames.includes('toast') // トースト通知は除外
+        })
       )
       
       if (significantChanges.length > 0) {

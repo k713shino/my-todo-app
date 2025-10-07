@@ -10,7 +10,7 @@ import TimeTrackingDashboard from '@/app/components/TimeTrackingDashboard'
 import RunningTimeSync from '@/app/components/RunningTimeSync'
 import RunningTimerBanner from '@/app/components/RunningTimerBanner'
 import type { TodoStats } from '@/types/todo'
-import { useMemo } from 'react'
+import DashboardSideNav from '@/app/components/DashboardSideNav'
 
 export default function Dashboard() {
   const { data: session, status } = useSession()
@@ -149,149 +149,153 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      {/* ヘッダー */}
-      <DashboardHeader onModalSearch={handleModalSearch} />
-      {/* 計測中タスクのサーバ同期（非表示コンポーネント）*/}
+    <div className="min-h-screen bg-slate-950 text-slate-100">
       <RunningTimeSync />
+      <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 xl:px-10 pb-28 xl:pb-14 pt-6 xl:pt-10">
+        <div className="flex flex-col gap-8 xl:grid xl:grid-cols-[240px,minmax(0,1fr),320px] xl:gap-10">
+          <DashboardSideNav
+            activeTab={homeTab}
+            onTabChange={setHomeTab}
+            onOpenSearch={() => {
+              setHomeTab('tasks')
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('search:open'))
+              }
+            }}
+            user={session?.user ?? undefined}
+          />
 
-      {/* メインコンテンツ - 固定ヘッダー分の上余白 */}
-      <main className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pt-20 sm:pt-24">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* ホームタブ切替 */}
-          <div className="border-b border-gray-200 dark:border-gray-700">
-            <nav className="-mb-px flex gap-2">
-              {[
-                { id: 'time', label: '⏱ 時間' },
-                { id: 'tasks', label: '🧾 タスク' }
-              ].map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setHomeTab(t.id as any)}
-                  className={`py-2.5 px-4 text-sm font-medium border-b-2 rounded-t-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 tap-target ${
-                    homeTab === t.id
-                      ? 'border-purple-500 text-purple-600 dark:text-purple-300'
-                      : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
-                  }`}
-                >{t.label}</button>
-              ))}
-            </nav>
+          <div className="min-w-0 flex flex-col gap-6 xl:max-w-2xl">
+            <DashboardHeader
+              onModalSearch={handleModalSearch}
+              className="sticky top-2 z-30 shadow-xl shadow-slate-950/40 border border-slate-800/70 bg-slate-900/70 backdrop-blur rounded-3xl"
+            />
+
+            <div className="rounded-3xl border border-slate-800/70 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <nav className="flex items-center gap-4 text-sm font-semibold">
+                {[
+                  { id: 'tasks' as const, label: 'おすすめ', emoji: '⭐' },
+                  { id: 'time' as const, label: 'フォーカス', emoji: '⏱' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setHomeTab(tab.id)}
+                    className={`relative px-3 py-2 transition-colors duration-150 rounded-full ${
+                      homeTab === tab.id
+                        ? 'text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="mr-2">{tab.emoji}</span>
+                    {tab.label}
+                    {homeTab === tab.id && (
+                      <span className="absolute inset-x-3 -bottom-1 h-1 rounded-full bg-blue-500" />
+                    )}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {homeTab === 'time' ? (
+              <div className="rounded-3xl border border-slate-800/70 bg-slate-900/60 backdrop-blur px-4 sm:px-6 py-4 shadow-xl shadow-slate-950/40">
+                <TimeTrackingDashboard />
+              </div>
+            ) : (
+              <TodoList modalSearchValues={modalSearchValues} advancedSearchParams={advancedParams} />
+            )}
+
+            <div className="lg:hidden space-y-4">
+              <RightRail
+                stats={stats}
+                timeSummary={timeSummary}
+                timeZone={timeZone}
+                setTimeZone={setTimeZone}
+                formatHM={formatHM}
+              />
+            </div>
           </div>
 
-          {homeTab === 'time' && (
-            <>
-              {/* 上段: 左=時間ダッシュボード / 右=要約（統計＋時間サマリ＋詳細分析） */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-                <div className="lg:col-span-2">
-                  <TimeTrackingDashboard />
-                </div>
-                <aside className="space-y-4">
-                  {/* 計測中バナー */}
-                  <RunningTimerBanner />
-                  {stats && (
-                    <div className="card">
-                      <div className="card-section">
-                        <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
-                      </div>
-                    </div>
-                  )}
-                  {Boolean(timeSummary) && (
-                    <div className="card">
-                      <div className="card-section">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">⏱️ 時間サマリ</h3>
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={timeZone}
-                              onChange={(e) => { setTimeZone(e.target.value); try { localStorage.setItem('time:tz', e.target.value); if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('time:tz-changed', { detail: e.target.value })) } catch {} }}
-                              className="select-base text-xs"
-                              title="タイムゾーンを選択"
-                            >
-                              <option value="UTC">UTC</option>
-                              <option value="Asia/Tokyo">Asia/Tokyo</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="text-center">
-                            <div className="text-[11px] muted mb-1">今日</div>
-                            <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{formatHM(timeSummary?.todaySeconds || 0)}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-[11px] muted mb-1">今週</div>
-                            <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{formatHM(timeSummary?.weekSeconds || 0)}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </aside>
-              </div>
-            </>
-          )}
-
-          {homeTab === 'tasks' && (
-            <>
-              {/* タスクビュー: 左=ツールバー+一覧 / 右=統計 */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-                <div className="lg:col-span-2 space-y-3">
-                  <div className="toolbar justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">🧾 Todo</span>
-                      <span className="text-xs muted hidden sm:inline">一覧と操作</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* 将来: 選択モード/新規作成ボタン */}
-                    </div>
-                  </div>
-                  <TodoList modalSearchValues={modalSearchValues} advancedSearchParams={advancedParams} />
-                </div>
-                <aside className="space-y-4">
-                  {/* 計測中バナー */}
-                  <RunningTimerBanner />
-                  {stats && (
-                    <div className="card">
-                      <div className="card-section">
-                        <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
-                      </div>
-                    </div>
-                  )}
-                  {Boolean(timeSummary) && (
-                    <div className="card">
-                      <div className="card-section">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">⏱️ 時間サマリ</h3>
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={timeZone}
-                              onChange={(e) => { setTimeZone(e.target.value); try { localStorage.setItem('time:tz', e.target.value); if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('time:tz-changed', { detail: e.target.value })) } catch {} }}
-                              className="select-base text-xs"
-                              title="タイムゾーンを選択"
-                            >
-                              <option value="UTC">UTC</option>
-                              <option value="Asia/Tokyo">Asia/Tokyo</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="text-center">
-                            <div className="text-[11px] muted mb-1">今日</div>
-                            <div className="text-xl font-bold text-purple-600 dark:text-purple-400">{formatHM(timeSummary?.todaySeconds || 0)}</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-[11px] muted mb-1">今週</div>
-                            <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{formatHM(timeSummary?.weekSeconds || 0)}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </aside>
-              </div>
-            </>
-          )}
+          <aside className="hidden lg:flex flex-col gap-6">
+            <RightRail
+              stats={stats}
+              timeSummary={timeSummary}
+              timeZone={timeZone}
+              setTimeZone={setTimeZone}
+              formatHM={formatHM}
+            />
+          </aside>
         </div>
-      </main>
+      </div>
     </div>
+  )
+}
+
+interface RightRailProps {
+  stats: TodoStats | null
+  timeSummary: { todaySeconds: number; weekSeconds: number } | null
+  timeZone: string
+  setTimeZone: (tz: string) => void
+  formatHM: (sec: number) => string
+}
+
+function RightRail({ stats, timeSummary, timeZone, setTimeZone, formatHM }: RightRailProps) {
+  return (
+    <>
+      <RunningTimerBanner />
+      {stats && (
+        <div className="rounded-3xl border border-slate-800/70 bg-slate-900/60 backdrop-blur shadow-xl shadow-slate-950/40">
+          <div className="p-5">
+            <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+              📊 今日のハイライト
+            </h3>
+            <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
+          </div>
+        </div>
+      )}
+      {Boolean(timeSummary) && (
+        <div className="rounded-3xl border border-slate-800/70 bg-slate-900/60 backdrop-blur shadow-xl shadow-slate-950/40">
+          <div className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-200">⏱️ 時間サマリ</h3>
+              <select
+                value={timeZone}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setTimeZone(value)
+                  try {
+                    localStorage.setItem('time:tz', value)
+                    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('time:tz-changed', { detail: value }))
+                  } catch {}
+                }}
+                className="select-base text-xs bg-slate-800 border-slate-700 text-slate-200"
+                title="タイムゾーンを選択"
+              >
+                <option value="UTC">UTC</option>
+                <option value="Asia/Tokyo">Asia/Tokyo</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-slate-800/80 border border-slate-700/80 px-4 py-3 text-center">
+                <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">今日</div>
+                <div className="text-2xl font-bold text-blue-400">{formatHM(timeSummary?.todaySeconds || 0)}</div>
+              </div>
+              <div className="rounded-2xl bg-slate-800/80 border border-slate-700/80 px-4 py-3 text-center">
+                <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">今週</div>
+                <div className="text-2xl font-bold text-purple-400">{formatHM(timeSummary?.weekSeconds || 0)}</div>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              集中して取り組めた時間を自動で集計します。休憩やスナックタイムも忘れずに！
+            </p>
+          </div>
+        </div>
+      )}
+      <div className="rounded-3xl border border-slate-800/70 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/80 backdrop-blur shadow-xl shadow-slate-950/40 p-5">
+        <h3 className="text-sm font-semibold text-slate-200 mb-2">📌 ヒント</h3>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          検索モーダルで高度検索を活用すると、タグや正規表現で素早くタスクを絞り込めます。
+        </p>
+      </div>
+    </>
   )
 }

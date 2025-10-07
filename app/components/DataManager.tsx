@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { useSession } from 'next-auth/react'
-import toast from 'react-hot-toast'
+import { toast } from 'react-hot-toast'
 
 interface DataManagerProps {
   className?: string

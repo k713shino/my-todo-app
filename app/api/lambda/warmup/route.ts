@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { createSecurityHeaders } from '@/lib/security'
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     console.log('🔥 Lambda関数ウォームアップ開始')
     const startTime = performance.now()
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   // POST方式でのウォームアップ（より積極的）
   try {
     console.log('🔥 積極的Lambda関数ウォームアップ開始')
