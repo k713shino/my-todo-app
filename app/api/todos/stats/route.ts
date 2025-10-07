@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
           const m = (tz === 'UTC' ? d.getUTCMonth() : d.getMonth()) + 1
           return `${y}/${String(m).padStart(2,'0')}`
         }
-        let monthCursor = startOfMonth(new Date())
+        const monthCursor = startOfMonth(new Date())
         for (let i = 0; i < months; i++) {
           const start = addMonths(monthCursor, -i)
           const end = addMonths(start, 1)
