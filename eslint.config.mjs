@@ -12,6 +12,11 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
+    languageOptions: {
+      parserOptions: {
+        project: true,
+      },
+    },
     rules: {
       // 新規コード用: 重要度に応じたレベル設定
       "@typescript-eslint/no-explicit-any": "warn", // フェーズ2で大量修正後にerrorへ

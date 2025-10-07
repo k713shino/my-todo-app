@@ -3,6 +3,12 @@ import SessionWrapper from './components/SessionWrapper'
 import GlobalToaster from './components/GlobalToaster'
 import { ThemeProvider } from './components/ThemeProvider'
 import ScrollToTopButton from './components/ScrollToTopButton'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Todo管理システム',
+  description: 'タスクを効率的に管理できるTodo管理システム',
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
