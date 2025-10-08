@@ -27,6 +27,7 @@ import XStyleTodoCard from './XStyleTodoCard'
 import XStyleTabs from './XStyleTabs'
 import XStyleFAB from './XStyleFAB'
 import XStyleSortBar from './XStyleSortBar'
+import XStyleBulkActions from './XStyleBulkActions'
 
 // 優先度の日本語ラベル
 const PRIORITY_LABELS: Record<Priority, string> = {
@@ -477,6 +478,17 @@ export default function TodoList({ modalSearchValues }: TodoListProps) {
             sortOrder={sortOrder}
             onSortByChange={setSortBy}
             onSortOrderChange={setSortOrder}
+          />
+
+          <XStyleBulkActions
+            isSelectionMode={bulkActions.isSelectionMode}
+            selectedCount={bulkActions.selectedTodos.size}
+            totalCount={sortedTodos.length}
+            isBulkOperating={bulkActions.isBulkOperating}
+            onToggleSelection={bulkActions.toggleSelectionMode}
+            onSelectAll={() => bulkActions.handleSelectAll(sortedTodos)}
+            onBulkStatusUpdate={bulkActions.handleBulkStatusUpdate}
+            onBulkDelete={bulkActions.handleBulkDelete}
           />
 
           {/* メインコンテンツ */}
