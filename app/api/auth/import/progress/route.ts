@@ -16,8 +16,9 @@ export async function GET(request: NextRequest) {
     if (!statusRaw) return NextResponse.json({ error: 'Import not found or expired' }, { status: 404 })
     const status = JSON.parse(statusRaw)
     return NextResponse.json({ importId, ...status })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Progress failed' }, { status: 500 })
+  } catch (e) {
+    const error = e as Error
+    return NextResponse.json({ error: error?.message || 'Progress failed' }, { status: 500 })
   }
 }
 

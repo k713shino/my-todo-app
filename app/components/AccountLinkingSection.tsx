@@ -21,7 +21,7 @@ export default function AccountLinkingSection() {
   const [availableUsers, setAvailableUsers] = useState<DatabaseUser[]>([])
   const [loading, setLoading] = useState(true)
   const [linking, setLinking] = useState(false)
-  const [linkResult, setLinkResult] = useState<any>(null)
+  const [linkResult, setLinkResult] = useState<{ success?: boolean; error?: string; linkedAccount?: { databaseUserId: string; todoCount: number } } | null>(null)
 
   useEffect(() => {
     if (session?.user) {

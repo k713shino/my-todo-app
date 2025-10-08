@@ -122,11 +122,16 @@ export default function XStyleTodoCard({
     }
   }, [])
 
+  const baseCardClasses = 'group relative mb-3 rounded-2xl border px-5 py-4 shadow-sm transition-all duration-200 cursor-pointer first:mt-4 last:mb-0'
+  const surfaceClasses = isSelected
+    ? 'border-blue-400 bg-blue-50/80 shadow-md ring-1 ring-blue-200/60 dark:border-blue-500 dark:bg-blue-900/25 dark:ring-blue-700/40'
+    : isHovered
+      ? 'border-slate-200 bg-slate-50/80 shadow-md dark:border-gray-700 dark:bg-gray-800/60'
+      : 'border-slate-200/80 bg-white/95 dark:border-gray-800/70 dark:bg-gray-900/80'
+
   return (
     <article
-      className={`group relative border-b border-gray-200 dark:border-gray-800 px-4 py-3 transition-all duration-200 cursor-pointer ${
-        isHovered ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-white dark:bg-gray-900'
-      } ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+      className={`${baseCardClasses} ${surfaceClasses}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => onEdit(todo)}
@@ -179,6 +184,8 @@ export default function XStyleTodoCard({
               <span className={`flex-shrink-0 text-xs font-medium ${getPriorityColor()}`}>
                 {todo.priority === 'URGENT' && '🔥'}
                 {todo.priority === 'HIGH' && '⚡'}
+                {todo.priority === 'MEDIUM' && '✨'}
+                {todo.priority === 'LOW' && '💎'}
               </span>
               <button
                 onClick={(e) => {
@@ -189,10 +196,10 @@ export default function XStyleTodoCard({
                     startTracking()
                   }
                 }}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                className={`flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold shadow-sm transition-colors ${
                   isTracking
-                    ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300 animate-pulse'
-                    : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300'
+                    ? 'bg-rose-100 text-rose-600 ring-1 ring-rose-200/70 dark:bg-red-900/30 dark:text-red-300 animate-pulse'
+                    : 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60 hover:bg-emerald-100 dark:bg-green-900/30 dark:text-green-300'
                 }`}
                 title={isTracking ? '計測を停止' : '計測を開始'}
               >
@@ -203,13 +210,13 @@ export default function XStyleTodoCard({
 
           {/* 説明 */}
           {todo.description && (
-            <p className="text-[13px] text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
+            <p className="text-[13px] text-slate-600 dark:text-gray-400 mb-3 leading-relaxed line-clamp-2">
               {todo.description}
             </p>
           )}
 
           {/* メタ情報 */}
-          <div className="flex flex-wrap items-center gap-2 text-[13px] text-gray-500 dark:text-gray-500">
+          <div className="flex flex-wrap items-center gap-2 text-[13px] text-slate-500 dark:text-gray-500">
             {/* 期限 */}
             {todo.dueDate && (
               <span className={`flex items-center gap-1 ${
@@ -224,7 +231,7 @@ export default function XStyleTodoCard({
 
             {/* カテゴリ */}
             {todo.category && (
-              <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full">
+              <span className="px-3 py-0.5 rounded-full bg-slate-100 text-slate-600 ring-1 ring-slate-200/70 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-700/50">
                 {todo.category}
               </span>
             )}
@@ -233,12 +240,12 @@ export default function XStyleTodoCard({
             {todo.tags && todo.tags.length > 0 && (
               <div className="flex gap-1">
                 {todo.tags.slice(0, 2).map((tag) => (
-                  <span key={tag} className="text-blue-500">
+                  <span key={tag} className="text-sky-600 dark:text-blue-300">
                     #{tag}
                   </span>
                 ))}
                 {todo.tags.length > 2 && (
-                  <span className="text-gray-400">+{todo.tags.length - 2}</span>
+                  <span className="text-slate-400 dark:text-gray-500">+{todo.tags.length - 2}</span>
                 )}
               </div>
             )}
@@ -247,7 +254,7 @@ export default function XStyleTodoCard({
 
           {/* ステータスタブ */}
           <div className="mt-3">
-            <div className="flex flex-wrap gap-1" role="tablist" aria-label="進捗ステータス">
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="進捗ステータス">
               {(Object.entries({
                 TODO: '未着手',
                 IN_PROGRESS: '作業中',
@@ -265,10 +272,10 @@ export default function XStyleTodoCard({
                       e.stopPropagation()
                       if (!isActive) onUpdate(todo.id, { title: todo.title, status })
                     }}
-                    className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors border ${
+                    className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all border ${
                       isActive
-                        ? 'bg-blue-500 border-blue-500 text-white shadow'
-                        : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700'
+                        ? 'border-blue-500 bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-200/60 dark:from-blue-600 dark:to-indigo-600'
+                        : 'border-slate-200/80 bg-white/80 text-slate-600 hover:border-blue-300 hover:bg-blue-50/80 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700'
                     }`}
                   >
                     {label}
@@ -280,15 +287,15 @@ export default function XStyleTodoCard({
         </div>
 
         {/* ホバー時のアクションボタン */}
-        <div className={`flex-shrink-0 flex items-center gap-1 transition-opacity ${
-          isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        <div className={`flex-shrink-0 flex items-center gap-1 transition-all ${
+          isHovered ? 'opacity-100 translate-x-0' : 'pointer-events-none translate-x-2 opacity-0'
         }`}>
           <button
             onClick={(e) => {
               e.stopPropagation()
               onEdit(todo)
             }}
-            className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full text-gray-500 hover:text-blue-500 transition-colors"
+            className="p-2 rounded-full text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-500 dark:text-gray-400 dark:hover:bg-blue-900/20"
             title="編集"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -302,7 +309,7 @@ export default function XStyleTodoCard({
                 onDelete(todo.id)
               }
             }}
-            className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full text-gray-500 hover:text-red-500 transition-colors"
+            className="p-2 rounded-full text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:text-gray-400 dark:hover:bg-red-900/20"
             title="削除"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

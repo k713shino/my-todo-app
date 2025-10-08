@@ -13,14 +13,14 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
-      // 新規コード用: 重要度に応じたレベル設定（本番ビルドのため一旦off）
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": ["off", { // 本番ビルドのため一旦off
+      // 段階的厳格化: Phase 2 - エラーに昇格 (警告ゼロ達成済み)
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": ["error", {
         argsIgnorePattern: "^_",
         varsIgnorePattern: "^_"
       }],
-      "react-hooks/exhaustive-deps": "off", // 本番ビルドのため一旦off
-      "@next/next/no-img-element": "error", // すでに修正完了
+      "react-hooks/exhaustive-deps": "error",
+      "@next/next/no-img-element": "error",
 
       // フェーズ2: 安全性ルールは本番ビルドを妨げるため一旦off
       "@typescript-eslint/no-unsafe-assignment": "off",

@@ -109,11 +109,11 @@ interface MockRedis {
   flushall(): Promise<string>
   
   // イベントエミッター
-  on(event: string, listener: (...args: any[]) => void): MockRedis
-  off(event: string, listener: (...args: any[]) => void): MockRedis
-  once(event: string, listener: (...args: any[]) => void): MockRedis
-  emit(event: string, ...args: any[]): boolean
-  removeListener(event: string, listener: (...args: any[]) => void): MockRedis
+  on(event: string, listener: (...args: unknown[]) => void): MockRedis
+  off(event: string, listener: (...args: unknown[]) => void): MockRedis
+  once(event: string, listener: (...args: unknown[]) => void): MockRedis
+  emit(event: string, ...args: unknown[]): boolean
+  removeListener(event: string, listener: (...args: unknown[]) => void): MockRedis
   removeAllListeners(event?: string): MockRedis
   
   // 接続管理
@@ -125,12 +125,12 @@ interface MockRedis {
   status: string
   
   // Pipeline処理
-  pipeline(): any
-  multi(): any
-  
+  pipeline(): unknown
+  multi(): unknown
+
   // その他
-  options: any
-  condition: any
+  options: Record<string, unknown>
+  condition: Record<string, unknown>
 }
 
 // Redisクライアントのシングルトンインスタンス

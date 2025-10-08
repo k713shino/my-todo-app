@@ -35,7 +35,7 @@ export async function GET() {
         })
       }
 
-      const authMethods = authResult.data?.authMethods || [{
+      const authMethods = (authResult.data as { authMethods?: unknown[] })?.authMethods || [{
         provider: 'credentials',
         providerAccountId: 'email'
       }]

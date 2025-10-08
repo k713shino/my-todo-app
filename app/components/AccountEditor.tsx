@@ -31,7 +31,7 @@ export default function AccountEditor({ className = '' }: AccountEditorProps) {
         image: session.user.image || ''
       })
     }
-  }, [session?.user?.name, session?.user?.image])
+  }, [session?.user])
 
   const handleSave = async () => {
     if (!session?.user) return

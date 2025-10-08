@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await request.json().catch(() => ({})) as { ids?: string[]; data?: Record<string, any> }
+    const body = await request.json().catch(() => ({})) as { ids?: string[]; data?: Record<string, unknown> }
     const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : []
     const data = body.data || {}
     if (ids.length === 0 || Object.keys(data).length === 0) {
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     try { await CacheManager.invalidateUserTodos(session.user.id) } catch {}
 
     return NextResponse.json({ success: true, count: ok, failed: fail })
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, startTransition } from 'react'
 import { Priority } from '@prisma/client'
 import type { TodoFilters, SavedSearch } from '@/types/todo'
-import { dateRangeLabels, DateRangePreset } from '@/lib/date-utils'
+import { DateRangePreset } from '@/lib/date-utils'
 import { useFilterPersistence } from '../hooks/useFilterPersistence'
 import { withScrollPreservation } from '../hooks/useScrollPreservation'
 import { usePageMovementDebugger } from '../hooks/usePageMovementDebugger'
@@ -15,7 +15,7 @@ interface TodoFiltersProps {
   enablePersistence?: boolean
 }
 
-const priorityLabels = {
+const _priorityLabels = {
   LOW: '低',
   MEDIUM: '中',
   HIGH: '高',
@@ -24,7 +24,6 @@ const priorityLabels = {
 
 export default function TodoFilters({ filter, onFilterChange, onManualSearch, enablePersistence = true }: TodoFiltersProps) {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([])
-  const [searchHistory, setSearchHistory] = useState<any[]>([])
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveSearchName, setSaveSearchName] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -32,8 +31,6 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
   const uncontrolledTagInputRef = useRef<HTMLInputElement>(null)
   const uncontrolledSearchInputRef = useRef<HTMLInputElement>(null)
   const uncontrolledCategoryInputRef = useRef<HTMLInputElement>(null)
-  // IME入力中かどうかのフラグ
-  const [isComposing, setIsComposing] = useState(false)
   // debounce用のタイマー
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
   
@@ -52,7 +49,7 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
         console.log('📝 詳細:', savedSearches.map(s => ({ id: s.id, name: s.name })))
       }
     }
-  }, [savedSearches.length]) // lengthのみ監視してオブジェクト全体の監視を避ける
+  }, [savedSearches]) // savedSearchesを監視
 
 
   // 初期化処理（一度のみ実行）
@@ -81,7 +78,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
       try {
         const response = await fetch('/api/todos/search-history?limit=10')
         if (response.ok) {
-          setSearchHistory(await response.json())
+          // TODO: Add searchHistory state if needed
+          await response.json()
         }
       } catch (error) {
         console.error('検索履歴の初期化に失敗:', error)
@@ -115,7 +113,8 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     initSavedSearches()
     initSearchHistory()
     initPersistedFilters()
-  }, []) // 依存配列を空にして初回のみ実行
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // 依存配列を空にして初回のみ実行（意図的）
 
   // コンポーネントアンマウント時のクリーンアップ
   useEffect(() => {
@@ -348,10 +347,10 @@ export default function TodoFilters({ filter, onFilterChange, onManualSearch, en
     }
   }
 
-  const hasActiveFilters = Object.keys(filter).some(key => 
-    filter[key as keyof TodoFilters] !== undefined && 
+  const hasActiveFilters = Object.keys(filter).some(key =>
+    filter[key as keyof TodoFilters] !== undefined &&
     filter[key as keyof TodoFilters] !== '' &&
-    !(Array.isArray(filter[key as keyof TodoFilters]) && (filter[key as keyof TodoFilters] as any[]).length === 0)
+    !(Array.isArray(filter[key as keyof TodoFilters]) && (filter[key as keyof TodoFilters] as unknown[]).length === 0)
   )
 
   return (

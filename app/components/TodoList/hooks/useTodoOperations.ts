@@ -60,7 +60,7 @@ export function useTodoOperations() {
       if (!raw) return null
       const parsed = JSON.parse(raw)
       if (!Array.isArray(parsed)) return null
-      return parsed.map((t: TodoResponse) => safeParseTodoDate(t))
+      return parsed.map((t: TodoResponse) => safeParseTodoDate(t as unknown as Record<string, unknown>))
     } catch { return null }
   }, [])
 
@@ -187,9 +187,9 @@ export function useTodoOperations() {
         })
       }
 
-      const parsedTodos = data.map((todo) => safeParseTodoDate(todo))
-      setTodos(parsedTodos)
-      saveClientCache(parsedTodos)
+      const parsedTodos = data.map((todo) => safeParseTodoDate(todo as unknown as Record<string, unknown>))
+      setTodos(parsedTodos as unknown as Todo[])
+      saveClientCache(parsedTodos as unknown as TodoResponse[])
 
       if (totalTime > 1000 && process.env.NODE_ENV !== 'production') {
         console.warn(`⚠️ パフォーマンス警告: 読み込みに${totalTime.toFixed(2)}msかかりました`)
@@ -217,8 +217,8 @@ export function useTodoOperations() {
         if (cachedResponse.ok) {
           const cachedData = await cachedResponse.json()
           if (Array.isArray(cachedData) && cachedData.length > 0) {
-            const parsedTodos = cachedData.map((todo: TodoResponse) => safeParseTodoDate(todo))
-            setTodos(parsedTodos)
+            const parsedTodos = cachedData.map((todo: TodoResponse) => safeParseTodoDate(todo as unknown as Record<string, unknown>))
+            setTodos(parsedTodos as unknown as Todo[])
             toast.success('📦 キャッシュからデータを復旧しました')
             setTimeout(() => { try { fetchTodos(true) } catch {} }, 15000)
             return
@@ -232,7 +232,7 @@ export function useTodoOperations() {
       try {
         const local = loadClientCache()
         if (local && local.length > 0) {
-          setTodos(local)
+          setTodos(local as unknown as Todo[])
           toast.success('💾 ローカルキャッシュから復旧しました')
           setTimeout(() => { try { fetchTodos(true) } catch {} }, 20000)
           return
@@ -258,8 +258,8 @@ export function useTodoOperations() {
       if (res.ok) {
         const cachedData = await res.json()
         if (Array.isArray(cachedData) && cachedData.length > 0) {
-          const parsed = cachedData.map((t: TodoResponse) => safeParseTodoDate(t))
-          setTodos(parsed)
+          const parsed = cachedData.map((t: TodoResponse) => safeParseTodoDate(t as unknown as Record<string, unknown>))
+          setTodos(parsed as unknown as Todo[])
           setIsLoading(false)
           setTimeout(() => { try { fetchTodos(true) } catch {} }, 0)
           return
@@ -402,7 +402,7 @@ export function useTodoOperations() {
       console.log('✅ 更新成功:', updatedTodo)
 
       setTodos(prev => prev.map(todo =>
-        todo.id === id ? safeParseTodoDate(updatedTodo) : todo
+        todo.id === id ? safeParseTodoDate(updatedTodo as unknown as Record<string, unknown>) as unknown as Todo : todo
       ))
 
       try { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('todo:changed')) } catch {}

@@ -89,11 +89,11 @@ export const dateRangeLabels: Record<DateRangePreset, string> = {
  * 安全に日付文字列をDateオブジェクトに変換する
  * 無効な日付の場合は現在時刻を返す
  */
-export function safeParseDate(dateValue: any): Date {
+export function safeParseDate(dateValue: Record<string, unknown>): Date {
   if (!dateValue) return new Date();
-  
+
   try {
-    const date = new Date(dateValue);
+    const date = new Date(String(dateValue));
     if (isNaN(date.getTime())) {
       return new Date();
     }
@@ -107,11 +107,11 @@ export function safeParseDate(dateValue: any): Date {
  * 安全に日付文字列をDateオブジェクトに変換する（null許可版）
  * 無効な日付の場合はnullを返す
  */
-export function safeParseNullableDate(dateValue: any): Date | null {
+export function safeParseNullableDate(dateValue: Record<string, unknown>): Date | null {
   if (!dateValue) return null;
-  
+
   try {
-    const date = new Date(dateValue);
+    const date = new Date(String(dateValue));
     if (isNaN(date.getTime())) {
       return null;
     }
@@ -124,16 +124,16 @@ export function safeParseNullableDate(dateValue: any): Date | null {
 /**
  * Todo型のレスポンスデータを安全に変換する
  */
-export function safeParseTodoDate<T extends Record<string, any>>(todo: T): T & {
+export function safeParseTodoDate<T extends Record<string, unknown>>(todo: T): T & {
   createdAt: Date;
   updatedAt: Date;
   dueDate: Date | null;
 } {
   return {
     ...todo,
-    createdAt: safeParseDate(todo.createdAt),
-    updatedAt: safeParseDate(todo.updatedAt),
-    dueDate: safeParseNullableDate(todo.dueDate),
+    createdAt: safeParseDate(todo.createdAt as Record<string, unknown>),
+    updatedAt: safeParseDate(todo.updatedAt as Record<string, unknown>),
+    dueDate: safeParseNullableDate(todo.dueDate as Record<string, unknown>),
   };
 }
 
@@ -141,11 +141,11 @@ export function safeParseTodoDate<T extends Record<string, any>>(todo: T): T & {
  * 安全にISO文字列に変換する
  * 無効な日付の場合は現在時刻のISO文字列を返す
  */
-export function safeToISOString(dateValue: any): string {
+export function safeToISOString(dateValue: Record<string, unknown>): string {
   if (!dateValue) return new Date().toISOString();
-  
+
   try {
-    const date = new Date(dateValue);
+    const date = new Date(String(dateValue));
     if (isNaN(date.getTime())) {
       return new Date().toISOString();
     }

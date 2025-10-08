@@ -42,8 +42,8 @@ export async function PUT(
     
     // 4ステータス専用対応: statusフィールドのみサポート
     if (body.status !== undefined) {
-      (updateData as any).status = body.status
-      console.log('📊 4ステータス更新:', { 
+      (updateData as Record<string, unknown>).status = body.status
+      console.log('📊 4ステータス更新:', {
         todoId: id,
         status: body.status
       })
@@ -62,24 +62,25 @@ export async function PUT(
     if (lambdaResponse.success && lambdaResponse.data) {
       // レスポンスデータの安全な日付変換
       // タグ正規化（CSV/配列両対応）
-      const normalizedTags = Array.isArray(lambdaResponse.data.tags)
-        ? lambdaResponse.data.tags
-        : (typeof lambdaResponse.data.tags === 'string'
-            ? lambdaResponse.data.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+      const dataRecord = lambdaResponse.data as Record<string, unknown>
+      const normalizedTags = Array.isArray(dataRecord.tags)
+        ? dataRecord.tags
+        : (typeof dataRecord.tags === 'string'
+            ? dataRecord.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
             : [])
 
       const updatedTodo = {
-        ...lambdaResponse.data,
-        createdAt: safeToISOString(lambdaResponse.data.createdAt),
-        updatedAt: safeToISOString(lambdaResponse.data.updatedAt),
-        dueDate: lambdaResponse.data.dueDate ? safeToISOString(lambdaResponse.data.dueDate) : null,
+        ...dataRecord,
+        createdAt: safeToISOString(dataRecord.createdAt as Record<string, unknown>),
+        updatedAt: safeToISOString(dataRecord.updatedAt as Record<string, unknown>),
+        dueDate: dataRecord.dueDate ? safeToISOString(dataRecord.dueDate as Record<string, unknown>) : null,
         // ステータスが欠落するバックエンド実装に備えてフォールバック
-        status: (lambdaResponse.data as any).status || ((lambdaResponse.data as any).completed ? 'DONE' : 'TODO'),
-        category: lambdaResponse.data.category || null,
+        status: (dataRecord as { status?: string; completed?: boolean }).status || ((dataRecord as { status?: string; completed?: boolean }).completed ? 'DONE' : 'TODO'),
+        category: dataRecord.category || null,
         tags: normalizedTags,
-      };
-      
-      console.log('✅ Lambda API でのTodo更新成功:', { 
+      } as Record<string, unknown>;
+
+      console.log('✅ Lambda API でのTodo更新成功:', {
         id: updatedTodo.id,
         status: updatedTodo.status,
         completed: updatedTodo.completed

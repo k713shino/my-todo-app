@@ -116,7 +116,7 @@ export class CacheManager {
   // Todoリストを保存（最適化版）
   static async setTodos(userId: string, todos: Todo[], ttl = 300): Promise<boolean> { // 5分
     // 大きなデータは要約してキャッシュしつつ、UIに必要なフィールドは保持
-    const optimizedTodos = todos.map((todo: any) => ({
+    const optimizedTodos = todos.map((todo: Todo) => ({
       id: todo.id,
       title: todo.title,
       status: todo.status,
@@ -126,7 +126,7 @@ export class CacheManager {
       updatedAt: todo.updatedAt,
       userId: todo.userId,
       category: todo.category ?? null,
-      tags: Array.isArray(todo.tags) ? todo.tags : (typeof todo.tags === 'string' ? todo.tags.split(',').map((t: string)=>t.trim()).filter(Boolean) : []),
+      tags: Array.isArray(todo.tags) ? todo.tags : [],
       // 説明文は長い場合は省略
       description: todo.description && typeof todo.description === 'string' && todo.description.length > 200 
         ? todo.description.slice(0, 200) + '...'
@@ -144,7 +144,7 @@ export class CacheManager {
       ]
       
       // パイプライン処理で高速削除
-      const pipeline = redis.pipeline()
+      const pipeline = redis.pipeline() as { del: (key: string) => unknown; exec: () => Promise<unknown> }
       keys.forEach(key => pipeline.del(key))
       await pipeline.exec()
       console.log(`🚀 Cache invalidated for user ${userId}: ${keys.length} keys`)
@@ -245,7 +245,7 @@ export class CacheManager {
       await redis.ping()
       const latency = Date.now() - start
       return { status: 'healthy', latency }
-    } catch (_error: unknown) {
+    } catch {
       return { status: 'unhealthy', latency: Date.now() - start }
     }
   }

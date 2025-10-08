@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       );
     `
     
-    if (!(tableExists as any[])[0]?.exists) {
+    if (!(tableExists as { exists?: boolean }[])[0]?.exists) {
       return NextResponse.json([])
     }
 

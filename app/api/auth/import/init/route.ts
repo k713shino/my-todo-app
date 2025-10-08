@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     const content = await file.text()
-    let rows: any[] = []
+    let rows: Record<string, unknown>[] = []
     if (file.name.endsWith('.json') || (file.type && file.type.includes('json'))) {
       const json = JSON.parse(content)
       rows = Array.isArray(json) ? json : (Array.isArray(json.todos) ? json.todos : [])
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       const { headers, rows: csvRows } = parseCSVText(content)
       if (headers.length === 0) return NextResponse.json({ error: 'Invalid CSV' }, { status: 400 })
       rows = csvRows.map(values => {
-        const t: any = {}
+        const t: Record<string, unknown> = {}
         headers.forEach((h, idx) => { t[h] = (values[idx] ?? '').trim() })
         // 標準キーへ寄せる（最低限）
         if (t.Title && !t.title) t.title = t.Title
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     const normalized = normalizeTodos(rows)
     const parents = normalized
-    const children: any[] = []
+    const children: Record<string, unknown>[] = []
 
     const userId = extractUserIdFromPrefixed(session.user.id)
 
@@ -64,7 +64,8 @@ export async function POST(request: NextRequest) {
     ])
 
     return NextResponse.json({ importId, total: normalized.length, parents: parents.length, children: children.length })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Init failed' }, { status: 500 })
+  } catch (e) {
+    const error = e as Error
+    return NextResponse.json({ error: error?.message || 'Init failed' }, { status: 500 })
   }
 }

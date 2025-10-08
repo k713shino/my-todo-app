@@ -49,7 +49,7 @@ export interface LambdaHealthCheck {
   status: 'healthy' | 'unhealthy'
   responseTime: number
   timestamp: string
-  details?: any
+  details?: Record<string, unknown>
 }
 
 export async function performLambdaHealthCheck(): Promise<LambdaHealthCheck> {

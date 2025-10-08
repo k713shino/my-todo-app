@@ -68,13 +68,13 @@ export const dbAdapter = {
     }
   },
 
-  async createUser(userData: any) {
+  async createUser(userData: Record<string, unknown>) {
     if (USE_LAMBDA_DB) {
-      return lambdaDB.createUser(userData)
+      return lambdaDB.createUser(userData as { email: string; password: string; name?: string })
     } else {
       try {
         const user = await prisma.user.create({
-          data: userData,
+          data: userData as { email: string; password: string; name?: string | null },
           select: {
             id: true,
             email: true,
@@ -94,7 +94,7 @@ export const dbAdapter = {
     }
   },
 
-  async updateUser(userId: string, userData: any) {
+  async updateUser(userId: string, userData: Record<string, unknown>) {
     if (USE_LAMBDA_DB) {
       return lambdaDB.updateUser(userId, userData)
     } else {
@@ -160,22 +160,22 @@ export const dbAdapter = {
   },
 
   // Todo操作
-  async getTodos(userId: string, filters?: any) {
+  async getTodos(userId: string, filters?: Record<string, unknown>) {
     if (USE_LAMBDA_DB) {
       return lambdaDB.getTodos(userId, filters)
     } else {
       try {
         const todos = await prisma.todo.findMany({
-          where: { 
+          where: {
             userId,
-            ...(filters?.completed !== undefined && { completed: filters.completed }),
-            ...(filters?.priority && { priority: filters.priority }),
-            ...(filters?.search && {
+            ...(filters?.completed !== undefined ? { completed: filters.completed } : {}),
+            ...(filters?.priority ? { priority: filters.priority } : {}),
+            ...(filters?.search ? {
               OR: [
-                { title: { contains: filters.search, mode: 'insensitive' } },
-                { description: { contains: filters.search, mode: 'insensitive' } }
+                { title: { contains: filters.search as string, mode: 'insensitive' } },
+                { description: { contains: filters.search as string, mode: 'insensitive' } }
               ]
-            })
+            } : {})
           },
           orderBy: { createdAt: 'desc' }
         })
@@ -190,13 +190,14 @@ export const dbAdapter = {
     }
   },
 
-  async createTodo(userId: string, todoData: any) {
+  async createTodo(userId: string, todoData: Record<string, unknown>) {
     if (USE_LAMBDA_DB) {
       return lambdaDB.createTodo(userId, todoData)
     } else {
       try {
         const todo = await prisma.todo.create({
-          data: { ...todoData, userId }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          data: { ...todoData, userId } as any
         })
         return { success: true, data: todo, error: undefined }
       } catch (error) {
@@ -209,7 +210,7 @@ export const dbAdapter = {
     }
   },
 
-  async updateTodo(userId: string, todoId: string, todoData: any) {
+  async updateTodo(userId: string, todoId: string, todoData: Record<string, unknown>) {
     if (USE_LAMBDA_DB) {
       return lambdaDB.updateTodo(userId, todoId, todoData)
     } else {

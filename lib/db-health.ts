@@ -54,7 +54,7 @@ export async function safeDbOperation<T>(
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorCode = (error as any)?.code
+    const errorCode = (error as Record<string, unknown>)?.code
 
     console.error(`❌ ${operationName} 失敗:`, {
       code: errorCode,
@@ -63,7 +63,7 @@ export async function safeDbOperation<T>(
 
     return {
       success: false,
-      error: errorCode || 'UNKNOWN_ERROR'
+      error: (errorCode as string) || 'UNKNOWN_ERROR'
     }
   }
 }

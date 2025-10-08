@@ -3,7 +3,7 @@ import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { redis } from '@/lib/redis'
 
 // 時間目標の設定・取得・更新
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await getAuthSession()
     if (!isAuthenticated(session)) {
@@ -15,12 +15,11 @@ export async function GET(request: NextRequest) {
 
     try {
       await redis.ping()
-    } catch (_pingError) {
-      console.error('❌ Redis ping failed:', _pingError)
-      return NextResponse.json({ 
+    } catch {
+      return NextResponse.json({
         dailyGoal: 480, // デフォルト8時間
         weeklyGoal: 2400, // デフォルト40時間
-        fallback: true 
+        fallback: true
       })
     }
 
@@ -115,7 +114,7 @@ export async function PUT(request: NextRequest) {
 
     try {
       await redis.ping()
-    } catch (_pingError) {
+    } catch {
       return NextResponse.json({ progress: 0, achieved: false, fallback: true })
     }
 

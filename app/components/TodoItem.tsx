@@ -52,13 +52,13 @@ const priorityColors = {
 
 /**
  * 優先度ごとのアイコン定義
- * 色付きの円で優先度を視覚的に表現
+ * 視覚的に優先度を表現
  */
 const priorityIcons = {
-  LOW: '🟢',
-  MEDIUM: '🟡',
-  HIGH: '🟠',
-  URGENT: '🔴',
+  LOW: '💎',
+  MEDIUM: '✨',
+  HIGH: '⚡',
+  URGENT: '🔥',
 }
 
 /**
@@ -127,7 +127,7 @@ function TodoItem({
   /**
    * ステータス変更ハンドラー（ドロップダウンでは直接onUpdateを呼ぶため不要だが、一応残しておく）
    */
-  const handleStatusChange = async () => {
+  const _handleStatusChange = async () => {
     setIsUpdating(true)
     try {
       const nextStatus = getNextStatus(todo.status)
@@ -197,29 +197,29 @@ function TodoItem({
           window.dispatchEvent(new CustomEvent('todo:changed'))
         }
       } catch {}
-    } catch (e) {
+    } catch {
       toast.error('計測開始に失敗しました')
     }
-  }, [todo.id])
+  }, [todo.id, todo.title])
 
   const stopTracking = useCallback(async () => {
     try {
       const res = await fetch('/api/time-entries/stop', { method: 'POST' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      try { 
+      try {
         localStorage.removeItem('time:runningTodoId')
         localStorage.removeItem('time:startedAt')
         localStorage.removeItem('time:runningTitle')
       } catch {}
       setIsTracking(false)
       toast('⏹️ 計測を停止しました')
-      try { 
+      try {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('time:runningChanged'))
           window.dispatchEvent(new CustomEvent('todo:changed'))
         }
       } catch {}
-    } catch (e) {
+    } catch {
       toast.error('計測停止に失敗しました')
     }
   }, [])
@@ -258,7 +258,6 @@ function TodoItem({
                   <h3 className={`text-sm sm:text-lg font-medium break-words ${
                     isCompleted(todo.status) ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'
                   }`}>
-                    <span className="mr-1">{priorityIcons[todo.priority]}</span>
                     {todo.title}
                   </h3>
                 </div>
@@ -344,9 +343,10 @@ function TodoItem({
 
         {/* メタ情報 */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm">
-          {/* 優先度 */}
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityColors[todo.priority]}`}>
-            {priorityLabels[todo.priority]}
+          {/* 優先度 - 視認性向上 */}
+          <span className={`px-2.5 py-1 rounded-full text-xs sm:text-sm font-semibold inline-flex items-center gap-1 ${priorityColors[todo.priority]} shadow-sm`}>
+            <span>{priorityIcons[todo.priority]}</span>
+            <span>{priorityLabels[todo.priority]}</span>
           </span>
 
           {/* 期限 */}

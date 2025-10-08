@@ -149,7 +149,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-slate-50 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100">
       <RunningTimeSync />
       <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 xl:px-10 pb-28 xl:pb-14 pt-6 xl:pt-10">
         <div className="flex flex-col gap-8 xl:grid xl:grid-cols-[240px,minmax(0,1fr),320px] xl:gap-10">
@@ -168,11 +168,11 @@ export default function Dashboard() {
           <div className="min-w-0 flex flex-col gap-6 xl:max-w-2xl">
             <DashboardHeader
               onModalSearch={handleModalSearch}
-              className="sticky top-2 z-30 shadow-xl shadow-slate-950/40 border border-slate-800/70 bg-slate-900/70 backdrop-blur rounded-3xl"
+              className="sticky top-2 z-30"
             />
 
-            <div className="rounded-3xl border border-slate-800/70 bg-slate-900/60 backdrop-blur px-4 py-3">
-              <nav className="flex items-center gap-4 text-sm font-semibold">
+            <div className="rounded-3xl border border-slate-200 bg-white/95 backdrop-blur px-4 py-3 shadow-[0_16px_44px_rgba(15,23,42,0.08)] transition-colors dark:border-slate-800/70 dark:bg-slate-900/60 dark:shadow-slate-950/40">
+              <nav className="flex items-center gap-4 text-sm font-semibold text-slate-500 dark:text-slate-300">
                 {[
                   { id: 'tasks' as const, label: 'おすすめ', emoji: '⭐' },
                   { id: 'time' as const, label: 'フォーカス', emoji: '⏱' },
@@ -182,14 +182,14 @@ export default function Dashboard() {
                     onClick={() => setHomeTab(tab.id)}
                     className={`relative px-3 py-2 transition-colors duration-150 rounded-full ${
                       homeTab === tab.id
-                        ? 'text-white'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'text-blue-600 dark:text-white'
+                        : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                     }`}
                   >
                     <span className="mr-2">{tab.emoji}</span>
                     {tab.label}
                     {homeTab === tab.id && (
-                      <span className="absolute inset-x-3 -bottom-1 h-1 rounded-full bg-blue-500" />
+                      <span className="absolute inset-x-3 -bottom-1 h-1 rounded-full bg-blue-500 dark:bg-blue-400" />
                     )}
                   </button>
                 ))}
@@ -197,7 +197,7 @@ export default function Dashboard() {
             </div>
 
             {homeTab === 'time' ? (
-              <div className="rounded-3xl border border-slate-800/70 bg-slate-900/60 backdrop-blur px-4 sm:px-6 py-4 shadow-xl shadow-slate-950/40">
+              <div className="rounded-3xl border border-slate-200 bg-white/95 backdrop-blur px-4 sm:px-6 py-4 shadow-[0_18px_48px_rgba(15,23,42,0.08)] transition-colors dark:border-slate-800/70 dark:bg-slate-900/60 dark:shadow-slate-950/40">
                 <TimeTrackingDashboard />
               </div>
             ) : (
@@ -243,9 +243,9 @@ function RightRail({ stats, timeSummary, timeZone, setTimeZone, formatHM }: Righ
     <>
       <RunningTimerBanner />
       {stats && (
-        <div className="rounded-3xl border border-slate-800/70 bg-slate-900/60 backdrop-blur shadow-xl shadow-slate-950/40">
+        <div className="rounded-3xl border border-slate-200 bg-white/95 backdrop-blur shadow-[0_18px_48px_rgba(15,23,42,0.08)] transition-colors dark:border-slate-800/70 dark:bg-slate-900/60 dark:shadow-slate-950/40">
           <div className="p-5">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2 dark:text-slate-200">
               📊 今日のハイライト
             </h3>
             <TodoStatsDisplay stats={stats} variant="neutral" showTimestamp={false} />
@@ -253,10 +253,10 @@ function RightRail({ stats, timeSummary, timeZone, setTimeZone, formatHM }: Righ
         </div>
       )}
       {Boolean(timeSummary) && (
-        <div className="rounded-3xl border border-slate-800/70 bg-slate-900/60 backdrop-blur shadow-xl shadow-slate-950/40">
+        <div className="rounded-3xl border border-slate-200 bg-white/95 backdrop-blur shadow-[0_18px_48px_rgba(15,23,42,0.08)] transition-colors dark:border-slate-800/70 dark:bg-slate-900/60 dark:shadow-slate-950/40">
           <div className="p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-200">⏱️ 時間サマリ</h3>
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">⏱️ 時間サマリ</h3>
               <select
                 value={timeZone}
                 onChange={(e) => {
@@ -267,7 +267,7 @@ function RightRail({ stats, timeSummary, timeZone, setTimeZone, formatHM }: Righ
                     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('time:tz-changed', { detail: value }))
                   } catch {}
                 }}
-                className="select-base text-xs bg-slate-800 border-slate-700 text-slate-200"
+                className="select-base text-xs bg-white border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
                 title="タイムゾーンを選択"
               >
                 <option value="UTC">UTC</option>
@@ -275,24 +275,24 @@ function RightRail({ stats, timeSummary, timeZone, setTimeZone, formatHM }: Righ
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-slate-800/80 border border-slate-700/80 px-4 py-3 text-center">
-                <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">今日</div>
-                <div className="text-2xl font-bold text-blue-400">{formatHM(timeSummary?.todaySeconds || 0)}</div>
+              <div className="rounded-2xl bg-slate-100 border border-slate-200 px-4 py-3 text-center transition-colors dark:bg-slate-800/80 dark:border-slate-700/80">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1 dark:text-slate-400">今日</div>
+                <div className="text-2xl font-bold text-blue-500 dark:text-blue-400">{formatHM(timeSummary?.todaySeconds || 0)}</div>
               </div>
-              <div className="rounded-2xl bg-slate-800/80 border border-slate-700/80 px-4 py-3 text-center">
-                <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">今週</div>
-                <div className="text-2xl font-bold text-purple-400">{formatHM(timeSummary?.weekSeconds || 0)}</div>
+              <div className="rounded-2xl bg-slate-100 border border-slate-200 px-4 py-3 text-center transition-colors dark:bg-slate-800/80 dark:border-slate-700/80">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1 dark:text-slate-400">今週</div>
+                <div className="text-2xl font-bold text-purple-500 dark:text-purple-400">{formatHM(timeSummary?.weekSeconds || 0)}</div>
               </div>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-500 leading-relaxed dark:text-slate-400">
               集中して取り組めた時間を自動で集計します。休憩やスナックタイムも忘れずに！
             </p>
           </div>
         </div>
       )}
-      <div className="rounded-3xl border border-slate-800/70 bg-gradient-to-br from-slate-900/80 via-slate-900/40 to-slate-900/80 backdrop-blur shadow-xl shadow-slate-950/40 p-5">
-        <h3 className="text-sm font-semibold text-slate-200 mb-2">📌 ヒント</h3>
-        <p className="text-xs text-slate-400 leading-relaxed">
+      <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-white to-slate-100 backdrop-blur shadow-[0_18px_48px_rgba(15,23,42,0.08)] transition-colors p-5 dark:border-slate-800/70 dark:from-slate-900/80 dark:via-slate-900/40 dark:to-slate-900/80 dark:shadow-slate-950/40">
+        <h3 className="text-sm font-semibold text-slate-700 mb-2 dark:text-slate-200">📌 ヒント</h3>
+        <p className="text-xs text-slate-500 leading-relaxed dark:text-slate-400">
           検索モーダルで高度検索を活用すると、タグや正規表現で素早くタスクを絞り込めます。
         </p>
       </div>

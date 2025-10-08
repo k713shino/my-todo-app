@@ -10,26 +10,26 @@ interface DataExportFormProps {
 export default function DataExportForm({ userId: _userId }: DataExportFormProps) {
   const [isExporting, setIsExporting] = useState(false)
 
-  const handleExport = async (format: 'json' | 'csv') => {
+  const handleExport = async (_format: 'json' | 'csv') => {
     setIsExporting(true)
-    
+
     try {
-      const response = await fetch(`/api/auth/export-data?format=${format}`, {
+      const response = await fetch(`/api/auth/export-data?_format=${_format}`, {
         method: 'GET'
       })
-      
+
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `my-todo-data-${new Date().toISOString().split('T')[0]}.${format}`
+        a.download = `my-todo-data-${new Date().toISOString().split('T')[0]}.${_format}`
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
         document.body.removeChild(a)
         
-        toast.success(`データが${format.toUpperCase()}形式でエクスポートされました`)
+        toast.success(`データが${_format.toUpperCase()}形式でエクスポートされました`)
       } else {
         const data = await response.json()
         if (data.maintenanceMode) {

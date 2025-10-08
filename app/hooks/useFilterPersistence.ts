@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { TodoFilters } from '@/types/todo'
 
@@ -27,16 +27,16 @@ export function useFilterPersistence() {
     if (completed !== null) filters.completed = completed === 'true'
     
     const priority = searchParams.get('priority')
-    if (priority) filters.priority = priority as any
-    
+    if (priority) filters.priority = priority as TodoFilters['priority']
+
     const category = searchParams.get('category')
     if (category) filters.category = category
-    
+
     const tags = searchParams.get('tags')
     if (tags) filters.tags = tags.split(',').filter(Boolean)
-    
+
     const dateRange = searchParams.get('dateRange')
-    if (dateRange) filters.dateRange = dateRange as any
+    if (dateRange) filters.dateRange = dateRange as TodoFilters['dateRange']
     
     return filters
   }, [searchParams])
@@ -64,10 +64,10 @@ export function useFilterPersistence() {
     
     try {
       // 空のフィルターは保存しない
-      const hasFilters = Object.keys(filters).some(key => 
-        filters[key as keyof TodoFilters] !== undefined && 
+      const hasFilters = Object.keys(filters).some(key =>
+        filters[key as keyof TodoFilters] !== undefined &&
         filters[key as keyof TodoFilters] !== '' &&
-        !(Array.isArray(filters[key as keyof TodoFilters]) && (filters[key as keyof TodoFilters] as any[]).length === 0)
+        !(Array.isArray(filters[key as keyof TodoFilters]) && (filters[key as keyof TodoFilters] as unknown[]).length === 0)
       )
       
       if (hasFilters) {

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
     const data = await resp.json()
     return NextResponse.json(data)
-  } catch (_error) {
+  } catch {
     return NextResponse.json({ running: false })
   }
 }

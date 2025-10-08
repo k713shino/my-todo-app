@@ -19,7 +19,7 @@ export default function DataManager({ className = '' }: DataManagerProps) {
 
     setIsExporting(true)
     try {
-      const response = await fetch('/api/todos/export?format=json')
+      const response = await fetch('/api/todos/export?_format=json')
       if (!response.ok) {
         throw new Error('エクスポートに失敗しました')
       }
@@ -33,20 +33,22 @@ export default function DataManager({ className = '' }: DataManagerProps) {
         // Chrome/Edge用: showSaveFilePickerを使用（対応している場合）
         try {
           if ('showSaveFilePicker' in window) {
-            const fileHandle = await (window as any).showSaveFilePicker({
+            const fileHandle = await (window as { showSaveFilePicker?: (options: unknown) => Promise<{ createWritable: () => Promise<{ write: (data: string) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker?.({
               suggestedName: filename,
               types: [{
                 description: 'JSON files',
                 accept: { 'application/json': ['.json'] }
               }]
             })
-            const writable = await fileHandle.createWritable()
-            await writable.write(jsonString)
-            await writable.close()
-            toast.success('JSONデータをエクスポートしました')
-            return
+            if (fileHandle) {
+              const writable = await fileHandle.createWritable()
+              await writable.write(jsonString)
+              await writable.close()
+              toast.success('JSONデータをエクスポートしました')
+              return
+            }
           }
-        } catch (fileApiError) {
+        } catch {
           console.log('File System API不対応、従来方法を使用')
         }
       }
@@ -87,7 +89,7 @@ export default function DataManager({ className = '' }: DataManagerProps) {
 
     setIsExporting(true)
     try {
-      const response = await fetch('/api/todos/export?format=csv')
+      const response = await fetch('/api/todos/export?_format=csv')
       if (!response.ok) {
         throw new Error('エクスポートに失敗しました')
       }
@@ -103,20 +105,22 @@ export default function DataManager({ className = '' }: DataManagerProps) {
         // Chrome/Edge用: showSaveFilePickerを使用（対応している場合）
         try {
           if ('showSaveFilePicker' in window) {
-            const fileHandle = await (window as any).showSaveFilePicker({
+            const fileHandle = await (window as { showSaveFilePicker?: (options: unknown) => Promise<{ createWritable: () => Promise<{ write: (data: string) => Promise<void>; close: () => Promise<void> }> }> }).showSaveFilePicker?.({
               suggestedName: filename,
               types: [{
                 description: 'CSV files',
                 accept: { 'text/csv': ['.csv'] }
               }]
             })
-            const writable = await fileHandle.createWritable()
-            await writable.write(csvWithBom)
-            await writable.close()
-            toast.success('CSVデータをエクスポートしました')
-            return
+            if (fileHandle) {
+              const writable = await fileHandle.createWritable()
+              await writable.write(csvWithBom)
+              await writable.close()
+              toast.success('CSVデータをエクスポートしました')
+              return
+            }
           }
-        } catch (fileApiError) {
+        } catch {
           console.log('File System API不対応、従来方法を使用')
         }
       }

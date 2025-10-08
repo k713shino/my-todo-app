@@ -117,7 +117,7 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
       if (mField) { pat = mField[2]; flags = mField[3] || '' }
       else if (mAll) { pat = mAll[1]; flags = mAll[2] || '' }
       else { setRegexError('形式は /パターン/フラグ または field:/パターン/フラグ'); return }
-      try { new RegExp(pat, flags) } catch (e: any) { setRegexError(`正規表現エラー: ${e?.message || '不正な式'}`) }
+      try { new RegExp(pat, flags) } catch (e: unknown) { setRegexError(`正規表現エラー: ${(e as { message?: string })?.message || '不正な式'}`) }
       // iフラグUIと同期
       setRegexFlagI(flags.includes('i'))
     }
@@ -261,16 +261,41 @@ function SearchModal({ isOpen, onClose, onSearch, isAuthenticated }: SearchModal
     }
   }
 
-  const handleLoadSearch = (searchFilters: any) => {
-    setKeyword(searchFilters.keyword || '')
-    setCategory(searchFilters.category || '')
-    setTags(searchFilters.tags ? searchFilters.tags.join(', ') : '')
-    setCompleted(searchFilters.completed === undefined ? '' : searchFilters.completed.toString())
-    setPriority(searchFilters.priority || '')
-    setDateRange(searchFilters.dateRange || '')
-    
+  const handleLoadSearch = (searchFilters: Record<string, unknown>) => {
+    const keywordValue = typeof searchFilters.keyword === 'string' ? searchFilters.keyword : ''
+    const categoryValue = typeof searchFilters.category === 'string' ? searchFilters.category : ''
+    const rawTags = searchFilters.tags
+    const tagsArray = Array.isArray(rawTags)
+      ? rawTags.filter((tag): tag is string => typeof tag === 'string')
+      : typeof rawTags === 'string'
+        ? rawTags.split(',').map(tag => tag.trim()).filter(Boolean)
+        : []
+    const completedValue = typeof searchFilters.completed === 'boolean'
+      ? searchFilters.completed
+      : searchFilters.completed === 'true'
+        ? true
+        : searchFilters.completed === 'false'
+          ? false
+          : undefined
+    const priorityValue = typeof searchFilters.priority === 'string' ? searchFilters.priority : ''
+    const dateRangeValue = typeof searchFilters.dateRange === 'string' ? searchFilters.dateRange : ''
+
+    setKeyword(keywordValue)
+    setCategory(categoryValue)
+    setTags(tagsArray.join(', '))
+    setCompleted(completedValue === undefined ? '' : String(completedValue))
+    setPriority(priorityValue)
+    setDateRange(dateRangeValue)
+
     // 検索条件を読み込んだ後、自動的に検索を実行
-    onSearch(searchFilters)
+    onSearch({
+      keyword: keywordValue,
+      category: categoryValue,
+      tags: tagsArray,
+      completed: completedValue,
+      priority: priorityValue || undefined,
+      dateRange: dateRangeValue || undefined,
+    })
     onClose()
   }
 
@@ -640,8 +665,8 @@ export default function DashboardHeader({ onModalSearch, className }: DashboardH
   }, [session?.user])
 
   const headerClassName = [
-    'flex items-center justify-between gap-4 px-5 py-4 rounded-3xl border border-slate-800/70 bg-slate-900/70 backdrop-blur',
-    'shadow-lg shadow-slate-950/40',
+    'flex items-center justify-between gap-4 px-5 py-4 rounded-3xl border border-slate-200 bg-white/95 backdrop-blur transition-colors',
+    'shadow-[0_18px_48px_rgba(15,23,42,0.08)] dark:border-slate-800/70 dark:bg-slate-900/70 dark:shadow-slate-950/40',
     className || '',
   ].join(' ').trim()
 
@@ -649,12 +674,12 @@ export default function DashboardHeader({ onModalSearch, className }: DashboardH
     <>
       <header className={headerClassName}>
         <div className="flex items-center min-w-0 gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-xl shadow-lg shadow-blue-900/40">
-            🗂
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 shadow-lg shadow-blue-200/60 dark:shadow-blue-900/40">
+            <Image src="/icons/favicon.svg" alt="My Todo" width={26} height={26} className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm text-slate-400 leading-tight">ようこそ戻りました</p>
-            <h1 className="text-base sm:text-lg font-semibold text-slate-100 truncate">
+            <p className="text-sm text-slate-500 leading-tight dark:text-slate-400">ようこそ戻りました</p>
+            <h1 className="text-base sm:text-lg font-semibold text-slate-900 truncate dark:text-slate-100">
               {isAuthenticated ? `${session?.user?.name ?? 'あなた'}のワークスペース` : 'My Todo ワークスペース'}
             </h1>
           </div>
@@ -664,7 +689,7 @@ export default function DashboardHeader({ onModalSearch, className }: DashboardH
           {isAuthenticated && (
             <button 
               onClick={() => setIsSearchModalOpen(true)}
-              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800 text-slate-100 hover:bg-slate-700 transition-colors text-sm font-medium"
+              className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors text-sm font-medium dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
               title="Todo検索"
             >
               🔍
@@ -674,7 +699,7 @@ export default function DashboardHeader({ onModalSearch, className }: DashboardH
           {isAuthenticated && (
             <button
               onClick={triggerNewTodo}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-blue-900/40"
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-500 hover:to-indigo-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-blue-200/60 dark:shadow-blue-900/40"
             >
               ✚ 新規タスク
             </button>
@@ -687,23 +712,23 @@ export default function DashboardHeader({ onModalSearch, className }: DashboardH
                   alt="Profile"
                   width={36}
                   height={36}
-                  className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-700"
+                  className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700"
                   unoptimized
                 />
               ) : (
-                <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-sm font-semibold text-slate-200">
+                <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-200">
                   {(session.user.name || session.user.email || 'U').slice(0, 1).toUpperCase()}
                 </div>
               )}
               <Link
                 href="/settings"
-                className="hidden sm:inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
+                className="hidden sm:inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
               >
                 ⚙️ 設定
               </Link>
               <button
                 onClick={() => signOut()}
-                className="text-xs text-slate-400 hover:text-red-300 transition-colors"
+                className="text-xs text-slate-400 hover:text-red-500 transition-colors dark:hover:text-red-300"
               >
                 ログアウト
               </button>

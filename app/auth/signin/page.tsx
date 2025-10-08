@@ -15,7 +15,7 @@ function SignInContent() {
     email: '',
     password: ''
   })
-  const [providers, setProviders] = useState<any>(null)
+  const [providers, setProviders] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -106,8 +106,8 @@ function SignInContent() {
         google: providers?.google
       })
       
-    } catch (err) {
-      console.error('ログインエラー:', err)
+    } catch (_err) {
+      console.error('ログインエラー:', _err)
       setError('ログインに失敗しました。もう一度お試しください。')
     } finally {
       setIsLoading(false)
@@ -150,8 +150,8 @@ function SignInContent() {
           email: formData.email
         })
       }
-    } catch (err) {
-      console.error('ログインエラー:', err)
+    } catch (_err) {
+      console.error('ログインエラー:', _err)
       setError('ネットワークエラーが発生しました。しばらく後に再試行してください。')
     } finally {
       setIsLoading(false)
@@ -351,8 +351,8 @@ function SignInContent() {
             <div className="text-xs text-gray-400 p-2 bg-gray-50 rounded">
               <p>利用可能な認証方法:</p>
               <ul>
-                {providers?.github && <li>✅ GitHub</li>}
-                {providers?.google && <li>✅ Google</li>}
+                {!!providers?.github && <li>✅ GitHub</li>}
+                {!!providers?.google && <li>✅ Google</li>}
                 <li>✅ メールアドレス</li>
               </ul>
             </div>

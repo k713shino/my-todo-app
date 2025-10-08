@@ -40,7 +40,7 @@ interface TodoFormProps {
  * 優先度の表示ラベル
  * データベース上の英語表記を日本語表示に変換
  */
-const priorityLabels = {
+const _priorityLabels = {
   LOW: '低',
   MEDIUM: '中',
   HIGH: '高',
@@ -200,7 +200,7 @@ export default function TodoForm({
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             disabled={isLoading}
           >
-            {Object.entries(priorityLabels).map(([value, label]) => (
+            {Object.entries(_priorityLabels).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>

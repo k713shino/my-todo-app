@@ -27,7 +27,7 @@ export function useScrollPreservation() {
 /**
  * 任意の関数実行前後でスクロール位置を保持する高階関数
  */
-export function withScrollPreservation<T extends any[], R>(
+export function withScrollPreservation<T extends unknown[], R>(
   fn: (...args: T) => R
 ) {
   return (...args: T): R => {

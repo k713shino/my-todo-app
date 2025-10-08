@@ -5,6 +5,7 @@ import { CacheManager } from '@/lib/cache'
 import { TodoStats } from '@/types/todo'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
+import { Status } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,8 +39,23 @@ export async function GET(request: NextRequest) {
     }
 
     if (!stats) {
+      interface TodoItem {
+        id: string
+        title: string
+        description?: string | null
+        status: string
+        priority: string
+        dueDate?: string | null
+        createdAt: string
+        updatedAt: string
+        userId: string
+        category?: string | null
+        tags: string[]
+        parentId?: string | null
+        _count?: { subtasks: number }
+      }
       // まずはユーザーTodoのキャッシュから集計（最速・一貫性重視）
-      let sourceTodos: any[] | null = await CacheManager.getTodos(session.user.id) as any
+      let sourceTodos: TodoItem[] | null = await CacheManager.getTodos(session.user.id) as TodoItem[] | null
 
       // キャッシュが無ければLambdaから取得
       if (!sourceTodos) {
@@ -47,15 +63,16 @@ export async function GET(request: NextRequest) {
         const resp = await lambdaAPI.get(`/todos/user/${encodeURIComponent(actualUserId)}`, { timeout: 8000 })
         if (resp.success && Array.isArray(resp.data)) {
           // user API と同様にメインタスクのみへ整形
-          const allTodos: any[] = resp.data
-          const mainTodos = allTodos.filter((t: any) => !t.parentId)
-          const safeTodos = mainTodos.map((todo: any) => {
-            const subtaskCount = allTodos.filter((t: any) => t.parentId && t.parentId.toString() === todo.id.toString()).length
+          const allTodos = resp.data as TodoItem[]
+          const mainTodos = allTodos.filter((t) => !t.parentId)
+          const safeTodos = mainTodos.map((todo) => {
+            const subtaskCount = allTodos.filter((t) => t.parentId && t.parentId.toString() === todo.id.toString()).length
+            const todoWithCompleted = todo as TodoItem & { completed?: boolean }
             return {
               id: todo.id,
               title: todo.title,
               description: todo.description || null,
-              status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
+              status: todo.status || (todoWithCompleted.completed ? 'DONE' : 'TODO'),
               priority: todo.priority || 'MEDIUM',
               dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString() : null,
               createdAt: new Date(todo.createdAt).toISOString(),
@@ -79,20 +96,20 @@ export async function GET(request: NextRequest) {
 
         const totalCount = sourceTodos.length
         const byStatus = {
-          todo: sourceTodos.filter((t: any) => t.status === 'TODO').length,
-          inProgress: sourceTodos.filter((t: any) => t.status === 'IN_PROGRESS').length,
-          review: sourceTodos.filter((t: any) => t.status === 'REVIEW').length,
-          done: sourceTodos.filter((t: any) => t.status === 'DONE').length,
+          todo: sourceTodos.filter((t) => t.status === 'TODO').length,
+          inProgress: sourceTodos.filter((t) => t.status === 'IN_PROGRESS').length,
+          review: sourceTodos.filter((t) => t.status === 'REVIEW').length,
+          done: sourceTodos.filter((t) => t.status === 'DONE').length,
         }
-        const overdueCount = sourceTodos.filter((t: any) => t.dueDate && t.status !== 'DONE' && now > new Date(t.dueDate).getTime()).length
+        const overdueCount = sourceTodos.filter((t) => t.dueDate && t.status !== 'DONE' && now > new Date(t.dueDate).getTime()).length
         const byPriority = {
-          urgent: sourceTodos.filter((t: any) => t.priority === 'URGENT').length,
-          high: sourceTodos.filter((t: any) => t.priority === 'HIGH').length,
-          medium: sourceTodos.filter((t: any) => t.priority === 'MEDIUM').length,
-          low: sourceTodos.filter((t: any) => t.priority === 'LOW').length,
+          urgent: sourceTodos.filter((t) => t.priority === 'URGENT').length,
+          high: sourceTodos.filter((t) => t.priority === 'HIGH').length,
+          medium: sourceTodos.filter((t) => t.priority === 'MEDIUM').length,
+          low: sourceTodos.filter((t) => t.priority === 'LOW').length,
         }
-        const weeklyDone = sourceTodos.filter((t: any) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= weekStartRef.getTime()).length
-        const monthlyDone = sourceTodos.filter((t: any) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= monthStart.getTime()).length
+        const weeklyDone = sourceTodos.filter((t) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= weekStartRef.getTime()).length
+        const monthlyDone = sourceTodos.filter((t) => t.status === 'DONE' && new Date(t.updatedAt).getTime() >= monthStart.getTime()).length
         // 週次完了推移（可変週数・週開始・タイムゾーン）
         const weekBuckets: Array<{ start: Date; end: Date; label: string; count: number }> = []
         const toLocalMidnight = (d: Date) => { const x = new Date(d); x.setHours(0,0,0,0); return x }
@@ -108,7 +125,7 @@ export async function GET(request: NextRequest) {
           return shiftDays(base, -offset)
         })()
         const fmtMD = (d: Date) => {
-          const y = tz === 'UTC' ? d.getUTCFullYear() : d.getFullYear()
+          const _y = tz === 'UTC' ? d.getUTCFullYear() : d.getFullYear()
           const m = (tz === 'UTC' ? d.getUTCMonth() : d.getMonth()) + 1
           const dd = tz === 'UTC' ? d.getUTCDate() : d.getDate()
           return `${m}/${dd}`
@@ -122,8 +139,8 @@ export async function GET(request: NextRequest) {
           cursor = shiftDays(cursor, -7)
         }
         for (const t of sourceTodos) {
-          if ((t as any).status !== 'DONE') continue
-          const u = new Date((t as any).updatedAt)
+          if (t.status !== 'DONE') continue
+          const u = new Date(t.updatedAt)
           for (const b of weekBuckets) {
             if (u >= b.start && u < b.end) { b.count++; break }
           }
@@ -162,15 +179,15 @@ export async function GET(request: NextRequest) {
           monthBuckets.unshift({ y: tz==='UTC'?start.getUTCFullYear():start.getFullYear(), m: (tz==='UTC'?start.getUTCMonth():start.getMonth())+1, start, end, label, count: 0 })
         }
         for (const t of sourceTodos) {
-          if ((t as any).status !== 'DONE') continue
-          const u = new Date((t as any).updatedAt)
+          if (t.status !== 'DONE') continue
+          const u = new Date(t.updatedAt)
           for (const b of monthBuckets) {
             if (u >= b.start && u < b.end) { b.count++; break }
           }
         }
         const categoryBreakdown: Record<string, number> = {}
         for (const t of sourceTodos) {
-          const cat = (t as any).category || '未分類'
+          const cat = t.category || '未分類'
           categoryBreakdown[cat] = (categoryBreakdown[cat] ?? 0) + 1
         }
 
@@ -198,9 +215,8 @@ export async function GET(request: NextRequest) {
         // 最後のフォールバック：従来のPrisma集計（DBが空なら0）
         // Lambda/キャッシュのどちらも取得できない時点で統計の信頼性は低いので
         // カードは非表示にできるよう unavailable を true にする
-        let errorCount = 0
-        const safeCount = async (args: any) => {
-          try { return await prisma.todo.count(args) } catch (e: any) { errorCount++; return 0 }
+        const safeCount = async (args: { where: { userId: string; status?: Status } }) => {
+          try { return await prisma.todo.count(args) } catch { return 0 }
         }
         const [totalCount, doneCount] = await Promise.all([
           safeCount({ where: { userId: session.user.id } }),

@@ -21,7 +21,7 @@ export interface AuthValidationResult {
  * 🛡️ 厳格なセッション検証
  * APIルートで使用する認証済みユーザー情報を取得
  */
-export async function getAuthenticatedUser(request?: NextRequest): Promise<AuthValidationResult> {
+export async function getAuthenticatedUser(_request?: NextRequest): Promise<AuthValidationResult> {
   try {
     // NextAuth セッションを取得
     const session = await getServerSession(authOptions)

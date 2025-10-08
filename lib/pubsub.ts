@@ -100,10 +100,10 @@ export class PubSubManager {
         this.subscribers.set(channel, new Set<MessageCallback>())
         
         await subClient.subscribe(channel)
-        subClient.on('message', (receivedChannel: string, message: string) => {
+        subClient.on('message', (receivedChannel: unknown, message: unknown) => {
           if (receivedChannel === channel) {
             try {
-              const data = JSON.parse(message)
+              const data = JSON.parse(String(message))
               const callbacks = this.subscribers.get(channel)
               if (callbacks) {
                 callbacks.forEach(cb => cb(data))
@@ -154,11 +154,11 @@ export class PubSubManager {
   ): Promise<boolean> {
     try {
       await subClient.psubscribe(pattern)
-      subClient.on('pmessage', (receivedPattern: string, channel: string, message: string) => {
+      subClient.on('pmessage', (receivedPattern: unknown, channel: unknown, message: unknown) => {
         if (receivedPattern === pattern) {
           try {
-            const data = JSON.parse(message)
-            callback(channel, data)
+            const data = JSON.parse(String(message))
+            callback(String(channel), data)
           } catch (error) {
             console.error('Pattern message parse error:', error)
           }

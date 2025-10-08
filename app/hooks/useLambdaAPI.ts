@@ -1,10 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { 
-  Todo, 
-  CreateTodoRequest, 
-  UpdateTodoRequest, 
-  VercelAPIResponse,
-  LambdaAPIError 
+import type {
+  Todo,
+  CreateTodoRequest,
+  UpdateTodoRequest,
+  VercelAPIResponse
 } from '@/types/lambda-api';
 
 interface UseLambdaAPIState<T> {
@@ -14,13 +13,13 @@ interface UseLambdaAPIState<T> {
 }
 
 interface UseLambdaAPIReturn<T> extends UseLambdaAPIState<T> {
-  execute: (...args: any[]) => Promise<T | void>;
+  execute: (...args: Record<string, unknown>[]) => Promise<T | void>;
   reset: () => void;
 }
 
 // 汎用的なAPI呼び出しフック
-export function useLambdaAPI<T = any>(
-  apiCall: (...args: any[]) => Promise<T>
+export function useLambdaAPI<T = unknown>(
+  apiCall: (...args: Record<string, unknown>[]) => Promise<T>
 ): UseLambdaAPIReturn<T> {
   const [state, setState] = useState<UseLambdaAPIState<T>>({
     data: null,
@@ -28,7 +27,7 @@ export function useLambdaAPI<T = any>(
     error: null,
   });
 
-  const execute = useCallback(async (...args: any[]): Promise<T | void> => {
+  const execute = useCallback(async (...args: Record<string, unknown>[]): Promise<T | void> => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {

@@ -50,10 +50,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Todo一覧をLambda APIから取得（修正されたユーザーIDを使用）
-    let todos: any[] = []
+    let todos: Record<string, unknown>[] = []
     try {
       const todosResponse = await lambdaAPI.getUserTodos(actualUserId)
-      todos = Array.isArray(todosResponse) ? todosResponse : []
+      todos = Array.isArray(todosResponse) ? (todosResponse as unknown as Record<string, unknown>[]) : []
       console.log(`📋 Found ${todos.length} todos`)
     } catch (todoError) {
       console.warn('❌ Failed to fetch todos:', todoError)
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
           hour,
           seconds: parseInt(hourSeconds || '0', 10)
         })
-      } catch (_hourError) {
+      } catch {
         hourlyStats.push({ hour, seconds: 0 })
       }
     }

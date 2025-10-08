@@ -9,6 +9,7 @@ import { CacheManager } from '@/lib/cache'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { createSecurityHeaders } from '@/lib/security'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
+import type { Todo } from '@/types/todo'
 
 export async function GET(request: NextRequest) {
   const startTime = performance.now()
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
   const actualUserId = extractUserIdFromPrefixed(userId)
   console.log('⚡ 高速ユーザー専用Todo取得開始:', { userId, actualUserId })
   
-  const normalizeTodo = (todo: any) => {
+  const normalizeTodo = (todo: Record<string, unknown>) => {
     const normalizedTags = Array.isArray(todo.tags)
       ? todo.tags
       : (typeof todo.tags === 'string'
@@ -36,9 +37,9 @@ export async function GET(request: NextRequest) {
       description: todo.description || null,
       status: todo.status || (todo.completed ? 'DONE' : 'TODO'),
       priority: todo.priority || 'MEDIUM',
-      dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
-      createdAt: new Date(todo.createdAt),
-      updatedAt: new Date(todo.updatedAt),
+      dueDate: todo.dueDate ? new Date(String(todo.dueDate)) : null,
+      createdAt: new Date(String(todo.createdAt)),
+      updatedAt: new Date(String(todo.updatedAt)),
       userId: todo.userId,
       category: todo.category || null,
       tags: normalizedTags,
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
             const latest = await lambdaAPI.get(`/todos/user/${encodeURIComponent(actualUserId)}`, { timeout: 8000 })
             if (latest.success && Array.isArray(latest.data)) {
               const normalizedTodos = latest.data.map(normalizeTodo)
-              await CacheManager.setTodos(userId, normalizedTodos, 300)
+              await CacheManager.setTodos(userId, normalizedTodos as Todo[], 300)
               console.log(`🔄 SWRリフレッシュ完了 (${(performance.now()-refreshStart).toFixed(2)}ms):`, normalizedTodos.length)
             }
           } catch (e) {
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
       console.log(`📡 Lambda API レスポンス (${lambdaTime.toFixed(2)}ms):`, {
         success: lambdaResponse.success,
         hasData: !!lambdaResponse.data,
-        dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0,
+        dataLength: lambdaResponse.data ? (lambdaResponse.data as unknown[]).length : 0,
         error: lambdaResponse.error
       })
     }
@@ -127,7 +128,7 @@ export async function GET(request: NextRequest) {
       const cacheStartTime = performance.now()
       
       // 非同期でキャッシュ保存（レスポンス速度に影響しない）
-      CacheManager.setTodos(userId, safeTodos, 300).then(() => {
+      CacheManager.setTodos(userId, safeTodos as Todo[], 300).then(() => {
         const cacheTime = performance.now() - cacheStartTime
         console.log(`💾 キャッシュ保存完了 (${cacheTime.toFixed(2)}ms):`, safeTodos.length, '件')
       }).catch(error => {

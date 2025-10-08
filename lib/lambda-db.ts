@@ -12,7 +12,7 @@ import type {
 const LAMBDA_API_URL = process.env.LAMBDA_API_URL || process.env.NEXT_PUBLIC_LAMBDA_API_URL
 
 // ローカル版からインポート版の型に移行
-type LambdaResponse<T = any> = LambdaAPILambdaResponse<T>
+type LambdaResponse<T = unknown> = LambdaAPILambdaResponse<T>
 
 class LambdaDB {
   private baseUrl: string
@@ -129,7 +129,7 @@ class LambdaDB {
   }
 
   // Todo操作
-  async getTodos(userId: string, filters?: any): Promise<LambdaResponse<Todo[]>> {
+  async getTodos(userId: string, filters?: Record<string, unknown>): Promise<LambdaResponse<Todo[]>> {
     // OAuth認証ユーザーIDから実際のデータベースユーザーIDを抽出
     const { extractUserIdFromPrefixed } = await import('@/lib/user-id-utils')
     const actualUserId = extractUserIdFromPrefixed(userId)
@@ -155,9 +155,9 @@ class LambdaDB {
     if (result.success && Array.isArray(result.data)) {
       console.log(`🔍 Raw data from Lambda: ${result.data.length} todos`)
       console.log(`🔍 Target actualUserId: "${actualUserId}"`)
-      console.log(`🔍 Sample todo userIds:`, result.data.slice(0, 3).map((todo: any) => `"${todo.userId}"`))
-      
-      const filteredTodos = result.data.filter((todo: any) => {
+      console.log(`🔍 Sample todo userIds:`, result.data.slice(0, 3).map((todo: Todo) => `"${todo.userId}"`))
+
+      const filteredTodos = result.data.filter((todo: Todo) => {
         const matches = todo.userId === actualUserId
         if (!matches) {
           console.log(`🔍 Filtering out todo "${todo.title}" (userId: "${todo.userId}")`)
@@ -229,17 +229,17 @@ class LambdaDB {
       
       // 2. ユーザーの統計情報を計算
       const totalTodos = todos.length
-      const completedTodos = todos.filter((todo: any) => todo.completed).length
+      const completedTodos = todos.filter((todo: Todo) => todo.status === 'DONE').length
       const pendingTodos = totalTodos - completedTodos
-      
+
       // 3. カテゴリ・優先度別の統計
-      const categoryStats = todos.reduce((acc: any, todo: any) => {
+      const categoryStats = todos.reduce((acc: Record<string, number>, todo: Todo) => {
         const category = todo.category || 'uncategorized'
         acc[category] = (acc[category] || 0) + 1
         return acc
       }, {})
-      
-      const priorityStats = todos.reduce((acc: any, todo: any) => {
+
+      const priorityStats = todos.reduce((acc: Record<string, number>, todo: Todo) => {
         acc[todo.priority] = (acc[todo.priority] || 0) + 1
         return acc
       }, {})

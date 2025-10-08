@@ -15,7 +15,7 @@ interface TodoKanbanViewProps {
   handleDragOver: (e: React.DragEvent, status: Status) => void
   handleDragLeave: (e: React.DragEvent) => void
   handleDrop: (e: React.DragEvent, status: Status) => void
-  handleUpdateTodo: (id: string, data: any) => Promise<void>
+  handleUpdateTodo: (id: string, data: Record<string, unknown>) => Promise<void>
   getNextStatus: (status: Status) => Status
   PRIORITY_LABELS: Record<Priority, string>
 }

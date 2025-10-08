@@ -16,7 +16,7 @@ export function usePageMovementDebugger() {
     console.log('🔍 ページ移動デバッガー開始')
     
     // 1. ページリロード検出
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    const handleBeforeUnload = (_e: BeforeUnloadEvent) => {
       console.log('🔄 RELOAD DETECTED: ページがリロードされようとしています')
       console.trace('リロード発生箇所')
     }
@@ -74,8 +74,8 @@ export function usePageMovementDebugger() {
     const domObserver = new MutationObserver((mutations) => {
       // DOM変更の頻度を制限
       const now = Date.now()
-      if (now - (domObserver as any).lastLogTime < 1000) return // 1秒以内は無視
-      (domObserver as any).lastLogTime = now
+      if (now - (domObserver as { lastLogTime?: number }).lastLogTime! < 1000) return // 1秒以内は無視
+      (domObserver as { lastLogTime?: number }).lastLogTime = now
 
       const significantChanges = mutations.filter(mutation =>
         mutation.type === 'childList' &&
@@ -130,12 +130,12 @@ export function usePageMovementDebugger() {
       if (target.type === 'text' || target.tagName === 'TEXTAREA') {
         // 入力イベントのログ頻度を制限（デバウンス）
         const now = Date.now()
-        const lastInputTime = (target as any).lastDebugTime || 0
-        
+        const lastInputTime = (target as { lastDebugTime?: number }).lastDebugTime || 0
+
         if (now - lastInputTime < 500) { // 500ms以内の連続入力は無視
           return
         }
-        (target as any).lastDebugTime = now
+        (target as { lastDebugTime?: number }).lastDebugTime = now
         
         console.log('⌨️ INPUT EVENT:', {
           tagName: target.tagName,

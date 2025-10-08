@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
 import { lambdaAPI } from '@/lib/lambda-api'
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils'
-import { Todo, TodoFilters } from '@/types/todo'
+import { TodoFilters } from '@/types/todo'
 import { safeToISOString } from '@/lib/date-utils'
-import { Priority, Status } from '@prisma/client'
+import { Priority } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       priority: searchParams.get('priority') as Priority || undefined,
       category: searchParams.get('category') || undefined,
       tags: searchParams.get('tags')?.split(',').filter(Boolean) || undefined,
-      dateRange: searchParams.get('dateRange') as any || undefined,
+      dateRange: (searchParams.get('dateRange') as 'overdue' | 'today' | 'this_week' | 'no_due_date') || undefined,
     }
 
     // スマートフィルタv2 拡張パラメータ
@@ -39,11 +39,11 @@ export async function GET(request: NextRequest) {
     const scoreWeightsParam = searchParams.get('weights') || undefined // JSON: {titleExact:5,...}
     const exprParam = searchParams.get('expr') || undefined // JSON複合条件
 
-    type Expr = 
+    type Expr =
       | { op: 'and' | 'or'; conds: Expr[] }
-      | { field: 'title'|'description'|'category'|'status'|'priority'|'tags'|'dueDate'; 
+      | { field: 'title'|'description'|'category'|'status'|'priority'|'tags'|'dueDate';
           type: 'eq'|'neq'|'contains'|'regex'|'in'|'range';
-          value?: any; from?: string; to?: string; flags?: string }
+          value?: string | string[]; from?: string; to?: string; flags?: string }
 
     const parseExprJSON = (raw?: string): Expr | undefined => {
       if (!raw) return undefined
@@ -98,13 +98,27 @@ export async function GET(request: NextRequest) {
     // ユーザー専用エンドポイントを利用（確実・高速）
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
     console.log('📡 Lambda API ユーザーTodo取得開始:', actualUserId)
-    let userTodos: any[] = []
+    interface TodoRecord {
+      id: string
+      title: string
+      description?: string
+      category?: string
+      tags?: string[]
+      priority?: string
+      status?: string
+      completed?: boolean
+      dueDate?: string | Date
+      createdAt: string | Date
+      updatedAt: string | Date
+      parentId?: string
+    }
+    let userTodos: TodoRecord[] = []
     try {
-      userTodos = await lambdaAPI.getUserTodos(actualUserId)
-    } catch (e) {
-      console.error('❌ Lambda getUserTodos 失敗:', e)
-      return NextResponse.json({ 
-        filters, results: [], count: 0, error: 'Failed to fetch user todos' 
+      userTodos = await lambdaAPI.getUserTodos(actualUserId) as unknown as TodoRecord[]
+    } catch (_e) {
+      console.error('❌ Lambda getUserTodos 失敗:', _e)
+      return NextResponse.json({
+        filters, results: [], count: 0, error: 'Failed to fetch user todos'
       }, { status: 500 })
     }
     console.log('📊 ユーザー固有Todo件数:', userTodos.length)
@@ -116,7 +130,7 @@ export async function GET(request: NextRequest) {
     if (statusParam) {
       const wanted = new Set(statusParam.split(',').map(s => s.trim()).filter(Boolean))
       if (wanted.size > 0) {
-        filteredTodos = filteredTodos.filter((todo: any) => {
+        filteredTodos = filteredTodos.filter((todo) => {
           const s = todo.status ? String(todo.status) : (todo.completed ? 'DONE' : 'TODO')
           return wanted.has(s)
         })
@@ -127,7 +141,7 @@ export async function GET(request: NextRequest) {
     // 全文検索
     if (filters.search) {
       const searchTerm = filters.search.toLowerCase();
-      filteredTodos = filteredTodos.filter((todo: any) => {
+      filteredTodos = filteredTodos.filter((todo) => {
         return (
           todo.title?.toLowerCase().includes(searchTerm) ||
           todo.description?.toLowerCase().includes(searchTerm) ||
@@ -139,20 +153,20 @@ export async function GET(request: NextRequest) {
 
     // 完了状態フィルター
     if (filters.completed !== undefined) {
-      filteredTodos = filteredTodos.filter((todo: any) => todo.completed === filters.completed);
+      filteredTodos = filteredTodos.filter((todo) => todo.completed === filters.completed);
       console.log(`✅ 完了状態フィルター "${filters.completed}" 結果:`, filteredTodos.length, '件');
     }
 
     // 優先度フィルター
     if (filters.priority) {
-      filteredTodos = filteredTodos.filter((todo: any) => todo.priority === filters.priority);
+      filteredTodos = filteredTodos.filter((todo) => todo.priority === filters.priority);
       console.log(`⚡ 優先度フィルター "${filters.priority}" 結果:`, filteredTodos.length, '件');
     }
 
     // カテゴリフィルター
     if (filters.category) {
       const categoryTerm = filters.category.toLowerCase();
-      filteredTodos = filteredTodos.filter((todo: any) => 
+      filteredTodos = filteredTodos.filter((todo) =>
         todo.category?.toLowerCase().includes(categoryTerm)
       );
       console.log(`📁 カテゴリフィルター "${filters.category}" 結果:`, filteredTodos.length, '件');
@@ -160,7 +174,7 @@ export async function GET(request: NextRequest) {
 
     // タグフィルター（いずれか）
     if (filters.tags && filters.tags.length > 0) {
-      filteredTodos = filteredTodos.filter((todo: any) => {
+      filteredTodos = filteredTodos.filter((todo) => {
         const todoTags = Array.isArray(todo.tags) ? todo.tags : [];
         return filters.tags!.some(tag => todoTags.includes(tag));
       });
@@ -171,7 +185,7 @@ export async function GET(request: NextRequest) {
     if (tagsAllParam) {
       const must = tagsAllParam.split(',').map(s => s.trim()).filter(Boolean)
       if (must.length > 0) {
-        filteredTodos = filteredTodos.filter((todo: any) => {
+        filteredTodos = filteredTodos.filter((todo) => {
           const todoTags = Array.isArray(todo.tags) ? todo.tags : []
           return must.every(tag => todoTags.includes(tag))
         })
@@ -182,42 +196,42 @@ export async function GET(request: NextRequest) {
     // 日付範囲フィルター
     if (filters.dateRange) {
       const now = new Date();
-      
+
       if (filters.dateRange === 'overdue') {
-        filteredTodos = filteredTodos.filter((todo: any) => {
+        filteredTodos = filteredTodos.filter((todo) => {
           return todo.dueDate && new Date(todo.dueDate) < now && !todo.completed;
         });
       } else if (filters.dateRange === 'today') {
         const today = new Date();
         const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-        
-        filteredTodos = filteredTodos.filter((todo: any) => {
+
+        filteredTodos = filteredTodos.filter((todo) => {
           if (!todo.dueDate) return false;
           const dueDate = new Date(todo.dueDate);
           return dueDate >= todayStart && dueDate < todayEnd;
         });
       } else if (filters.dateRange === 'this_week') {
         const weekEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-        
-        filteredTodos = filteredTodos.filter((todo: any) => {
+
+        filteredTodos = filteredTodos.filter((todo) => {
           if (!todo.dueDate) return false;
           const dueDate = new Date(todo.dueDate);
           return dueDate >= now && dueDate <= weekEnd;
         });
       } else if (filters.dateRange === 'no_due_date') {
-        filteredTodos = filteredTodos.filter((todo: any) => !todo.dueDate);
+        filteredTodos = filteredTodos.filter((todo) => !todo.dueDate);
       }
-      
+
       console.log(`📅 日付範囲フィルター "${filters.dateRange}" 結果:`, filteredTodos.length, '件');
     }
 
     // 正規表現フィルタ
     if (parsedRegex) {
       const fields = parsedRegex.field ? [parsedRegex.field] : fieldsParam
-      filteredTodos = filteredTodos.filter((todo: any) => {
+      filteredTodos = filteredTodos.filter((todo) => {
         return fields.some((f) => {
-          const v = f === 'tags' ? (Array.isArray(todo.tags) ? todo.tags.join(' ') : '') : String(todo[f] ?? '')
+          const v = f === 'tags' ? (Array.isArray(todo.tags) ? todo.tags.join(' ') : '') : String((todo as unknown as Record<string, unknown>)[f] ?? '')
           return parsedRegex!.re.test(v)
         })
       })
@@ -225,44 +239,42 @@ export async function GET(request: NextRequest) {
     }
 
     // 複合条件（JSON）
-    const applyExpr = (t: any, e?: Expr): boolean => {
+    const applyExpr = (t: TodoRecord, e?: Expr): boolean => {
       if (!e) return true
-      if ((e as any).op) {
-        const node = e as any
-        const results = (node.conds || []).map((c: Expr) => applyExpr(t, c))
-        return node.op === 'and' ? results.every(Boolean) : results.some(Boolean)
+      if ('op' in e) {
+        const results = e.conds.map((c) => applyExpr(t, c))
+        return e.op === 'and' ? results.every(Boolean) : results.some(Boolean)
       }
-      const c = e as any
-      const get = (field: string): any => {
+      const get = (field: string): string | string[] => {
         if (field === 'tags') return Array.isArray(t.tags) ? t.tags : []
-        return t[field]
+        return String((t as unknown as Record<string, unknown>)[field] ?? '')
       }
-      switch (c.type) {
-        case 'eq': return String(get(c.field)) === String(c.value)
-        case 'neq': return String(get(c.field)) !== String(c.value)
+      switch (e.type) {
+        case 'eq': return String(get(e.field)) === String(e.value)
+        case 'neq': return String(get(e.field)) !== String(e.value)
         case 'contains': {
-          const v = get(c.field)
-          return String(v ?? '').toLowerCase().includes(String(c.value ?? '').toLowerCase())
+          const v = get(e.field)
+          return String(v ?? '').toLowerCase().includes(String(e.value ?? '').toLowerCase())
         }
         case 'regex': {
           try {
-            const re = new RegExp(String(c.value ?? ''), c.flags || '')
-            const v = c.field === 'tags' ? (Array.isArray(t.tags) ? t.tags.join(' ') : '') : String(get(c.field) ?? '')
+            const re = new RegExp(String(e.value ?? ''), e.flags || '')
+            const v = e.field === 'tags' ? (Array.isArray(t.tags) ? t.tags.join(' ') : '') : String(get(e.field) ?? '')
             return re.test(v)
           } catch { return false }
         }
         case 'in': {
-          const arr = Array.isArray(c.value) ? c.value.map((x: any) => String(x)) : []
-          const v = get(c.field)
+          const arr = Array.isArray(e.value) ? e.value.map((x) => String(x)) : []
+          const v = get(e.field)
           return arr.includes(String(v))
         }
         case 'range': {
           // 日付範囲用
-          const v = get(c.field)
+          const v = get(e.field)
           if (!v) return false
-          const dt = new Date(v)
-          const fromOk = c.from ? dt >= new Date(c.from) : true
-          const toOk = c.to ? dt <= new Date(c.to) : true
+          const dt = new Date(String(v))
+          const fromOk = e.from ? dt >= new Date(e.from) : true
+          const toOk = e.to ? dt <= new Date(e.to) : true
           return fromOk && toOk
         }
         default: return true
@@ -277,7 +289,7 @@ export async function GET(request: NextRequest) {
     const tokens = (filters.search || '').trim().split(/\s+/).filter(Boolean)
     const priorityOrder = { 'URGENT': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 } as const
     const now = new Date()
-    const withScore = filteredTodos.map((t: any) => {
+    const withScore = filteredTodos.map((t) => {
       let score = 0
       const title = String(t.title || '')
       const desc = String(t.description || '')
@@ -287,7 +299,7 @@ export async function GET(request: NextRequest) {
       // 正規表現一致ボーナス（既にフィルタしているが、スコアにも加点）
       if (parsedRegex) {
         const fields = parsedRegex.field ? [parsedRegex.field] : fieldsParam
-        if (fields.some(f => parsedRegex.re.test(f === 'tags' ? tagStr : String((t as any)[f] ?? '')))) {
+        if (fields.some(f => parsedRegex.re.test(f === 'tags' ? tagStr : String((t as unknown as Record<string, unknown>)[f] ?? '')))) {
           score += weights.regexBonus
         }
       }
@@ -341,10 +353,10 @@ export async function GET(request: NextRequest) {
     // 親を含めるルール:
     // - 親がマッチした場合はその親を含める
     // - 子（サブタスク）がマッチした場合も、その親を一覧に含める（親自身が直接マッチしていなくても可）
-    const idToTodo = new Map<string, any>(userTodos.map((t: any) => [String(t.id), t]))
+    const idToTodo = new Map<string, TodoRecord>(userTodos.map((t) => [String(t.id), t]))
     const idToScore = new Map<string, number>(withScore.map(ws => [String(ws.t.id), ws.score]))
     const includeParentIds = new Set<string>()
-    const matchedSubtasksByParent = new Map<string, any[]>()
+    const matchedSubtasksByParent = new Map<string, TodoRecord[]>()
 
     for (const t of matchedTodos) {
       if (!t.parentId) {
@@ -360,7 +372,7 @@ export async function GET(request: NextRequest) {
 
     // 親タスクのみを作成し、子のマッチ数に応じて少しスコア加点
     const childMatchBoost = 1
-    type ParentEntry = { parent: any; aggScore: number }
+    type ParentEntry = { parent: TodoRecord; aggScore: number }
     const parentEntries: ParentEntry[] = []
     for (const pid of includeParentIds) {
       const parent = idToTodo.get(pid)
@@ -390,11 +402,11 @@ export async function GET(request: NextRequest) {
     filteredTodos = parentEntries.map(e => e.parent)
 
     // 安全な日付変換
-    const results = filteredTodos.map((todo: any) => ({
+    const results = filteredTodos.map((todo) => ({
       ...todo,
-      createdAt: safeToISOString(todo.createdAt),
-      updatedAt: safeToISOString(todo.updatedAt),
-      dueDate: todo.dueDate ? safeToISOString(todo.dueDate) : null,
+      createdAt: safeToISOString(todo.createdAt as unknown as Record<string, unknown>),
+      updatedAt: safeToISOString(todo.updatedAt as unknown as Record<string, unknown>),
+      dueDate: todo.dueDate ? safeToISOString(todo.dueDate as unknown as Record<string, unknown>) : null,
       priority: todo.priority || 'MEDIUM',
       category: todo.category || null,
       tags: todo.tags || []
@@ -418,7 +430,7 @@ export async function GET(request: NextRequest) {
         fields: fieldsParam,
         hasExpr: !!expr,
         matchedSubtasks: Object.fromEntries(
-          Array.from(matchedSubtasksByParent.entries()).map(([pid, subs]) => [pid, subs.map((s: any) => ({ id: s.id, title: s.title, status: s.status }))])
+          Array.from(matchedSubtasksByParent.entries()).map(([pid, subs]) => [pid, subs.map((s) => ({ id: s.id, title: s.title, status: s.status }))])
         )
       }
     })

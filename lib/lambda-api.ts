@@ -28,7 +28,7 @@ export class LambdaAPI {
   /**
    * Lambda APIに対してHTTPリクエストを送信
    */
-  async request<T = any>(
+  async request<T = unknown>(
     endpoint: string = '',
     options: RequestOptions = {}
   ): Promise<T> {
@@ -329,7 +329,7 @@ export class LambdaAPI {
   /**
    * 汎用GETリクエスト（VercelAPIResponse形式の戻り値用）
    */
-  async get<T = any>(endpoint: string, options: RequestOptions = {}): Promise<LambdaAPIResponse<T>> {
+  async get<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<LambdaAPIResponse<T>> {
     try {
       const response = await this.request<T>(endpoint, { method: 'GET', ...options });
       return {
@@ -349,7 +349,7 @@ export class LambdaAPI {
   /**
    * 汎用POSTリクエスト（VercelAPIResponse形式の戻り値用）
    */
-  async post<T = any>(endpoint: string, data: any, options: RequestOptions = {}): Promise<LambdaAPIResponse<T>> {
+  async post<T = unknown>(endpoint: string, data: unknown, options: RequestOptions = {}): Promise<LambdaAPIResponse<T>> {
     console.log('🚀🔵 === Lambda API POST START ===', { endpoint, data });
     
     try {
@@ -404,7 +404,7 @@ export class LambdaAPI {
   /**
    * 汎用PUTリクエスト（VercelAPIResponse形式の戻り値用）
    */
-  async put<T = any>(endpoint: string, data: any): Promise<LambdaAPIResponse<T>> {
+  async put<T = unknown>(endpoint: string, data: unknown): Promise<LambdaAPIResponse<T>> {
     try {
       const response = await this.request<T>(endpoint, {
         method: 'PUT',
@@ -427,7 +427,7 @@ export class LambdaAPI {
   /**
    * 汎用DELETEリクエスト（VercelAPIResponse形式の戻り値用）
    */
-  async delete<T = any>(endpoint: string): Promise<LambdaAPIResponse<T>> {
+  async delete<T = unknown>(endpoint: string): Promise<LambdaAPIResponse<T>> {
     try {
       const response = await this.request<T>(endpoint, {
         method: 'DELETE',

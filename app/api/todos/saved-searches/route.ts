@@ -13,10 +13,10 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('✅ API: 認証成功', (session as any).user.id)
+    console.log('✅ API: 認証成功', (session as { user: { id: string } }).user.id)
 
     try {
-      const savedSearches = await lambdaAPI.getUserSavedSearches((session as any).user.id)
+      const savedSearches = await lambdaAPI.getUserSavedSearches((session as { user: { id: string } }).user.id)
       console.log('📋 API: 取得した保存済み検索数:', savedSearches.length)
       return NextResponse.json(savedSearches)
     } catch (error) {
@@ -55,11 +55,11 @@ export async function POST(request: NextRequest) {
     }
     
     if (!isAuthenticated(session)) {
-      console.log('❌ API: 認証失敗', { hasSession: !!session, hasUser: !!(session as any)?.user })
+      console.log('❌ API: 認証失敗', { hasSession: !!session, hasUser: !!(session as unknown as { user?: unknown })?.user })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('✅ API: 認証成功', { userId: (session as any).user.id, userEmail: (session as any).user.email })
+    console.log('✅ API: 認証成功', { userId: (session as { user: { id: string; email?: string } }).user.id, userEmail: (session as { user: { id: string; email?: string } }).user.email })
 
     // リクエストボディの解析エラーハンドリング
     let body
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     const requestData = {
       name: name.trim(),
       filters: typeof filters === 'string' ? filters : JSON.stringify(filters),
-      userId: (session as any).user.id,
+      userId: (session as { user: { id: string } }).user.id,
     }
     console.log('🚀 Lambda API呼び出し開始:', requestData)
 

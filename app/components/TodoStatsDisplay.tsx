@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { TodoStats } from '@/types/todo'
 
 type Variant = 'color' | 'neutral' | 'compact'
@@ -15,11 +15,12 @@ interface TodoStatsDisplayProps {
 }
 
 export default function TodoStatsDisplay({ stats, variant = 'color', showTimestamp = true, timeZone }: TodoStatsDisplayProps) {
+  const gradientId = useId()
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
   const weekly = stats.weeklyDone ?? 0
   const monthly = stats.monthlyDone ?? 0
   const maxBar = Math.max(weekly, monthly, 1)
-  const lastUpdatedRaw = (stats as any)?.lastUpdated as string | undefined
+  const lastUpdatedRaw = (stats as { lastUpdated?: string })?.lastUpdated as string | undefined
 
   const formattedUpdated = (() => {
     if (!lastUpdatedRaw) return undefined
@@ -52,10 +53,12 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
   const categorySegments = (() => {
     let acc = 0
     return categoryEntries.map(([name, count], i) => {
+      const numeric = Number(count)
       const start = (acc / Math.max(1, categoryTotal)) * 100
-      acc += Number(count)
+      acc += numeric
       const end = (acc / Math.max(1, categoryTotal)) * 100
-      return { name, count: Number(count), start, end, color: palette[i % palette.length] }
+      const percent = Math.round((numeric / Math.max(1, categoryTotal)) * 100)
+      return { name, count: numeric, start, end, percent, color: palette[i % palette.length] }
     })
   })()
 
@@ -67,6 +70,7 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
     { key: 'LOW', label: '低', color: '#10b981', value: stats.byPriority.low },
   ].sort((a, b) => b.value - a.value)
   const priorityMax = Math.max(...priorityBars.map(b => b.value), 1)
+  const priorityTotal = Math.max(1, stats.total)
   const [showPercent, setShowPercent] = useState(false)
 
   // 折れ線グラフ（週次/月次切替）
@@ -77,14 +81,23 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
   }, [trendMode, stats.weeklyTrend, stats.monthlyTrend])
   const trendMax = Math.max(...trend.map(t => t.count), 1)
   const w = 260, h = 80, pad = 6
-  const points = trend.length > 0
+  const trendPoints = trend.length > 0
     ? trend.map((t, i) => {
-        const x = pad + (i * (w - pad*2)) / Math.max(1, trend.length - 1)
-        const y = h - pad - (t.count / trendMax) * (h - pad*2)
-        return `${x},${y}`
-      }).join(' ')
+        const x = pad + (i * (w - pad * 2)) / Math.max(1, trend.length - 1)
+        const y = h - pad - (t.count / trendMax) * (h - pad * 2)
+        return { ...t, x, y }
+      })
+    : []
+  const linePath = trendPoints.length > 0
+    ? `M${trendPoints.map(p => `${p.x},${p.y}`).join(' L')}`
+    : ''
+  const areaPath = trendPoints.length > 0
+    ? `${linePath} L${trendPoints[trendPoints.length - 1].x},${h - pad} L${trendPoints[0].x},${h - pad} Z`
     : ''
   const trendLabelStep = trend.length > 10 ? Math.ceil(trend.length / 8) : 1
+  const latestTrend = trendPoints.length > 0 ? trendPoints[trendPoints.length - 1] : undefined
+  const previousTrend = trendPoints.length > 1 ? trendPoints[trendPoints.length - 2] : undefined
+  const trendDelta = latestTrend && previousTrend ? latestTrend.count - previousTrend.count : undefined
 
   if (variant === 'compact') {
     // コンパクト: ダッシュボードの小カードと同じサイズ感で4指標のみ
@@ -160,29 +173,49 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
       </div>
 
       {/* 優先度別統計 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="flex flex-col gap-4">
         {/* 棒グラフ */}
-        <div className={`${cardBg} rounded p-3`}>
-          <div className={`flex items-center justify-between mb-2`}>
-            <div className={`text-sm ${mutedText}`}>優先度別分布</div>
+        <div className={`${cardBg} rounded-xl p-3 space-y-3`}>
+          <div className={`flex items-center justify-between`}>
+            <div className={`text-sm font-medium ${variant === 'neutral' ? 'text-gray-700 dark:text-gray-200' : 'text-white'}`}>優先度別分布</div>
             <button
-              className={`text-[11px] px-2 py-0.5 rounded ${variant==='neutral' ? 'bg-gray-200 dark:bg-gray-700' : 'bg-white/20'} ${mutedText}`}
+              className={`text-[11px] px-2 py-0.5 rounded-full border ${variant==='neutral' ? 'border-gray-200 text-gray-600 dark:border-gray-600 dark:text-gray-300' : 'border-white/40 text-white/80'} hover:border-blue-400 hover:text-blue-500`}
               onClick={(e) => { e.preventDefault(); setShowPercent(p => !p) }}
               title={showPercent ? '件数表示に切替' : '割合表示に切替'}
-            >{showPercent ? '％' : '#'} 表示</button>
+            >
+              {showPercent ? '件数' : '％'} 切替
+            </button>
           </div>
-          <div className="space-y-2">
-            {priorityBars.map(b => (
-              <div key={b.key} className="flex items-center gap-2 text-xs">
-                <div className="w-10 text-right pr-1" style={{ color: b.color }} title={`${b.label}: ${b.value}件 (${Math.round((b.value/Math.max(1, stats.total))*100)}%)`}>{b.label}</div>
-                <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded" title={`${b.label}: ${b.value}件 (${Math.round((b.value/Math.max(1, stats.total))*100)}%)`}>
-                  <div className="h-2 rounded" style={{ width: `${showPercent ? Math.round((b.value/Math.max(1, stats.total))*100) : Math.round((b.value/priorityMax)*100)}%`, backgroundColor: b.color }} />
+          <div className="space-y-3 text-xs sm:text-sm">
+            {priorityBars.map(b => {
+              const percent = Math.round((b.value / priorityTotal) * 100)
+              const width = showPercent
+                ? percent
+                : Math.round((b.value / priorityMax) * 100)
+              return (
+                <div key={b.key} className="space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 font-medium" style={{ color: b.color }}>
+                      <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: b.color }} />
+                      <span>{b.label}</span>
+                    </div>
+                    <div className={`flex items-center gap-2 font-mono ${mutedText}`}>
+                      <span>{showPercent ? `${percent}%` : `${b.value}件`}</span>
+                      {!showPercent && <span className="text-[11px]">({percent}%)</span>}
+                    </div>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-gray-200/80 dark:bg-gray-700/80" aria-hidden>
+                    <div
+                      className="h-2.5 rounded-full"
+                      style={{
+                        width: `${Math.min(100, width)}%`,
+                        background: `linear-gradient(90deg, ${b.color} 0%, ${b.color}dd 100%)`
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className={`${mutedText} w-10 text-right font-mono`}>
-                  {showPercent ? `${Math.round((b.value/Math.max(1, stats.total))*100)}%` : b.value}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -190,43 +223,63 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
         <div className={`${cardBg} rounded p-3`}>
           <div className={`text-sm mb-2 ${mutedText} flex items-center justify-between`}>
             <span>{trendMode === 'monthly' ? '月次完了推移' : '週次完了推移'}</span>
-            <div className="flex gap-1 text-xs">
-              <button onClick={() => setTrendMode('weekly')} className={`px-2 py-0.5 rounded ${trendMode==='weekly' ? 'bg-purple-600 text-white' : `${mutedText} bg-transparent border border-gray-300 dark:border-gray-600`}`}>週</button>
-              <button onClick={() => setTrendMode('monthly')} className={`px-2 py-0.5 rounded ${trendMode==='monthly' ? 'bg-purple-600 text-white' : `${mutedText} bg-transparent border border-gray-300 dark:border-gray-600`}`}>月</button>
+            <div className="flex items-center gap-3 text-xs">
+              {trendPoints.length > 0 && (
+                <span className={`inline-flex items-center gap-1 font-medium ${trendDelta !== undefined ? (trendDelta >= 0 ? 'text-emerald-500 dark:text-emerald-300' : 'text-rose-500 dark:text-rose-300') : mutedText}`}>
+                  <span>{latestTrend?.label}</span>
+                  <span className="font-mono">{latestTrend?.count ?? 0}件</span>
+                  {trendDelta !== undefined && (
+                    <span className="inline-flex items-center gap-0.5">
+                      {trendDelta >= 0 ? '▲' : '▼'}
+                      {Math.abs(trendDelta)}
+                    </span>
+                  )}
+                </span>
+              )}
+              <div className="flex gap-1">
+                <button onClick={() => setTrendMode('weekly')} className={`px-2 py-0.5 rounded-full border ${trendMode==='weekly' ? 'border-purple-500 bg-purple-500 text-white shadow-sm' : `${mutedText} border-gray-300 dark:border-gray-600 bg-transparent`}`}>週</button>
+                <button onClick={() => setTrendMode('monthly')} className={`px-2 py-0.5 rounded-full border ${trendMode==='monthly' ? 'border-purple-500 bg-purple-500 text-white shadow-sm' : `${mutedText} border-gray-300 dark:border-gray-600 bg-transparent`}`}>月</button>
+              </div>
             </div>
           </div>
           <div className="space-y-2">
-            <svg viewBox={`0 0 ${w} ${h + 18}`} className="w-full h-28 overflow-visible">
-              {/* 横グリッド（3本） */}
-              {[0.25, 0.5, 0.75].map((p, i) => (
-                <line key={i} x1={pad} y1={pad + (h - pad*2) * p} x2={w-pad} y2={pad + (h - pad*2) * p} stroke={variant==='neutral' ? '#e5e7eb' : 'rgba(255,255,255,0.25)'} strokeWidth={0.5} />
-              ))}
-              {/* 軸 */}
-              <line x1={pad} y1={h-pad} x2={w-pad} y2={h-pad} stroke={variant==='neutral' ? '#9ca3af' : 'rgba(255,255,255,0.6)'} strokeWidth={0.75} />
-              <line x1={pad} y1={pad} x2={pad} y2={h-pad} stroke={variant==='neutral' ? '#9ca3af' : 'rgba(255,255,255,0.6)'} strokeWidth={0.75} />
-              {/* 折れ線 */}
-              {points && (
-                <polyline points={points} fill="none" stroke={variant==='neutral' ? '#8b5cf6' : '#ffffff'} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-              )}
-              {/* データ点 */}
-              {trend.map((t, i) => {
-                const x = pad + (i * (w - pad*2)) / Math.max(1, trend.length - 1)
-                const y = h - pad - (t.count / trendMax) * (h - pad*2)
-                return (
-                  <g key={i}>
-                    <circle cx={x} cy={y} r={3} fill={variant==='neutral' ? '#8b5cf6' : '#ffffff'}>
-                      <title>{`${t.label}: ${t.count}件`}</title>
+            {trendPoints.length > 0 ? (
+              <svg viewBox={`0 0 ${w} ${h + 18}`} className="w-full h-32 overflow-visible">
+                <defs>
+                  <linearGradient id={`${gradientId}-trend`} x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor={variant==='neutral' ? '#8b5cf6' : '#ffffff'} stopOpacity="0.35" />
+                    <stop offset="100%" stopColor={variant==='neutral' ? '#8b5cf6' : '#ffffff'} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {[0.25, 0.5, 0.75].map((p, i) => (
+                  <line key={i} x1={pad} y1={pad + (h - pad * 2) * p} x2={w - pad} y2={pad + (h - pad * 2) * p} stroke={variant === 'neutral' ? '#e5e7eb' : 'rgba(255,255,255,0.25)'} strokeWidth={0.5} />
+                ))}
+                <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke={variant === 'neutral' ? '#cbd5f5' : 'rgba(255,255,255,0.45)'} strokeWidth={0.75} />
+                <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke={variant === 'neutral' ? '#cbd5f5' : 'rgba(255,255,255,0.45)'} strokeWidth={0.75} />
+                {areaPath && (
+                  <path d={areaPath} fill={`url(#${gradientId}-trend)`} />
+                )}
+                {linePath && (
+                  <path d={linePath} fill="none" stroke={variant === 'neutral' ? '#8b5cf6' : '#ffffff'} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                )}
+                {trendPoints.map((point, i) => (
+                  <g key={point.label}>
+                    <circle cx={point.x} cy={point.y} r={3} fill={variant === 'neutral' ? '#8b5cf6' : '#ffffff'}>
+                      <title>{`${point.label}: ${point.count}件`}</title>
                     </circle>
-                    {/* ラベル（SVG内・点と同じxに配置） */}
-                    {(i % trendLabelStep === 0 || i === trend.length - 1) && (
-                      <text x={x} y={h - pad + 12} textAnchor="middle" fontSize="9" className="fill-current" style={{ fill: variant==='neutral' ? '#9ca3af' : 'rgba(255,255,255,0.8)' }}>
-                        {t.label}
+                    {(i % trendLabelStep === 0 || i === trendPoints.length - 1) && (
+                      <text x={point.x} y={h - pad + 12} textAnchor="middle" fontSize="9" className="fill-current" style={{ fill: variant === 'neutral' ? '#6b7280' : 'rgba(255,255,255,0.8)' }}>
+                        {point.label}
                       </text>
                     )}
                   </g>
-                )
-              })}
-            </svg>
+                ))}
+              </svg>
+            ) : (
+              <div className={`flex h-28 items-center justify-center rounded border text-xs ${variant === 'neutral' ? 'border-gray-200 text-gray-500' : 'border-white/30 text-white/70'}`}>
+                最近の完了データが不足しています。
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -248,7 +301,7 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
               aria-label="カテゴリ分布"
               role="img"
             >
-              <div className={`absolute inset-4 ${variant === 'neutral' ? 'bg-white dark:bg-gray-800' : 'bg-white/80'} rounded-full flex items-center justify-center`}> 
+              <div className={`absolute inset-4 ${variant === 'neutral' ? 'bg-white dark:bg-gray-800' : 'bg-white/80'} rounded-full flex items-center justify-center`}>
                 <div className={`text-center ${variant === 'neutral' ? 'text-gray-800 dark:text-gray-100' : 'text-gray-800'}`}>
                   <div className="text-xs">カテゴリ</div>
                   <div className="text-lg font-bold">{categoryTotal}</div>
@@ -256,17 +309,32 @@ export default function TodoStatsDisplay({ stats, variant = 'color', showTimesta
               </div>
             </div>
           </div>
-          <div className="md:col-span-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          <div className="md:col-span-2 space-y-3">
+            <div className={`flex items-center justify-between text-xs ${mutedText}`}>
+              <span>カテゴリ一覧</span>
+              <span className="font-mono">{categorySegments.length}種</span>
+            </div>
+            <div className="space-y-2">
               {categorySegments.map((seg) => (
-                <div key={seg.name} className={`${cardBg} rounded p-2 flex items-center justify-between`}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: seg.color }} />
-                    <span className={`truncate ${variant === 'neutral' ? 'text-gray-800 dark:text-gray-200' : 'text-white'}`}>{seg.name}</span>
+                <div key={seg.name} className={`${cardBg} rounded-xl p-3 shadow-sm transition-colors`}> 
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-flex h-3 w-3 flex-shrink-0 rounded-full" style={{ backgroundColor: seg.color }} />
+                      <span className={`truncate font-medium ${variant === 'neutral' ? 'text-gray-800 dark:text-gray-200' : 'text-white'}`}>{seg.name}</span>
+                    </div>
+                    <div className={`flex items-center gap-3 ${variant === 'neutral' ? 'text-gray-700 dark:text-gray-300' : 'text-white/90'}`}>
+                      <span className="font-mono text-xs sm:text-sm">{seg.count}件</span>
+                      <span className={`text-xs ${mutedText}`}>{seg.percent}%</span>
+                    </div>
                   </div>
-                  <div className={`flex items-center gap-2 ${variant === 'neutral' ? 'text-gray-700 dark:text-gray-300' : 'text-white/90'}`}>
-                    <span className="font-mono">{seg.count}</span>
-                    <span className={`${mutedText}`}>{Math.round((seg.count / Math.max(1, categoryTotal)) * 100)}%</span>
+                  <div className="mt-3 h-2 rounded-full bg-gray-200/80 dark:bg-gray-700/80" aria-hidden>
+                    <div
+                      className="h-2 rounded-full"
+                      style={{
+                        width: `${seg.percent}%`,
+                        background: `linear-gradient(90deg, ${seg.color} 0%, ${seg.color}dd 100%)`
+                      }}
+                    />
                   </div>
                 </div>
               ))}

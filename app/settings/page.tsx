@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils'
-import Link from 'next/link'
 import ThemeToggle from '@/app/components/ThemeToggle'
 import SignOutButton from '@/app/components/SignOutButton'
 import AccountEditor from '@/app/components/AccountEditor'

@@ -76,12 +76,12 @@ export async function POST(request: NextRequest) {
 
     // ファイル内容を読み取り
     const fileContent = await file.text()
-    let todoData: any[] = []
+    let todoData: Record<string, unknown>[] = []
 
     // ユーザーID（接頭辞除去）を先に確定（後続でも利用）
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
     // 既存ユーザーのTodoを取得（重複検知のため）
-    const existingTodos: any[] = await lambdaAPI.getUserTodos(actualUserId)
+    const existingTodos = await lambdaAPI.getUserTodos(actualUserId) as unknown as Record<string, unknown>[]
 
     // 文字列正規化（NFKC + 小文字 + 句読点/記号/余分な空白除去）
     const normalizeStr = (s: string) => (s || '')
@@ -112,16 +112,16 @@ export async function POST(request: NextRequest) {
     }
     const eqNullable = (x?: string | null, y?: string | null) => (x || '') === (y || '')
 
-    const existingIndexByTitle = new Map<string, any[]>()
+    const existingIndexByTitle = new Map<string, Record<string, unknown>[]>()
     for (const e of existingTodos) {
-      const key = normalizeStr(e.title)
+      const key = normalizeStr(e.title as string)
       const arr = existingIndexByTitle.get(key) || []
       arr.push(e)
       existingIndexByTitle.set(key, arr)
     }
 
-    const isDuplicateOfExisting = (t: any): any | null => {
-      const key = normalizeStr(t.title)
+    const isDuplicateOfExisting = (t: Record<string, unknown>): Record<string, unknown> | null => {
+      const key = normalizeStr(t.title as string)
       const candidates = [
         ...(existingIndexByTitle.get(key) || []),
         // 類似タイトル候補（簡易探索）: 同じ先頭語を含むもの
@@ -129,16 +129,16 @@ export async function POST(request: NextRequest) {
           .filter(([k]) => k !== key && (k.includes(key) || key.includes(k)))
           .flatMap(([, v]) => v)
       ]
-      const tTokens = tokenize(t.title)
-      let best: any | null = null
+      const tTokens = tokenize(t.title as string)
+      let best: Record<string, unknown> | null = null
       let bestScore = 0
       for (const c of candidates) {
-        const score = jaccard(tTokens, tokenize(c.title))
+        const score = jaccard(tTokens, tokenize(c.title as string))
         // 厳密一致 or 高類似度 + 重要フィールド一致で重複判定
-        const exact = normalizeStr(c.title) === key
+        const exact = normalizeStr(c.title as string) === key
         const strongSimilar = score >= 0.9
-        const dateOk = eqDay(t.dueDate ?? null, c.dueDate ?? null)
-        const catOk = eqNullable(t.category ?? null, c.category ?? null)
+        const dateOk = eqDay(t.dueDate as string | null | undefined, c.dueDate as string | null | undefined)
+        const catOk = eqNullable(t.category as string | null | undefined, c.category as string | null | undefined)
         if ((exact || strongSimilar) && dateOk && catOk) {
           if (score > bestScore) { best = c; bestScore = score }
         }
@@ -148,9 +148,9 @@ export async function POST(request: NextRequest) {
 
     // バッチ内重複（originalId優先、なければキー合成）をスキップ
     const seen = new Set<string>()
-    const batchKey = (t: any) => {
+    const batchKey = (t: Record<string, unknown>) => {
       if (t.originalId) return `oid:${String(t.originalId)}`
-      return `k:${normalizeStr(t.title)}|d:${t.dueDate ? new Date(t.dueDate).toDateString() : 'none'}|c:${(t.category||'')}`
+      return `k:${normalizeStr(t.title as string)}|d:${t.dueDate ? new Date(t.dueDate as string).toDateString() : 'none'}|c:${(t.category||'')}`
     }
 
     try {
@@ -198,8 +198,8 @@ export async function POST(request: NextRequest) {
         }
 
         todoData = rows.map(values => {
-          
-          const todo: any = {}
+
+          const todo: Record<string, unknown> = {}
           
           headers.forEach((header, index) => {
             const value = (values[index] ?? '').trim()
@@ -292,13 +292,13 @@ export async function POST(request: NextRequest) {
         return 'TODO'
       })()
 
-      const normalized: any = {
+      const normalized: Record<string, unknown> = {
         title: todo.title || 'Untitled',
         description: todo.description || '',
         status: statusValue,
         priority: priorityValue,
         category: todo.category || null,
-        dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString() : null,
+        dueDate: todo.dueDate ? new Date(String(todo.dueDate)).toISOString() : null,
         tags: Array.isArray(todo.tags)
           ? todo.tags
           : (typeof todo.tags === 'string' && todo.tags.length > 0
@@ -324,7 +324,7 @@ export async function POST(request: NextRequest) {
       }
       
       return normalized
-    }).filter(todo => todo.title.trim().length > 0)
+    }).filter(todo => (todo.title as string).trim().length > 0)
     
     console.log('📊 正規化されたデータサンプル:', {
       totalCount: normalizedTodos.length,
@@ -384,7 +384,7 @@ export async function POST(request: NextRequest) {
       let importedCount = 0
       let skippedCount = 0
 
-      const createOne = async (payload: any) => {
+      const createOne = async (payload: Record<string, unknown>) => {
         const res = await lambdaAPI.post('/todos', {
           title: payload.title,
           description: payload.description || undefined,

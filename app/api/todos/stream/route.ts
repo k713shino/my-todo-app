@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const stream = new ReadableStream({
     start(controller) {
       // リアルタイムデータの送信ロジック
-      const sendUpdate = (data: any) => {
+      const sendUpdate = (data: Record<string, unknown>) => {
         const message = `data: ${JSON.stringify(data)}\n\n`
         controller.enqueue(encoder.encode(message))
       }

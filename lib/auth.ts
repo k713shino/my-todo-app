@@ -217,7 +217,7 @@ export const authOptions: AuthOptions = {
       }
       return session
     },
-    jwt: async ({ user, token, account, trigger, session }: { user?: User; token: JWT; account?: any; trigger?: "signIn" | "signUp" | "update"; session?: any }) => {
+    jwt: async ({ user, token, account, trigger, session }: { user?: User; token: JWT; account?: Record<string, unknown> | null; trigger?: "signIn" | "signUp" | "update"; session?: Record<string, unknown> }) => {
       console.log('🔐 JWT callback:', {
         hasUser: !!user,
         hasToken: !!token,
@@ -233,10 +233,10 @@ export const authOptions: AuthOptions = {
       if (trigger === "update" && session) {
         console.log('🔄 Session update triggered:', session)
         if (session.name) {
-          token.name = session.name
+          token.name = session.name as string
         }
         if (session.image !== undefined) {
-          token.picture = session.image
+          token.picture = session.image as string | null
         }
         return token
       }
@@ -256,7 +256,7 @@ export const authOptions: AuthOptions = {
             } else {
               token.hasPassword = false
             }
-          } catch (_error) {
+          } catch {
             token.hasPassword = false
           }
         }
@@ -271,7 +271,7 @@ export const authOptions: AuthOptions = {
       // それ以外はダッシュボードにリダイレクト
       return `${baseUrl}/dashboard`
     },
-    signIn: async ({ user, account }: { user: User; account: any }) => {
+    signIn: async ({ user, account }: { user: User; account: Record<string, unknown> | null }) => {
       try {
         console.log('🔐 signIn callback 実行中', {
           provider: account?.provider,

@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server'
-
 // CSVパーサ（既存の import-data と同等の仕様）
 export function parseCSVText(text: string): { headers: string[]; rows: string[][] } {
   if (!text) return { headers: [], rows: [] }
@@ -30,7 +28,7 @@ export function parseCSVText(text: string): { headers: string[]; rows: string[][
   return { headers, rows: dataRows }
 }
 
-export const normalizePriority = (val: any): string => {
+export const normalizePriority = (val: unknown): string => {
   const pRaw = (val || '').toString()
   const p = pRaw.toUpperCase()
   if ([ 'LOW','MEDIUM','HIGH','URGENT' ].includes(p)) return p
@@ -39,7 +37,7 @@ export const normalizePriority = (val: any): string => {
   return 'MEDIUM'
 }
 
-export const normalizeStatus = (val: any, completed?: boolean): string => {
+export const normalizeStatus = (val: unknown, completed?: boolean): string => {
   const sRaw = (val || '').toString()
   const s = sRaw.toUpperCase()
   if (['TODO','IN_PROGRESS','REVIEW','DONE'].includes(s)) return s
@@ -48,7 +46,7 @@ export const normalizeStatus = (val: any, completed?: boolean): string => {
   return 'TODO'
 }
 
-export const normalizeArrayTags = (tags: any): string[] => {
+export const normalizeArrayTags = (tags: unknown): string[] => {
   return Array.isArray(tags)
     ? tags
     : (typeof tags === 'string' && tags.length > 0
@@ -56,15 +54,15 @@ export const normalizeArrayTags = (tags: any): string[] => {
         : [])
 }
 
-export const normalizeTodos = (todoData: any[]): any[] => {
+export const normalizeTodos = (todoData: Record<string, unknown>[]): Record<string, unknown>[] => {
   return todoData.map(todo => {
-    const normalized: any = {
+    const normalized: Record<string, unknown> = {
       title: todo.title || 'Untitled',
       description: todo.description || '',
-      status: normalizeStatus(todo.status, todo.completed),
+      status: normalizeStatus(todo.status, todo.completed as boolean | undefined),
       priority: normalizePriority(todo.priority),
       category: todo.category || null,
-      dueDate: todo.dueDate ? new Date(todo.dueDate).toISOString() : null,
+      dueDate: todo.dueDate ? new Date(String(todo.dueDate)).toISOString() : null,
       tags: normalizeArrayTags(todo.tags)
     }
     if (todo.completed !== undefined) normalized.completed = Boolean(todo.completed)

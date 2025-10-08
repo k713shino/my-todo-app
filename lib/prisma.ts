@@ -102,7 +102,7 @@ const createDummyPrismaClient = () => {
     },
     $queryRaw: async () => [],
     $executeRaw: async () => 0,
-    $transaction: async (fn: any) => await fn(dummyClient),
+    $transaction: async (fn: (client: typeof dummyClient) => Promise<unknown>) => await fn(dummyClient),
     $connect: async () => {},
     $disconnect: async () => {},
   } as unknown as PrismaClient
@@ -205,7 +205,7 @@ if (process.env.NODE_ENV !== 'production' && !isBuildTime()) {
 }
 
 // 詳細な接続テスト関数
-export async function testDatabaseConnection(): Promise<{ success: boolean; details: any }> {
+export async function testDatabaseConnection(): Promise<{ success: boolean; details: unknown }> {
   // ビルド時やダミークライアント使用時はスキップ
   if (isBuildTime() || !process.env.DATABASE_URL || process.env.DATABASE_URL.includes('dummy')) {
     console.log('⏭️ Database connection test skipped (build time or dummy URL)')
@@ -215,8 +215,8 @@ export async function testDatabaseConnection(): Promise<{ success: boolean; deta
   const testResults = {
     basicConnection: false,
     timing: 0,
-    error: null as any,
-    serverInfo: null as any,
+    error: null as Error | null,
+    serverInfo: null as unknown,
     environmentInfo: {
       nodeEnv: process.env.NODE_ENV,
       vercel: process.env.VERCEL,
@@ -251,15 +251,16 @@ export async function testDatabaseConnection(): Promise<{ success: boolean; deta
     
     return { success: true, details: testResults }
   } catch (error) {
+    const errorObj = error as Record<string, unknown>
     testResults.error = {
       name: error instanceof Error ? error.name : 'Unknown',
       message: error instanceof Error ? error.message : String(error),
-      code: (error as any)?.code,
-      errno: (error as any)?.errno,
-      syscall: (error as any)?.syscall,
-      address: (error as any)?.address,
-      port: (error as any)?.port
-    }
+      code: errorObj?.code,
+      errno: errorObj?.errno,
+      syscall: errorObj?.syscall,
+      address: errorObj?.address,
+      port: errorObj?.port
+    } as Error
     
     console.error('❌ Database connection failed:', testResults.error)
     return { success: false, details: testResults }
@@ -267,7 +268,7 @@ export async function testDatabaseConnection(): Promise<{ success: boolean; deta
 }
 
 // AWS RDS 専用の診断関数
-export async function diagnoseAWSRDS(): Promise<any> {
+export async function diagnoseAWSRDS(): Promise<Record<string, unknown>> {
   if (!process.env.DATABASE_URL) {
     return { error: 'DATABASE_URL not configured' }
   }
@@ -322,7 +323,7 @@ if (typeof process !== 'undefined' && !isBuildTime()) {
     console.error('🚨 Uncaught Exception:', error)
     try {
       await prisma.$disconnect()
-    } catch (_) {
+    } catch {
       // エラー時も処理続行
     }
     process.exit(1)
@@ -332,7 +333,7 @@ if (typeof process !== 'undefined' && !isBuildTime()) {
     console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason)
     try {
       await prisma.$disconnect()
-    } catch (_) {
+    } catch {
       // エラー時も処理続行
     }
     process.exit(1)

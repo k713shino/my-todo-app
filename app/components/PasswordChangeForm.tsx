@@ -69,7 +69,7 @@ export default function PasswordChangeForm() {
       })
 
       // 成否に関わらずJSONを読み、メッセージを適切に抽出
-      const result = await response.json().catch(() => null as any)
+      const result = await response.json().catch(() => null as { success?: boolean; error?: string; message?: string } | null)
 
       if (!response.ok || (result && result.success === false)) {
         const apiMessage = result?.error || result?.message

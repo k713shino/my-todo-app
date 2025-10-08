@@ -77,22 +77,22 @@ export async function GET() {
       }, { status: 500 })
     }
 
-    const todoList = allTodosResult.data as any[]
-    const uniqueUserIds = Array.from(new Set(todoList.map((todo: any) => todo.userId)))
+    const todoList = allTodosResult.data as Record<string, unknown>[]
+    const uniqueUserIds = Array.from(new Set(todoList.map((todo: Record<string, unknown>) => todo.userId)))
     
     const userStats = uniqueUserIds.map(userId => {
-      const userTodos = todoList.filter((todo: any) => todo.userId === userId)
+      const userTodos = todoList.filter((todo: Record<string, unknown>) => todo.userId === userId)
       return {
         userId,
         todoCount: userTodos.length,
-        completedCount: userTodos.filter((todo: any) => todo.completed).length,
-        sampleTodos: userTodos.slice(0, 3).map((todo: any) => ({
+        completedCount: userTodos.filter((todo: Record<string, unknown>) => todo.completed).length,
+        sampleTodos: userTodos.slice(0, 3).map((todo: Record<string, unknown>) => ({
           id: todo.id,
           title: todo.title,
           category: todo.category,
           createdAt: todo.createdAt
         })),
-        lastActivity: Math.max(...userTodos.map((todo: any) => new Date(todo.updatedAt).getTime()))
+        lastActivity: Math.max(...userTodos.map((todo: Record<string, unknown>) => new Date(String(todo.updatedAt)).getTime()))
       }
     }).sort((a, b) => b.lastActivity - a.lastActivity) // 最新活動順
 

@@ -65,8 +65,8 @@ export default function TimeGoalSetting() {
         }
 
         // 進捗はサマリを優先（TZを考慮）
-        const summaryRes = await fetch(`/api/time-entries/summary?tz=${encodeURIComponent(timeZone)}`).catch(err => ({ ok: false } as any))
-        if (summaryRes && 'ok' in summaryRes && (summaryRes as any).ok && 'json' in summaryRes) {
+        const summaryRes = await fetch(`/api/time-entries/summary?tz=${encodeURIComponent(timeZone)}`).catch(_err => ({ ok: false } as { ok: boolean }))
+        if (summaryRes && 'ok' in summaryRes && (summaryRes as { ok: boolean }).ok && 'json' in summaryRes) {
           try {
             const summary = await (summaryRes as Response).json()
             const dTarget = (goals?.dailyGoal || 480) * 60
@@ -95,15 +95,15 @@ export default function TimeGoalSetting() {
           const [dailyRes, weeklyRes] = await Promise.all([
             fetch('/api/time-entries/goals', {
               method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'daily' })
-            }).catch(() => ({ ok: false } as any)),
+            }).catch(() => ({ ok: false } as { ok: boolean })),
             fetch('/api/time-entries/goals', {
               method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'weekly' })
-            }).catch(() => ({ ok: false } as any)),
+            }).catch(() => ({ ok: false } as { ok: boolean })),
           ])
-          if (dailyRes && 'ok' in dailyRes && (dailyRes as any).ok && 'json' in dailyRes) {
+          if (dailyRes && 'ok' in dailyRes && (dailyRes as { ok: boolean }).ok && 'json' in dailyRes) {
             try { setDailyProgress(await (dailyRes as Response).json()) } catch {}
           }
-          if (weeklyRes && 'ok' in weeklyRes && (weeklyRes as any).ok && 'json' in weeklyRes) {
+          if (weeklyRes && 'ok' in weeklyRes && (weeklyRes as { ok: boolean }).ok && 'json' in weeklyRes) {
             try { setWeeklyProgress(await (weeklyRes as Response).json()) } catch {}
           }
         }
@@ -122,12 +122,12 @@ export default function TimeGoalSetting() {
   // TZ変更イベントを購読
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const onTzChanged = (e: any) => {
-      const tz = e?.detail || ((): string => { try { return localStorage.getItem('time:tz') || 'Asia/Tokyo' } catch { return 'Asia/Tokyo' } })()
+    const onTzChanged = (e: Event) => {
+      const tz = ((e as CustomEvent).detail as string) || ((): string => { try { return localStorage.getItem('time:tz') || 'Asia/Tokyo' } catch { return 'Asia/Tokyo' } })()
       setTimeZone(tz)
     }
-    window.addEventListener('time:tz-changed', onTzChanged)
-    return () => window.removeEventListener('time:tz-changed', onTzChanged)
+    window.addEventListener('time:tz-changed', onTzChanged as EventListener)
+    return () => window.removeEventListener('time:tz-changed', onTzChanged as EventListener)
   }, [])
 
   const handleSave = async () => {

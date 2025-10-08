@@ -28,10 +28,10 @@ export async function POST(request: NextRequest) {
       redis.get(`${baseKey}:status`),
     ])
     if (!parentsRaw || !statusRaw) return NextResponse.json({ error: 'Import not found or expired' }, { status: 404 })
-    const parents: any[] = JSON.parse(parentsRaw)
-    const existing: any[] = existingRaw ? JSON.parse(existingRaw) : []
+    const parents: Record<string, unknown>[] = JSON.parse(parentsRaw)
+    const existing: Record<string, unknown>[] = existingRaw ? JSON.parse(existingRaw) : []
     const idmap: Record<string, string> = idmapRaw ? JSON.parse(idmapRaw) : {}
-    const status = JSON.parse(statusRaw)
+    const status = JSON.parse(statusRaw) as Record<string, unknown>
     status.stage = 'parents'
 
     const slice = parents.slice(cursor, cursor + limit)
@@ -39,31 +39,31 @@ export async function POST(request: NextRequest) {
     let skipped = 0
 
     // 既存インデックス（簡易）
-    const indexByTitle = new Map<string, any[]>()
+    const indexByTitle = new Map<string, Record<string, unknown>[]>()
     for (const e of existing) {
-      const k = normalizeStr(e.title)
+      const k = normalizeStr(e.title as string)
       const arr = indexByTitle.get(k) || []
       arr.push(e)
       indexByTitle.set(k, arr)
     }
 
-    const isDup = (t: any): any | null => {
+    const isDup = (t: Record<string, unknown>): Record<string, unknown> | null => {
       // externalId/Source があればそれを優先
       if (t.externalId) {
-        const c = existing.find((e: any) => (e.externalId || null) === t.externalId && (!t.externalSource || (e.externalSource || null) === t.externalSource))
+        const c = existing.find((e: Record<string, unknown>) => (e.externalId || null) === t.externalId && (!t.externalSource || (e.externalSource || null) === t.externalSource))
         if (c) return c
       }
-      const key = normalizeStr(t.title)
+      const key = normalizeStr(t.title as string)
       const cand = [ ...(indexByTitle.get(key) || []) ]
-      const tTokens = tokenize(t.title)
-      let best: any | null = null
+      const tTokens = tokenize(t.title as string)
+      let best: Record<string, unknown> | null = null
       let bestScore = 0
       for (const c of cand) {
-        const score = jaccard(tTokens, tokenize(c.title))
-        const exact = normalizeStr(c.title) === key
+        const score = jaccard(tTokens, tokenize(c.title as string))
+        const exact = normalizeStr(c.title as string) === key
         const strongSimilar = score >= 0.9
-        const dateOk = eqDay(t.dueDate ?? null, c.dueDate ?? null)
-        const catOk = eqNullable(t.category ?? null, c.category ?? null)
+        const dateOk = eqDay(t.dueDate as string | null | undefined ?? null, c.dueDate as string | null | undefined ?? null)
+        const catOk = eqNullable(t.category as string | null | undefined ?? null, c.category as string | null | undefined ?? null)
         if ((exact || strongSimilar) && dateOk && catOk) {
           if (score > bestScore) { best = c; bestScore = score }
         }
@@ -94,17 +94,18 @@ export async function POST(request: NextRequest) {
       })
       if (res.success && res.data) {
         imported++
-        existing.push(res.data)
-        if (item.originalId) idmap[String(item.originalId)] = String((res.data as any).id)
+        existing.push(res.data as Record<string, unknown>)
+        if (item.originalId) idmap[String(item.originalId)] = String((res.data as Record<string, unknown>).id)
       } else {
         skipped++
       }
     }
 
     cursor += slice.length
-    status.parents.processed = Math.min(status.parents.processed + slice.length, status.parents.total)
-    status.parents.imported += imported
-    status.parents.skipped += skipped
+    const parents_status = status.parents as Record<string, unknown>
+    parents_status.processed = Math.min((parents_status.processed as number) + slice.length, parents_status.total as number)
+    parents_status.imported = (parents_status.imported as number) + imported
+    parents_status.skipped = (parents_status.skipped as number) + skipped
 
     await Promise.all([
       redis.setex(`${baseKey}:existing`, TTL_SEC, JSON.stringify(existing)),
@@ -114,8 +115,9 @@ export async function POST(request: NextRequest) {
 
     const done = cursor >= parents.length
     return NextResponse.json({ nextCursor: cursor, done, imported, skipped })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Parents chunk failed' }, { status: 500 })
+  } catch (e) {
+    const error = e as Error
+    return NextResponse.json({ error: error?.message || 'Parents chunk failed' }, { status: 500 })
   }
 }
 

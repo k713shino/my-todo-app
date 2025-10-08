@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Priority, Status } from '@prisma/client';
-import { lambdaAPI, formatLambdaAPIError } from '@/lib/lambda-api';
+
+
 import { getAuthSession, isAuthenticated } from '@/lib/session-utils';
 import { getAuthenticatedUser, createAuthErrorResponse, createSecurityHeaders } from '@/lib/auth-utils';
-import type { Todo } from '@/types/todo';
+
 import { safeToISOString } from '@/lib/date-utils';
 import { CacheManager } from '@/lib/cache';
 import { extractUserIdFromPrefixed } from '@/lib/user-id-utils';
+import { lambdaAPI } from '@/lib/lambda-api';
+import type { Todo } from '@/types/todo';
 
 export const dynamic = 'force-dynamic'
 
@@ -57,21 +59,21 @@ export async function GET(request: NextRequest) {
     console.log('📡 Lambda API レスポンス:', {
       success: lambdaResponse.success,
       hasData: !!lambdaResponse.data,
-      dataLength: lambdaResponse.data ? lambdaResponse.data.length : 0,
+      dataLength: lambdaResponse.data ? (lambdaResponse.data as unknown[]).length : 0,
       error: lambdaResponse.error
     })
     
     if (lambdaResponse.success && Array.isArray(lambdaResponse.data)) {
       // 🛡️ データサニタイズ (Date オブジェクトに変換)
-      const safeTodos = lambdaResponse.data.map((todo: any) => ({
+      const safeTodos = lambdaResponse.data.map((todo: Record<string, unknown>) => ({
         id: todo.id,
         title: todo.title,
         description: todo.description || null,
         status: todo.status || (todo.completed ? 'DONE' : 'TODO'), // statusを優先、後方互換性でcompletedも変換
         priority: todo.priority || 'MEDIUM',
-        dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
-        createdAt: new Date(todo.createdAt),
-        updatedAt: new Date(todo.updatedAt),
+        dueDate: todo.dueDate ? new Date(String(todo.dueDate)) : null,
+        createdAt: new Date(String(todo.createdAt)),
+        updatedAt: new Date(String(todo.updatedAt)),
         userId: todo.userId,
         category: todo.category || null,
         tags: Array.isArray(todo.tags) ? todo.tags : []
@@ -82,7 +84,7 @@ export async function GET(request: NextRequest) {
       // 🛡️ Redisキャッシュに保存 (5分間キャッシュ)
       if (safeTodos.length >= 0) {
         try {
-          await CacheManager.setTodos(authResult.user!.id, safeTodos, 300)
+          await CacheManager.setTodos(authResult.user!.id, safeTodos as Todo[], 300)
           console.log('📦 Redis キャッシュに保存完了:', safeTodos.length, '件')
         } catch (cacheError) {
           console.log('⚠️ Redis キャッシュ保存失敗:', cacheError)
@@ -139,10 +141,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    let body: any;
+    let body: Record<string, unknown>;
     try {
       body = await request.json();
-    } catch (parseError) {
+    } catch {
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
     
@@ -172,8 +174,8 @@ export async function POST(request: NextRequest) {
     // 外部IDが与えられている場合、ユーザー内で重複がないか事前チェック
     if (todoData.externalId) {
       try {
-        const existing = await lambdaAPI.getUserTodos(actualUserId)
-        const conflict = Array.isArray(existing) && existing.find((t: any) => {
+        const existing = await lambdaAPI.getUserTodos(actualUserId) as unknown as Record<string, unknown>[]
+        const conflict = Array.isArray(existing) && existing.find((t: Record<string, unknown>) => {
           const sameId = (t.externalId || null) === todoData.externalId
           // externalSource が指定されていれば一致をより厳密に
           const sameSource = (todoData.externalSource ? (t.externalSource || null) === todoData.externalSource : true)
@@ -197,8 +199,8 @@ export async function POST(request: NextRequest) {
       const lambdaTime = performance.now() - lambdaStart
       
       if (lambdaResponse.success && lambdaResponse.data) {
-        const responseData = lambdaResponse.data
-        
+        const responseData = lambdaResponse.data as Record<string, unknown>
+
         // レスポンスデータの安全な日付変換
         // タグ正規化（CSV/配列両対応）
         const normalizedTags = Array.isArray(responseData.tags)
@@ -209,21 +211,21 @@ export async function POST(request: NextRequest) {
 
         const newTodo = {
           ...responseData,
-          createdAt: safeToISOString(responseData.createdAt),
-          updatedAt: safeToISOString(responseData.updatedAt),
-          dueDate: responseData.dueDate ? safeToISOString(responseData.dueDate) : null,
+          createdAt: safeToISOString(responseData.createdAt as Record<string, unknown>),
+          updatedAt: safeToISOString(responseData.updatedAt as Record<string, unknown>),
+          dueDate: responseData.dueDate ? safeToISOString(responseData.dueDate as Record<string, unknown>) : null,
           priority: responseData.priority || 'MEDIUM',
           category: responseData.category || null,
           tags: normalizedTags
-        }
-        
+        } as Record<string, unknown>
+
         // キャッシュ無効化（非同期）
         CacheManager.invalidateUserTodos(session.user.id).catch(() => {})
-        
+
         const totalTime = performance.now() - startTime
-        const performanceLevel = totalTime < 500 ? '🟢 高速' : 
+        const performanceLevel = totalTime < 500 ? '🟢 高速' :
                                 totalTime < 1000 ? '🟡 普通' : '🔴 要改善'
-        
+
         console.log(`✅ Todo作成完了 (${totalTime.toFixed(2)}ms) ${performanceLevel}:`, {
           id: newTodo.id,
           lambdaTime: lambdaTime.toFixed(2) + 'ms'

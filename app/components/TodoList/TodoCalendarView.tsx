@@ -1,7 +1,5 @@
 'use client'
 
-import { format } from 'date-fns'
-import { ja } from 'date-fns/locale'
 import { Status } from '@prisma/client'
 import type { Todo } from '@/types/todo'
 

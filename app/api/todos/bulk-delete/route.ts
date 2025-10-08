@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       const apiResp = await lambdaAPI.delete(`/todos/${encodeURIComponent(tid)}?userId=${encodeURIComponent(userId)}`)
       if (apiResp.success) { ok++; return }
       const apiNotFound = typeof apiResp.error === 'string' && /not found/i.test(apiResp.error)
-      const apiEndpointMissing = typeof apiResp.error === 'string' && /Endpoint not found|404/.test(apiResp.error)
+      const _apiEndpointMissing = typeof apiResp.error === 'string' && /Endpoint not found|404/.test(apiResp.error)
       if (apiNotFound) { ok++; return }
 
       // 2) フォールバック: ユーザー固有エンドポイント
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     try { await CacheManager.invalidateUserTodos(session.user.id) } catch {}
 
     return NextResponse.json({ success: true, deleted: ok, failed: fail })
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

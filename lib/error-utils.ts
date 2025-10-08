@@ -117,7 +117,7 @@ export async function retryWithBackoff<T>(
 export async function withCacheFallback<T>(
   primaryOperation: () => Promise<T>,
   fallbackOperation: () => Promise<T | null>,
-  errorMessage: string = 'データの取得に失敗しました'
+  _errorMessage: string = 'データの取得に失敗しました'
 ): Promise<T> {
   try {
     return await primaryOperation();

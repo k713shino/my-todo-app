@@ -127,12 +127,12 @@ export default function TimeTrackingDashboard() {
   // タイムゾーン変更イベントを購読
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const onTzChanged = (e: any) => {
-      const tz = e?.detail || ((): string => { try { return localStorage.getItem('time:tz') || 'Asia/Tokyo' } catch { return 'Asia/Tokyo' } })()
+    const onTzChanged = (e: Event) => {
+      const tz = ((e as CustomEvent).detail as string) || ((): string => { try { return localStorage.getItem('time:tz') || 'Asia/Tokyo' } catch { return 'Asia/Tokyo' } })()
       setTimeZone(tz)
     }
-    window.addEventListener('time:tz-changed', onTzChanged)
-    return () => window.removeEventListener('time:tz-changed', onTzChanged)
+    window.addEventListener('time:tz-changed', onTzChanged as EventListener)
+    return () => window.removeEventListener('time:tz-changed', onTzChanged as EventListener)
   }, [])
 
   // 概要タブ向け: 進行中分の“見える化”オーバーレイ
@@ -167,7 +167,7 @@ export default function TimeTrackingDashboard() {
       const totalWorkTime = worked.reduce((s, t) => s + (t.totalSeconds || 0), 0)
       const totalSessions = worked.reduce((s, t) => s + (t.sessions || 0), 0)
       const overlay: TaskTimeStats = base || {
-        taskStats: a.taskStats as any,
+        taskStats: a.taskStats as TaskStats[],
         totalTasks: a.taskStats.length,
         workedTasks: worked.length,
         totalWorkTime,
@@ -267,7 +267,7 @@ export default function TimeTrackingDashboard() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'overview' | 'tasks' | 'productivity' | 'goals')}
               className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors rounded-t-md focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 ${
                 activeTab === tab.id
                   ? 'border-purple-500 text-purple-600 dark:text-purple-300 bg-white dark:bg-gray-800'
@@ -364,7 +364,7 @@ export default function TimeTrackingDashboard() {
                   <label className="text-xs muted">並び替え</label>
                   <select
                     value={tasksSort}
-                    onChange={(e) => setTasksSort(e.target.value as any)}
+                    onChange={(e) => setTasksSort(e.target.value as 'totalTime' | 'sessions' | 'efficiency')}
                     className="select-base text-xs"
                   >
                     <option value="totalTime">総時間</option>

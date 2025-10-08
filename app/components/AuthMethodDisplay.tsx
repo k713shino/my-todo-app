@@ -41,7 +41,7 @@ export default function AuthMethodDisplay({ className = '' }: AuthMethodDisplayP
     }
 
     fetchAuthMethods()
-  }, [session?.user?.id])
+  }, [session])
 
   const getProviderIcon = (provider: string) => {
     switch (provider) {

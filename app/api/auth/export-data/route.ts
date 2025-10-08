@@ -127,7 +127,15 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    const exportData = exportResult.data
+    const exportData = exportResult.data as {
+      user?: {
+        id?: string;
+        name?: string | null;
+        email?: string | null;
+        dataSource?: string;
+      };
+      todos?: Record<string, unknown>[]
+    }
     if (!exportData) {
       console.warn('⚠️ エクスポートデータが見つかりません:', session.user.id)
       return NextResponse.json({ error: 'Export data not found' }, { status: 404 })
@@ -153,28 +161,28 @@ export async function GET(request: NextRequest) {
         'ID', 'Title', 'Description', 'Status', 'Completed', 'Priority', 'Category', 'Tags', 'Due Date', 'Created At', 'Updated At'
       ]
       
-      const csvRows = (exportData.todos || []).map((todo: any) => {
-        const escapeCsv = (str: string | null) => {
+      const csvRows = (exportData.todos || []).map((todo: Record<string, unknown>): string[] => {
+        const escapeCsv = (str: string | null | undefined) => {
           if (!str) return ''
-          return `"${str.replace(/"/g, '""')}"`
+          return `"${String(str).replace(/"/g, '""')}"`
         }
-        
+
         return [
-          todo.id,
-          escapeCsv(todo.title),
-          escapeCsv(todo.description),
-          (todo.status || (todo.completed ? 'DONE' : 'TODO')),
+          String(todo.id),
+          escapeCsv(String(todo.title || '')),
+          escapeCsv(String(todo.description || '')),
+          String(todo.status || (todo.completed ? 'DONE' : 'TODO')),
           (todo.completed ? 'true' : 'false'),
-          todo.priority,
-          escapeCsv(todo.category || ''),
-          escapeCsv(Array.isArray(todo.tags) ? todo.tags.join(',') : (todo.tags || '')),
-          todo.dueDate ? new Date(todo.dueDate).toISOString() : '',
-          new Date(todo.createdAt).toISOString(),
-          new Date(todo.updatedAt).toISOString()
+          String(todo.priority),
+          escapeCsv(String(todo.category || '')),
+          escapeCsv(Array.isArray(todo.tags) ? todo.tags.join(',') : String(todo.tags || '')),
+          todo.dueDate ? new Date(String(todo.dueDate)).toISOString() : '',
+          new Date(String(todo.createdAt)).toISOString(),
+          new Date(String(todo.updatedAt)).toISOString()
         ]
       })
 
-      const csvContent = [csvHeaders.join(','), ...csvRows.map((row: string[]) => row.join(','))].join('\n')
+      const csvContent = [csvHeaders.join(','), ...csvRows.map((row) => row.join(','))].join('\n')
 
       return new NextResponse(csvContent, {
         headers: {

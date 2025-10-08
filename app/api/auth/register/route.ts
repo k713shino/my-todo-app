@@ -6,32 +6,32 @@ import { createSecurityHeaders } from '@/lib/auth-utils'
 /**
  * 🚨 緊急対応: Lambda API経由でのユーザー登録
  */
-async function registerViaLambdaAPI(requestData: any): Promise<NextResponse> {
+async function registerViaLambdaAPI(requestData: Record<string, unknown>): Promise<NextResponse> {
   console.log('🔄 Lambda API経由登録開始')
-  
+
   const { name, email, password } = requestData
-  
+
   // バリデーション
-  if (!email || !password || password.length < 8) {
+  if (!email || !password || (password as string).length < 8) {
     return NextResponse.json(
-      { error: 'メールアドレスと8文字以上のパスワードが必要です' }, 
+      { error: 'メールアドレスと8文字以上のパスワードが必要です' },
       { status: 400 }
     )
   }
-  
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(email)) {
+  if (!emailRegex.test(email as string)) {
     return NextResponse.json(
-      { error: '有効なメールアドレスを入力してください' }, 
+      { error: '有効なメールアドレスを入力してください' },
       { status: 400 }
     )
   }
-  
+
   // Lambda API経由でユーザー登録
   const requestBody = {
-    name: name?.trim() || null,
-    email: email.toLowerCase().trim(),
-    password: password
+    name: (name as string | undefined)?.trim() || null,
+    email: (email as string).toLowerCase().trim(),
+    password: password as string
   }
   
   console.log('📤 Lambda API登録リクエスト:', {
@@ -55,14 +55,14 @@ async function registerViaLambdaAPI(requestData: any): Promise<NextResponse> {
   })
   
   if (!response.ok) {
-    let errorData: any = {}
+    let errorData: Record<string, unknown> = {}
     let responseText = ''
     
     try {
       responseText = await response.text()
       errorData = JSON.parse(responseText)
-    } catch (parseError) {
-      console.error('❌ Lambda APIレスポンス解析エラー:', parseError)
+    } catch {
+      console.error('❌ Lambda APIレスポンス解析エラー')
       errorData = { rawResponse: responseText }
     }
     
@@ -148,24 +148,24 @@ export async function POST(request: NextRequest) {
     }
 
     const { name, email, password } = requestData
-    
+
     // バリデーション
     console.log('🔍 バリデーション開始')
-    if (!email || !password || password.length < 8) {
+    if (!email || !password || (password as string).length < 8) {
       console.log('❌ バリデーション失敗: 不十分な入力')
       return NextResponse.json(
-        { error: 'メールアドレスと8文字以上のパスワードが必要です' }, 
+        { error: 'メールアドレスと8文字以上のパスワードが必要です' },
         { status: 400 }
       )
     }
-    
+
     // メールアドレス形式チェック
     console.log('🔍 メールアドレス形式チェック')
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(email as string)) {
       console.log('❌ メールアドレス形式エラー:', email)
       return NextResponse.json(
-        { error: '有効なメールアドレスを入力してください' }, 
+        { error: '有効なメールアドレスを入力してください' },
         { status: 400 }
       )
     }
@@ -175,41 +175,41 @@ export async function POST(request: NextRequest) {
     let existingUser
     try {
       existingUser = await prisma.user.findUnique({
-        where: { email: email.toLowerCase().trim() }
+        where: { email: (email as string).toLowerCase().trim() }
       })
       console.log('✅ 既存ユーザーチェック完了:', { found: !!existingUser })
     } catch (findError) {
       console.error('❌ 既存ユーザーチェックエラー:', findError)
       throw findError
     }
-    
+
     if (existingUser) {
       console.log('❌ 重複ユーザー発見')
       return NextResponse.json(
-        { error: 'このメールアドレスは既に登録されています' }, 
+        { error: 'このメールアドレスは既に登録されています' },
         { status: 400 }
       )
     }
-    
+
     // パスワードハッシュ化
     console.log('🔍 パスワードハッシュ化開始')
     let hashedPassword
     try {
-      hashedPassword = await bcrypt.hash(password, 12)
+      hashedPassword = await bcrypt.hash(password as string, 12)
       console.log('✅ パスワードハッシュ化完了')
     } catch (hashError) {
       console.error('❌ パスワードハッシュ化エラー:', hashError)
       throw hashError
     }
-    
+
     // ユーザー作成
     console.log('🔍 ユーザー作成開始')
     let user
     try {
       user = await prisma.user.create({
         data: {
-          name: name?.trim() || null,
-          email: email.toLowerCase().trim(),
+          name: (name as string | undefined)?.trim() || null,
+          email: (email as string).toLowerCase().trim(),
           password: hashedPassword,
         },
         select: {
@@ -243,14 +243,14 @@ export async function POST(request: NextRequest) {
     console.error('💥 Registration error (詳細ログ):', {
       error: err,
       message: err instanceof Error ? err.message : String(err),
-      code: (err as any)?.code,
+      code: (err as { code?: string })?.code,
       stack: err instanceof Error ? err.stack : undefined,
       name: err instanceof Error ? err.name : undefined
     })
-    
+
     // 🛡️ セキュリティ強化: エラー詳細の適切な処理
     const errorMessage = err instanceof Error ? err.message : '不明なエラー'
-    const errorCode = (err as any)?.code
+    const errorCode = (err as { code?: string })?.code
     
     // データベース関連のエラーかチェック
     if (errorMessage.includes('unique constraint') || errorCode === 'P2002') {

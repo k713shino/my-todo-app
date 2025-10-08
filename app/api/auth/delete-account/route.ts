@@ -64,10 +64,10 @@ export async function DELETE(request: NextRequest) {
       }
 
       // 削除が成功した場合の統計情報
-      const lambdaData = response.data as any
+      const lambdaData = response.data as { stats?: { deletedAt?: string; todoCount?: number; authMethod?: string; memberSince?: string } }
       console.log('✅ Account deleted successfully via Lambda API:', lambdaData)
-      
-      return NextResponse.json({ 
+
+      return NextResponse.json({
         message: 'アカウントが正常に削除されました',
         deletedAt: lambdaData.stats?.deletedAt || new Date().toISOString(),
         stats: {
