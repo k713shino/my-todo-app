@@ -127,12 +127,18 @@ REDIS_COMMAND_TIMEOUT_MS=7000
 
 ## スクリーンショット
 ダークモードのみ掲載
+![my-todo-app](docs/screenshots/my-todo-app.png)
+サインイン画面
+![Signin](docs/screenshots/auth-signin.png)
+サインイン画面
 ![Tasks](docs/screenshots/dashboard-tasks.png)
 タスクモード
 ![Time](docs/screenshots/dashboard-time.png)
 時間モード
-![Signin](docs/screenshots/auth-signin.png)
-サインイン画面
+![TimeLine](docs/screenshots/dashboard-timeline.png)
+タイムライン
+![Setting](docs/screenshots/setting.png)
+設定画面
 
 ---
 
