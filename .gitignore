@@ -30,9 +30,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env
-
 # vercel
 .vercel
 
@@ -42,6 +39,7 @@ next-env.d.ts
 
 # 環境変数
 .env
+.env.backup
 .env.local
 .env.production.local
 
@@ -65,16 +63,12 @@ node_modules/
 .idea/
 .serena/
 .claud/
-lambda-js/
-daily-notes/
-handover/
 
 # ログ
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.env
 
 # セキュリティ: データベースダンプとログ
 *.sql
@@ -82,10 +76,10 @@ yarn-error.log*
 *.log
 d
 accounts
-.env.local
-.env.production
 OAuth_tokens*
 
 *.zip
 *.tar.gz
 *.tgz
+
+lambda-js/index.js
