@@ -137,8 +137,7 @@ export async function POST(request: NextRequest) {
     }
     
     // 🚨 緊急対応: RDS接続問題時はLambda API経由で登録
-    // USE_LAMBDA_DB が true の場合のみ Lambda API を使用
-    if (process.env.USE_LAMBDA_DB === 'true' && process.env.LAMBDA_API_URL) {
+    if (process.env.LAMBDA_API_URL) {
       console.log('🔄 Lambda API経由での会員登録を試行')
       try {
         return await registerViaLambdaAPI(requestData)
