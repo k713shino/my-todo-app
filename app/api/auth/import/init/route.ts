@@ -50,22 +50,31 @@ export async function POST(request: NextRequest) {
     const importId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const baseKey = `import:${userId}:${importId}`
 
-    await Promise.all([
-      redis.setex(`${baseKey}:parents`, TTL_SEC, JSON.stringify(parents)),
-      redis.setex(`${baseKey}:children`, TTL_SEC, JSON.stringify(children)),
-      // 初期化段階では既存取得を行わず、各チャンク処理側で必要に応じて補う
-      redis.setex(`${baseKey}:existing`, TTL_SEC, JSON.stringify([])),
-      redis.setex(`${baseKey}:idmap`, TTL_SEC, JSON.stringify({})),
-      redis.setex(`${baseKey}:status`, TTL_SEC, JSON.stringify({
-        stage: 'ready',
-        parents: { total: parents.length, processed: 0, imported: 0, skipped: 0 },
-        children: { total: children.length, processed: 0, imported: 0, skipped: 0 }
-      }))
-    ])
+    try {
+      await Promise.all([
+        redis.setex(`${baseKey}:parents`, TTL_SEC, JSON.stringify(parents)),
+        redis.setex(`${baseKey}:children`, TTL_SEC, JSON.stringify(children)),
+        // 初期化段階では既存取得を行わず、各チャンク処理側で必要に応じて補う
+        redis.setex(`${baseKey}:existing`, TTL_SEC, JSON.stringify([])),
+        redis.setex(`${baseKey}:idmap`, TTL_SEC, JSON.stringify({})),
+        redis.setex(`${baseKey}:status`, TTL_SEC, JSON.stringify({
+          stage: 'ready',
+          parents: { total: parents.length, processed: 0, imported: 0, skipped: 0 },
+          children: { total: children.length, processed: 0, imported: 0, skipped: 0 }
+        }))
+      ])
+    } catch (redisError) {
+      console.error('❌ Redis connection error during import init:', redisError)
+      const errorMessage = redisError instanceof Error ? redisError.message : String(redisError)
+      return NextResponse.json({
+        error: `初期化エラー: Redis接続に失敗しました。${errorMessage}`
+      }, { status: 500 })
+    }
 
     return NextResponse.json({ importId, total: normalized.length, parents: parents.length, children: children.length })
   } catch (e) {
     const error = e as Error
+    console.error('❌ Import init error:', error)
     return NextResponse.json({ error: error?.message || 'Init failed' }, { status: 500 })
   }
 }

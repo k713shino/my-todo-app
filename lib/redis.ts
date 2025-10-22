@@ -10,24 +10,29 @@ const getRedisConfig = () => {
   // ioredis用の正しい設定オプション
   return {
     // 基本設定
-    lazyConnect: true,
-    // リクエストリトライをやや増やして初回接続の不安定さを吸収
-    maxRetriesPerRequest: Number(process.env.REDIS_MAX_RETRIES_PER_REQUEST || 3),
-    retryDelayOnFailover: 50,
-    enableReadyCheck: false,
-    // 再接続戦略（指数バックオフ、最大1s）
+    lazyConnect: false,  // すぐに接続を確立
+    // リクエストリトライを増やして接続の不安定さを吸収
+    maxRetriesPerRequest: Number(process.env.REDIS_MAX_RETRIES_PER_REQUEST || 10),
+    retryDelayOnFailover: 100,
+    enableReadyCheck: true,  // 接続確認を有効化
+    // 再接続戦略（指数バックオフ、最大2s）
     retryStrategy(times: number) {
-      const delay = Math.min(times * 200, 1000)
+      if (times > 10) {
+        console.error(`❌ Redis connection failed after ${times} attempts`)
+        return null  // 10回以上失敗したら諦める
+      }
+      const delay = Math.min(times * 300, 2000)
+      console.log(`🔄 Redis retry attempt ${times}, waiting ${delay}ms`)
       return delay
     },
-    
+
     // タイムアウト設定（Vercel serverless最適化）
-    connectTimeout: Number(process.env.REDIS_CONNECT_TIMEOUT_MS || 7000),
-    commandTimeout: Number(process.env.REDIS_COMMAND_TIMEOUT_MS || 7000),
-    
+    connectTimeout: Number(process.env.REDIS_CONNECT_TIMEOUT_MS || 10000),
+    commandTimeout: Number(process.env.REDIS_COMMAND_TIMEOUT_MS || 10000),
+
     // TLS設定（Upstashは必須）
     tls: {},
-    
+
     // 接続プール設定
     family: 4, // IPv4優先（Vercel推奨）
     keepAlive: 10000,
