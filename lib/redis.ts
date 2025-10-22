@@ -8,18 +8,24 @@ const getRedisConfig = () => {
   }
   
   // ioredis用の正しい設定オプション
+  const maxRetries = process.env.REDIS_MAX_RETRIES_PER_REQUEST
+    ? Number(process.env.REDIS_MAX_RETRIES_PER_REQUEST)
+    : 20  // デフォルトを20に増加
+
+  console.log(`🔧 Redis config: maxRetriesPerRequest=${maxRetries}`)
+
   return {
     // 基本設定
     lazyConnect: false,  // すぐに接続を確立
-    // リクエストリトライを増やして接続の不安定さを吸収
-    maxRetriesPerRequest: Number(process.env.REDIS_MAX_RETRIES_PER_REQUEST || 10),
+    // リクエストリトライを大幅に増やして接続の不安定さを吸収
+    maxRetriesPerRequest: maxRetries,
     retryDelayOnFailover: 100,
     enableReadyCheck: true,  // 接続確認を有効化
     // 再接続戦略（指数バックオフ、最大2s）
     retryStrategy(times: number) {
-      if (times > 10) {
+      if (times > 15) {
         console.error(`❌ Redis connection failed after ${times} attempts`)
-        return null  // 10回以上失敗したら諦める
+        return null  // 15回以上失敗したら諦める
       }
       const delay = Math.min(times * 300, 2000)
       console.log(`🔄 Redis retry attempt ${times}, waiting ${delay}ms`)
@@ -27,8 +33,8 @@ const getRedisConfig = () => {
     },
 
     // タイムアウト設定（Vercel serverless最適化）
-    connectTimeout: Number(process.env.REDIS_CONNECT_TIMEOUT_MS || 10000),
-    commandTimeout: Number(process.env.REDIS_COMMAND_TIMEOUT_MS || 10000),
+    connectTimeout: Number(process.env.REDIS_CONNECT_TIMEOUT_MS || 15000),
+    commandTimeout: Number(process.env.REDIS_COMMAND_TIMEOUT_MS || 15000),
 
     // TLS設定（Upstashは必須）
     tls: {},

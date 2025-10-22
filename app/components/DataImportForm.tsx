@@ -59,64 +59,15 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
       const formData = new FormData()
       formData.append('file', file)
 
-      // 新フロー: init -> parents (チャンク処理)
-      const initRes = await fetch('/api/auth/import/init', { method: 'POST', body: formData })
-      if (!initRes.ok) {
-        // フォールバック: 旧APIで単発インポート（大容量ではタイムアウトの可能性）
-        const legacy = await fetch('/api/auth/import-data', { method: 'POST', body: formData })
-        toast.dismiss(loadingToast)
-        if (legacy.ok) {
-          const result = await legacy.json()
-          const importedCount = result.importedCount || 0
-          const skippedCount = result.skippedCount || 0
-          const totalCount = result.totalCount || 0
-          if (fileInputRef.current) fileInputRef.current.value = ''
-          if (importedCount > 0) {
-            setModalResult({ type:'success', title:'インポート完了（フォールバック）', message:`旧方式でインポートしました。${skippedCount>0?'重複は自動スキップ。':''}`, importedCount, skippedCount, totalCount })
-            setShowModal(true)
-            setTimeout(() => { window.location.reload() }, 2000)
-          } else if (skippedCount > 0) {
-            setModalResult({ type:'info', title:'インポート完了（フォールバック）', message:'すべて重複のためスキップされました。', importedCount:0, skippedCount, totalCount })
-            setShowModal(true)
-          } else {
-            setModalResult({ type:'error', title:'インポートエラー', message:'有効なデータが見つかりませんでした。', totalCount:0 })
-            setShowModal(true)
-          }
-        } else {
-          const data = await legacy.json().catch(()=>({}))
-          setModalResult({ type:'error', title:'初期化エラー', message: (await initRes.json().catch(()=>({}))).error || data.error || 'インポート初期化に失敗しました。' })
-          setShowModal(true)
-        }
-        setIsImporting(false)
-        return
-      }
-      const init = await initRes.json()
-      const importId: string = init.importId
-      let importedCount = 0
-      let skippedCount = 0
-
-      // データをチャンク処理
-      let cursor = 0
-      const limit = Math.max(1, parseInt(process.env.NEXT_PUBLIC_IMPORT_CHUNK_SIZE || '100', 10))
-      while (true) {
-        const res = await fetch('/api/auth/import/parents', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify({ importId, cursor, limit })
-        })
-        if (!res.ok) break
-        const data = await res.json()
-        importedCount += data.imported || 0
-        skippedCount += data.skipped || 0
-        cursor = data.nextCursor || 0
-        if (data.done) break
-      }
-
-      // ローディングトースターを削除
+      // シンプルなインポート（Redisを使わない方式）
+      const response = await fetch('/api/auth/import-data', { method: 'POST', body: formData })
       toast.dismiss(loadingToast)
 
-      {
-        const totalCount = (init?.total || 0)
+      if (response.ok) {
+        const result = await response.json()
+        const importedCount = result.importedCount || 0
+        const skippedCount = result.skippedCount || 0
+        const totalCount = result.totalCount || 0
         
         // ファイル入力をリセット
         if (fileInputRef.current) {
@@ -134,7 +85,7 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
             totalCount
           })
           setShowModal(true)
-          
+
           // 新しいTodoがインポートされた場合のみページをリロード
           setTimeout(() => {
             window.location.reload()
@@ -158,6 +109,14 @@ export default function DataImportForm({ userId: _userId }: DataImportFormProps)
           })
           setShowModal(true)
         }
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setModalResult({
+          type: 'error',
+          title: 'インポートエラー',
+          message: data.error || 'インポートに失敗しました。'
+        })
+        setShowModal(true)
       }
     } catch (error) {
       console.error('Import error:', error)
