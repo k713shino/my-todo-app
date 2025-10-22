@@ -95,6 +95,7 @@ export default function DataManager({ className = '' }: DataManagerProps) {
       }
 
       const csvData = await response.text()
+      console.log('📊 Exported CSV preview:', csvData.substring(0, 200))
       // BOM付きでCSVを作成（Excelでの文字化け防止）
       const bom = '\uFEFF'
       const csvWithBom = bom + csvData

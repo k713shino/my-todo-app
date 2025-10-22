@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
       }
 
       const { searchParams } = new URL(request.url)
-      const format = searchParams.get('format') || 'json'
+      const format = searchParams.get('format') || searchParams.get('_format') || 'json'
+
+      console.log('📊 Export format:', format, 'Query params:', Object.fromEntries(searchParams.entries()))
 
       // ユーザーのTodoデータを取得
       const todos = await prisma.todo.findMany({

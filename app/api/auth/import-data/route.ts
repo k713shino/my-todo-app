@@ -246,11 +246,27 @@ export async function POST(request: NextRequest) {
         }
         
         // 最低限必要なヘッダーチェック
-        const titleHeader = headers.find(h => h.toLowerCase() === 'title' || h === 'Title')
-        
+        console.log('📋 ヘッダー検証:', {
+          headers,
+          headersLowerCase: headers.map(h => h.toLowerCase()),
+          hasTitleEnglish: headers.includes('Title'),
+          hasTitleJapanese: headers.includes('タイトル'),
+          hasTitleLowerCase: headers.some(h => h.toLowerCase() === 'title')
+        })
+
+        const titleHeader = headers.find(h =>
+          h.toLowerCase() === 'title' ||
+          h === 'Title' ||
+          h === 'タイトル' ||
+          h.toLowerCase() === 'タイトル'
+        )
+
         if (!titleHeader) {
-          throw new Error('CSV must contain a "Title" column')
+          console.error('❌ Title column not found. Available headers:', headers)
+          throw new Error(`CSV must contain a "Title" or "タイトル" column. Found headers: ${headers.join(', ')}`)
         }
+
+        console.log('✅ Title header found:', titleHeader)
 
         todoData = rows.map(values => {
 
