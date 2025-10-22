@@ -6,33 +6,73 @@ import { CacheManager } from '@/lib/cache'
 
 // CSVテキストを安全に解析（引用符・改行・二重引用符エスケープ対応）
 function parseCSVText(text: string): { headers: string[]; rows: string[][] } {
-  if (!text) return { headers: [], rows: [] }
-  // UTF-8 BOM除去
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
-  const rows: string[][] = []
-  let row: string[] = []
-  let field = ''
-  let inQuotes = false
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    if (inQuotes) {
-      if (ch === '"') {
-        const next = text[i + 1]
-        if (next === '"') { field += '"'; i++ } else { inQuotes = false }
-      } else { field += ch }
-    } else {
-      if (ch === '"') inQuotes = true
-      else if (ch === ',') { row.push(field); field = '' }
-      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = '' }
-      else if (ch === '\r') { /* CRLF無視 */ }
-      else { field += ch }
+  try {
+    if (!text || text.trim().length === 0) {
+      console.log('⚠️ Empty CSV content')
+      return { headers: [], rows: [] }
     }
+
+    console.log('📋 CSV解析詳細:', {
+      length: text.length,
+      startsWithBOM: text.charCodeAt(0) === 0xFEFF,
+      firstChars: text.substring(0, 50),
+      containsComma: text.includes(','),
+      containsNewline: text.includes('\n')
+    })
+
+    // UTF-8 BOM除去
+    if (text.charCodeAt(0) === 0xFEFF) {
+      text = text.slice(1)
+      console.log('✓ BOM removed')
+    }
+
+    const rows: string[][] = []
+    let row: string[] = []
+    let field = ''
+    let inQuotes = false
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (inQuotes) {
+        if (ch === '"') {
+          const next = text[i + 1]
+          if (next === '"') { field += '"'; i++ } else { inQuotes = false }
+        } else { field += ch }
+      } else {
+        if (ch === '"') inQuotes = true
+        else if (ch === ',') { row.push(field); field = '' }
+        else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+        else if (ch === '\r') { /* CRLF無視 */ }
+        else { field += ch }
+      }
+    }
+
+    // 最後の行を追加
+    row.push(field)
+    if (row.some(c => c.trim().length > 0)) {
+      rows.push(row)
+    }
+
+    console.log('📋 CSV解析中間結果:', {
+      totalRows: rows.length,
+      firstRow: rows[0],
+      hasMultipleRows: rows.length > 1
+    })
+
+    const nonEmpty = rows.filter(r => r.some(c => c.trim().length > 0))
+    const headers = (nonEmpty[0] || []).map(h => h.trim())
+    const dataRows = nonEmpty.slice(1)
+
+    console.log('📋 CSV最終結果:', {
+      headers,
+      dataRowsCount: dataRows.length
+    })
+
+    return { headers, rows: dataRows }
+  } catch (error) {
+    console.error('❌ CSV parsing error:', error)
+    throw new Error(`CSV parsing failed: ${error instanceof Error ? error.message : String(error)}`)
   }
-  row.push(field); rows.push(row)
-  const nonEmpty = rows.filter(r => r.some(c => c.trim().length > 0))
-  const headers = (nonEmpty[0] || []).map(h => h.trim())
-  const dataRows = nonEmpty.slice(1)
-  return { headers, rows: dataRows }
 }
 
 export async function POST(request: NextRequest) {
@@ -154,9 +194,16 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      console.log('📄 ファイル解析開始:', {
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        contentPreview: fileContent.substring(0, 200)
+      })
+
       if (file.name.endsWith('.json')) {
         const jsonData = JSON.parse(fileContent)
-        
+
         // GDPR準拠エクスポート形式の構造チェック
         if (jsonData.todos && Array.isArray(jsonData.todos)) {
           // GDPR準拠エクスポートファイル（推奨形式）
@@ -175,10 +222,18 @@ export async function POST(request: NextRequest) {
           throw new Error('Invalid JSON structure. Expected format: {todos: [...]} or [...]')
         }
       } else if (file.name.endsWith('.csv')) {
+        console.log('📋 CSV解析開始...')
         // CSV解析（引用符・改行対応）
         const { headers, rows } = parseCSVText(fileContent)
+        console.log('📋 CSV解析結果:', {
+          headersCount: headers.length,
+          rowsCount: rows.length,
+          headers: headers,
+          firstRow: rows[0]
+        })
+
         if (headers.length === 0 || rows.length === 0) {
-          throw new Error('CSV file must have header and at least one data row')
+          throw new Error(`CSV file must have header and at least one data row. Found ${headers.length} headers and ${rows.length} rows`)
         }
         console.log('📋 CSVヘッダーを検出:', headers)
         
@@ -252,9 +307,10 @@ export async function POST(request: NextRequest) {
         }).filter(todo => todo.title) // タイトルがあるもののみ
       }
     } catch (parseError) {
-      console.error('File parsing error:', parseError)
-      return NextResponse.json({ 
-        error: 'Failed to parse file. Please check the file format.' 
+      console.error('❌ File parsing error:', parseError)
+      const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
+      return NextResponse.json({
+        error: `Failed to parse file: ${errorMessage}. Please check the file format.`
       }, { status: 400 })
     }
 
