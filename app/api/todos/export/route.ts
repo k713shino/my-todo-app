@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
       console.log(`✅ Exporting ${todos.length} todos in ${format} format for user:`, session.user.id)
 
       if (format === 'csv') {
-        // CSV形式でエクスポート
-        const csvHeader = 'ID,タイトル,説明,完了状態,優先度,期限,カテゴリ,タグ,作成日,更新日\n'
+        // CSV形式でエクスポート（GDPR準拠形式）
+        const csvHeader = 'ID,Title,Description,Status,Completed,Priority,Category,Tags,Parent ID,Due Date,Created At,Updated At\n'
         const csvRows = todos.map(todo => {
           const escapeCsv = (str: string | null) => {
             if (!str) return ''
@@ -44,13 +44,15 @@ export async function GET(request: NextRequest) {
             todo.id,
             escapeCsv(todo.title),
             escapeCsv(todo.description),
-            todo.status === 'DONE' ? '完了' : `${todo.status === 'TODO' ? '未着手' : todo.status === 'IN_PROGRESS' ? '作業中' : '確認中'}`,
+            todo.status,
+            todo.status === 'DONE' ? 'true' : 'false',
             todo.priority,
-            todo.dueDate ? new Date(todo.dueDate).toLocaleDateString('ja-JP') : '',
             escapeCsv(todo.category),
-            Array.isArray(todo.tags) ? todo.tags.join(';') : '',
-            new Date(todo.createdAt).toLocaleDateString('ja-JP'),
-            new Date(todo.updatedAt).toLocaleDateString('ja-JP')
+            Array.isArray(todo.tags) ? escapeCsv(todo.tags.join(',')) : '',
+            '', // Parent ID (現在未使用)
+            todo.dueDate ? new Date(todo.dueDate).toISOString() : '',
+            new Date(todo.createdAt).toISOString(),
+            new Date(todo.updatedAt).toISOString()
           ].join(',')
         }).join('\n')
 
