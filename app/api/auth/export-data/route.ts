@@ -43,9 +43,9 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const format = searchParams.get('format') || 'json'
+    const format = searchParams.get('format') || searchParams.get('_format') || 'json'
 
-    console.log('🔍 エクスポートAPI開始 - ユーザーID:', session.user.id, 'フォーマット:', format)
+    console.log('🔍 エクスポートAPI開始 - ユーザーID:', session.user.id, 'フォーマット:', format, 'クエリ:', Object.fromEntries(searchParams.entries()))
 
     // データベース接続テスト（Lambda経由）
     console.log('🔍 Testing database connection via adapter...')
