@@ -118,6 +118,16 @@ export async function POST(request: NextRequest) {
     const fileContent = await file.text()
     let todoData: Record<string, unknown>[] = []
 
+    console.log('📄 ファイル情報:', {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      endsWithCSV: file.name.endsWith('.csv'),
+      endsWithJSON: file.name.endsWith('.json'),
+      contentLength: fileContent.length,
+      firstLine: fileContent.split('\n')[0]
+    })
+
     // ユーザーID（接頭辞除去）を先に確定（後続でも利用）
     const actualUserId = extractUserIdFromPrefixed(session.user.id)
     // 既存ユーザーのTodoを取得（重複検知のため）
@@ -201,7 +211,19 @@ export async function POST(request: NextRequest) {
         contentPreview: fileContent.substring(0, 200)
       })
 
-      if (file.name.endsWith('.json')) {
+      // ファイル形式を内容からも判定
+      const isJsonContent = fileContent.trim().startsWith('{') || fileContent.trim().startsWith('[')
+      const isJsonFile = file.name.endsWith('.json')
+      const isCsvFile = file.name.endsWith('.csv')
+
+      console.log('📄 形式判定:', {
+        isJsonFile,
+        isCsvFile,
+        isJsonContent,
+        firstChar: fileContent.trim()[0]
+      })
+
+      if (isJsonFile || (isJsonContent && !isCsvFile)) {
         const jsonData = JSON.parse(fileContent)
 
         // GDPR準拠エクスポート形式の構造チェック
@@ -221,8 +243,10 @@ export async function POST(request: NextRequest) {
         } else {
           throw new Error('Invalid JSON structure. Expected format: {todos: [...]} or [...]')
         }
-      } else if (file.name.endsWith('.csv')) {
+      } else if (isCsvFile) {
         console.log('📋 CSV解析開始...')
+        console.log('📋 CSV生データ（最初の300文字）:', fileContent.substring(0, 300))
+
         // CSV解析（引用符・改行対応）
         const { headers, rows } = parseCSVText(fileContent)
         console.log('📋 CSV解析結果:', {
