@@ -5,12 +5,6 @@ const nextConfig = {
     // 本番ビルド時でも型エラーを厳密にチェック
     ignoreBuildErrors: false,
   },
-  
-  // ESLint設定
-  eslint: {
-    // 本番ビルド時のESLintエラーも厳密にチェック
-    ignoreDuringBuilds: false,
-  },
 
   // 環境変数の設定
   env: {
@@ -53,8 +47,11 @@ const nextConfig = {
 
   // 画像最適化設定
   images: {
-    domains: [
-      'wmo3ty4ngk.execute-api.ap-northeast-1.amazonaws.com',
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'wmo3ty4ngk.execute-api.ap-northeast-1.amazonaws.com',
+      },
     ],
   },
 
