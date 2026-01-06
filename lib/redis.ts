@@ -48,9 +48,16 @@ const getRedisConfig = () => {
 // ビルド時の接続問題を回避する関数です
 const shouldConnectRedis = (): boolean => {
   // ビルド時やテスト時は接続しない
-  if (process.env.NODE_ENV === 'test') return false
-  if (process.env.NEXT_PHASE === 'phase-production-build') return false
-  if (process.env.CI === 'true') return false
+  if (process.env.NODE_ENV === 'test') {
+    console.log('🧪 Test environment detected - using mock Redis')
+    return false
+  }
+  
+  // CI環境では接続しない
+  if (process.env.CI === 'true') {
+    console.log('🔧 CI environment detected - using mock Redis')
+    return false
+  }
   
   // REDIS_URLが設定されていない場合はモックを使用
   if (!process.env.REDIS_URL) {
@@ -58,12 +65,22 @@ const shouldConnectRedis = (): boolean => {
     return false
   }
   
-  // Vercelビルド環境での判定（より緩和）
-  if (process.env.VERCEL === '1' && process.env.REDIS_URL?.includes('upstash.io')) {
-    console.log('✅ Vercel production environment detected with Upstash Redis')
+  // ビルド時のみスキップ（ランタイムでは接続する）
+  // NEXT_PHASEはビルド時にのみ設定されるべきだが、念のためVERCEL_ENV も確認
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    console.log('🏗️ Build phase detected - using mock Redis')
+    return false
+  }
+  
+  // Vercel本番/プレビュー環境での判定
+  if (process.env.VERCEL === '1') {
+    console.log('✅ Vercel runtime environment detected with REDIS_URL:', 
+      process.env.REDIS_URL?.substring(0, 30) + '...')
     return true
   }
   
+  // ローカル開発環境
+  console.log('🖥️ Local development environment - attempting Redis connection')
   return true
 }
 
